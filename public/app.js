@@ -35,7 +35,7 @@ function tierClass(tier) {
 }
 
 function tierLabel(tier) {
-  if (tier === 'strong-buy') return 'Likely to Sell';
+  if (tier === 'strong-buy') return 'Prime';
   if (tier === 'watchlist') return 'Possible';
   if (tier === 'pass') return 'Unlikely';
   return '—';
