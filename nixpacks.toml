@@ -6,7 +6,7 @@ cmds = ["npm ci"]
 
 # Copy everything including data/ into the final image
 [phases.build]
-cmds = ["echo 'Build complete'"]
+cmds = ["echo 'Build complete — 31 companies'"]
 
 [start]
 cmd = "npm start"
