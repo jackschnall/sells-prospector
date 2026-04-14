@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sells M&amp;A Prospector</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="mock-banner" class="mock-banner" hidden>
+      <span class="diamond">&#9670;</span>
+      <span>DEMO DATA &mdash; MOCK MODE ACTIVE</span>
+      <span class="diamond">&#9670;</span>
+    </div>
+
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">S</div>
+        <div class="brand-text">
+          <div class="brand-name">Sells</div>
+          <div class="brand-sub">M&amp;A Prospector</div>
+        </div>
+      </div>
+      <div class="rollups" id="rollups">
+        <div class="rollup"><div class="rollup-label">Total</div><div class="rollup-value" id="stat-total">0</div></div>
+        <div class="rollup"><div class="rollup-label">Researched</div><div class="rollup-value" id="stat-done">0</div></div>
+        <div class="rollup"><div class="rollup-label">Likely to Sell</div><div class="rollup-value" id="stat-strong">0</div></div>
+        <div class="rollup"><div class="rollup-label">In CRM</div><div class="rollup-value" id="stat-crm">0</div></div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <section class="sb-section">
+          <div class="sb-title">Upload Targets</div>
+          <form id="upload-form">
+            <label class="dropzone" id="dropzone">
+              <input type="file" id="file-input" accept=".csv,text/csv" hidden />
+              <div class="dz-inner">
+                <div class="dz-icon">&#8613;</div>
+                <div class="dz-text">Drop CSV or <u>browse</u></div>
+                <div class="dz-sub">accepted headers: name, city, state, phone, website, owner&hellip;</div>
+              </div>
+            </label>
+            <div id="upload-status" class="sb-status"></div>
+          </form>
+        </section>
+
+        <section class="sb-section">
+          <div class="sb-title">Salesforce CRM</div>
+          <textarea
+            id="sf-textarea"
+            class="sf-textarea"
+            placeholder="Paste company names already in Salesforce, one per line"
+            rows="5"
+          ></textarea>
+          <div class="sb-row">
+            <button type="button" class="btn-ghost" id="sf-save">Save List</button>
+            <span class="sb-hint" id="sf-count">0 names on file</span>
+          </div>
+        </section>
+
+        <section class="sb-section">
+          <div class="sb-title">Thesis</div>
+          <div class="field">
+            <label>Geography</label>
+            <input type="text" id="t-geo" placeholder="e.g. Dallas–Fort Worth, TX" />
+          </div>
+          <button type="button" class="btn-ghost" id="thesis-save">Save Thesis</button>
+        </section>
+
+        <section class="sb-section">
+          <div class="sb-title">Filter by Tier</div>
+          <div class="tier-filters" id="tier-filters">
+            <button type="button" class="tier-chip all active" data-tier=""><span class="dot"></span>All</button>
+            <button type="button" class="tier-chip strong-buy" data-tier="strong-buy"><span class="dot"></span>Likely to Sell</button>
+            <button type="button" class="tier-chip watchlist" data-tier="watchlist"><span class="dot"></span>Possible</button>
+            <button type="button" class="tier-chip pass" data-tier="pass"><span class="dot"></span>Unlikely</button>
+          </div>
+          <label class="toggle" style="margin-top: 12px">
+            <input type="checkbox" id="hide-crm" />
+            <span>Hide companies already in CRM</span>
+          </label>
+        </section>
+
+        <section class="sb-section">
+          <div class="sb-title">Markets</div>
+          <div id="markets-list" class="markets-list">
+            <div class="sb-hint">No markets analyzed yet.</div>
+          </div>
+        </section>
+
+        <section class="sb-section">
+          <div class="sb-title">Agent</div>
+          <div class="run-controls">
+            <button type="button" class="btn-primary" id="run-btn">Find Prospects</button>
+            <button type="button" class="btn-stop" id="stop-btn" hidden>Stop</button>
+          </div>
+          <div id="run-progress" class="run-progress" hidden>
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+            <div class="progress-label" id="progress-label">&nbsp;</div>
+          </div>
+        </section>
+      </aside>
+
+      <!-- Main -->
+      <section class="main">
+        <nav class="tabs" id="main-tabs" role="tablist">
+          <button type="button" class="tab active" data-tab="dashboard" role="tab">Dashboard</button>
+          <button type="button" class="tab" data-tab="companies" role="tab">Companies</button>
+          <button type="button" class="tab" data-tab="agent" role="tab">Agent</button>
+          <button type="button" class="tab" data-tab="export" role="tab">Export</button>
+        </nav>
+
+        <!-- DASHBOARD TAB -->
+        <div id="tab-dashboard" class="tab-panel active">
+          <div class="dash-header">
+            <div class="dash-title">Origination Pipeline</div>
+            <div class="dash-sub" id="dash-sub">No companies loaded yet.</div>
+          </div>
+
+          <div class="dash-grid">
+            <div class="dash-card">
+              <div class="dash-card-label">Total Targets</div>
+              <div class="dash-card-value" id="dash-total">0</div>
+            </div>
+            <div class="dash-card">
+              <div class="dash-card-label">Researched</div>
+              <div class="dash-card-value" id="dash-done">0</div>
+              <div class="dash-card-sub" id="dash-done-pct">&mdash;</div>
+            </div>
+            <div class="dash-card accent-strong">
+              <div class="dash-card-label">Likely to Sell</div>
+              <div class="dash-card-value" id="dash-strong">0</div>
+            </div>
+            <div class="dash-card accent-watch">
+              <div class="dash-card-label">Possible</div>
+              <div class="dash-card-value" id="dash-watch">0</div>
+            </div>
+            <div class="dash-card accent-pass">
+              <div class="dash-card-label">Unlikely</div>
+              <div class="dash-card-value" id="dash-pass">0</div>
+            </div>
+            <div class="dash-card">
+              <div class="dash-card-label">Already in CRM</div>
+              <div class="dash-card-value" id="dash-crm">0</div>
+            </div>
+          </div>
+
+          <section class="dash-section">
+            <div class="dash-section-title"><span class="diamond">&#9670;</span> Top Sell Candidates</div>
+            <div id="dash-top" class="dash-top-list">
+              <div class="dash-empty">Run research to surface top candidates.</div>
+            </div>
+          </section>
+        </div>
+
+        <!-- COMPANIES TAB -->
+        <div id="tab-companies" class="tab-panel">
+          <div class="toolbar">
+            <input type="search" id="search" class="search" placeholder="Search companies&hellip;" />
+            <div class="toolbar-spacer"></div>
+            <select id="sort" class="select">
+              <option value="score_desc">Score (high to low)</option>
+              <option value="name_asc">Name (A–Z)</option>
+              <option value="recent">Recently researched</option>
+            </select>
+            <div class="view-toggle">
+              <button type="button" id="view-grid" class="active" title="Grid">&#9638;</button>
+              <button type="button" id="view-list" title="List">&#9776;</button>
+            </div>
+          </div>
+
+          <div id="companies" class="companies-grid"></div>
+
+          <div id="empty-state" class="empty-state" hidden>
+            <div class="empty-icon">&#9670;</div>
+            <div class="empty-title">No companies yet</div>
+            <div class="empty-sub">
+              Upload a CSV of target companies to begin prospecting.
+            </div>
+          </div>
+        </div>
+
+        <!-- AGENT TAB -->
+        <div id="tab-agent" class="tab-panel">
+          <div id="agent-idle" class="agent-idle">
+            <div class="agent-idle-icon">&#9670;</div>
+            <div class="agent-idle-title">Agent is idle</div>
+            <div class="agent-idle-body">
+              The research pipeline will appear here when a run is active.
+              Click <strong>Find Prospects</strong> in the sidebar to kick off
+              discovery. The orchestrator runs Discovery first to surface
+              net-new candidates, then processes each sequentially through
+              Research &rarr; Scoring &rarr; Flags.
+            </div>
+          </div>
+
+          <section id="pipeline" class="pipeline" hidden>
+            <div class="pipeline-header">
+              <div class="pipeline-title">
+                <span class="diamond">&#9670;</span> Agent Pipeline
+              </div>
+              <div class="pipeline-current" id="pipeline-current">Idle</div>
+            </div>
+            <div class="pipeline-tree">
+              <div class="pipeline-node orchestrator" id="pipeline-orchestrator" data-status="idle">
+                <div class="node-label">Orchestrator</div>
+                <div class="node-sub">Opus 4.6</div>
+                <span class="node-status"></span>
+              </div>
+              <div class="pipeline-trunk"></div>
+              <div class="pipeline-branches">
+                <div class="pipeline-node worker" data-stage="discovery" data-status="idle">
+                  <div class="node-label">Discovery</div>
+                  <div class="node-sub">Sonnet + web_search</div>
+                  <span class="node-status"></span>
+                </div>
+                <div class="pipeline-node worker" data-stage="research" data-status="idle">
+                  <div class="node-label">Research</div>
+                  <div class="node-sub">Sonnet + web_search</div>
+                  <span class="node-status"></span>
+                </div>
+                <div class="pipeline-node worker" data-stage="scoring" data-status="idle">
+                  <div class="node-label">Scoring</div>
+                  <div class="node-sub">Opus 4.6</div>
+                  <span class="node-status"></span>
+                </div>
+                <div class="pipeline-node worker" data-stage="flags" data-status="idle">
+                  <div class="node-label">Flags</div>
+                  <div class="node-sub">Sonnet 4.6</div>
+                  <span class="node-status"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="agent-log-wrap">
+              <div class="agent-log-title">Activity Log</div>
+              <div id="agent-log" class="agent-log">
+                <div class="agent-log-empty">Awaiting events&hellip;</div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- EXPORT TAB -->
+        <div id="tab-export" class="tab-panel">
+          <div class="export-header">
+            <div class="export-title">Export &amp; Tearsheets</div>
+            <div class="export-sub">Download the full ranked dataset or open a print-ready tearsheet for any researched company.</div>
+          </div>
+
+          <div class="export-actions">
+            <a class="btn-primary" id="export-xlsx-btn" href="/api/export.xlsx" download>
+              Download Excel Export
+            </a>
+            <a class="btn-ghost" id="export-btn" href="/api/export.csv" download>
+              Download CSV
+            </a>
+          </div>
+
+          <section class="export-section">
+            <div class="export-section-title"><span class="diamond">&#9670;</span> Researched Companies</div>
+            <div id="export-list" class="export-list">
+              <div class="export-empty">No researched companies yet.</div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <!-- Slide-in detail panel -->
+    <aside id="detail-panel" class="detail-panel" hidden>
+      <div class="detail-header">
+        <button type="button" class="detail-close" id="detail-close" aria-label="Close">&times;</button>
+        <div class="detail-score" id="d-score">—</div>
+        <div class="detail-headline">
+          <div class="detail-name" id="d-name">—</div>
+          <div class="detail-sub" id="d-sub">—</div>
+        </div>
+        <div class="detail-tier" id="d-tier">—</div>
+      </div>
+
+      <div class="detail-body">
+        <section class="d-section">
+          <div class="d-section-title">Summary</div>
+          <div id="d-summary" class="d-summary">—</div>
+        </section>
+
+        <section class="d-section">
+          <div class="d-section-title">Signals</div>
+          <table class="signal-table" id="d-signals">
+            <thead>
+              <tr><th>Signal</th><th>Weight</th><th>Raw</th><th>Notes</th><th>Score</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+
+        <section class="d-section">
+          <div class="d-section-title">Red Flags</div>
+          <div id="d-flags" class="flag-list"></div>
+        </section>
+
+        <section class="d-section">
+          <div class="d-section-title">Contact</div>
+          <div id="d-contact" class="contact-grid"></div>
+        </section>
+
+        <section class="d-section">
+          <div class="d-section-title">Sources</div>
+          <div id="d-sources" class="sources"></div>
+        </section>
+
+        <section class="d-section">
+          <div class="d-section-title">Notes</div>
+          <div id="d-notes" class="notes"></div>
+          <div class="note-compose">
+            <textarea id="d-note-input" rows="2" placeholder="Add a note&hellip;"></textarea>
+            <button type="button" class="btn-ghost" id="d-note-save">Save Note</button>
+          </div>
+        </section>
+
+        <div class="detail-actions">
+          <button type="button" class="btn-ghost" id="d-outreach">Mark for Outreach</button>
+          <button type="button" class="btn-ghost" id="d-override">Research Anyway</button>
+          <a class="btn-ghost" id="d-tearsheet" target="_blank" rel="noopener">Open Tearsheet</a>
+          <button type="button" class="btn-primary" id="d-sf-push">Push to Salesforce</button>
+        </div>
+      </div>
+    </aside>
+
+    <div id="toast" class="toast" hidden></div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tearsheet</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      body {
+        background: #fdfbf5;
+        color: #0d1b2a;
+        padding: 32px;
+        max-width: 900px;
+        margin: 0 auto;
+        font-family: 'Source Sans 3', sans-serif;
+      }
+      .ts-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        border-bottom: 2px solid #0d1b2a;
+        padding-bottom: 16px;
+        margin-bottom: 24px;
+      }
+      .ts-brand {
+        font-family: 'Playfair Display', serif;
+        font-weight: 700;
+        font-size: 28px;
+        letter-spacing: 1px;
+      }
+      .ts-brand-sub {
+        color: #6b7280;
+        font-size: 14px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+      }
+      .ts-score-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        font-family: 'DM Mono', monospace;
+        font-size: 36px;
+        font-weight: 500;
+      }
+      .ts-score-pill small {
+        font-family: 'Source Sans 3', sans-serif;
+        font-size: 14px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #6b7280;
+      }
+      h1.ts-name {
+        font-family: 'Playfair Display', serif;
+        font-size: 42px;
+        margin: 0 0 4px;
+        letter-spacing: 0.5px;
+      }
+      .ts-loc {
+        color: #6b7280;
+        font-size: 16px;
+        margin-bottom: 24px;
+      }
+      .ts-tier {
+        display: inline-block;
+        padding: 4px 12px;
+        border: 1px solid #0d1b2a;
+        border-radius: 2px;
+        font-size: 11px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+      .ts-tier.tier-strong { background: #14532d; color: #fff; border-color: #14532d; }
+      .ts-tier.tier-watch { background: #c9a84c; color: #fff; border-color: #c9a84c; }
+      .ts-tier.tier-pass { background: #6b7280; color: #fff; border-color: #6b7280; }
+      .ts-section {
+        margin: 28px 0;
+      }
+      .ts-section-title {
+        font-family: 'Playfair Display', serif;
+        font-size: 20px;
+        color: #0d1b2a;
+        border-bottom: 1px solid #c9a84c;
+        padding-bottom: 6px;
+        margin-bottom: 12px;
+      }
+      .ts-summary {
+        font-size: 17px;
+        line-height: 1.55;
+      }
+      .ts-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      .ts-table th,
+      .ts-table td {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .ts-table th {
+        font-size: 11px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #6b7280;
+        font-weight: 600;
+      }
+      .ts-table td.num {
+        font-family: 'DM Mono', monospace;
+        text-align: right;
+      }
+      .ts-flags .ts-flag {
+        padding: 8px 10px;
+        border-left: 4px solid;
+        margin-bottom: 6px;
+      }
+      .ts-flag.hard { border-color: #991b1b; background: #fef2f2; }
+      .ts-flag.yellow { border-color: #c9a84c; background: #fef9e7; }
+      .ts-contact {
+        display: grid;
+        grid-template-columns: 140px 1fr;
+        row-gap: 6px;
+        column-gap: 16px;
+        font-size: 15px;
+      }
+      .ts-contact .k {
+        color: #6b7280;
+        font-size: 12px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+      .ts-sources {
+        font-size: 13px;
+        color: #374151;
+      }
+      .ts-sources a {
+        color: #0d1b2a;
+        display: block;
+        margin-bottom: 4px;
+      }
+      .ts-footer {
+        margin-top: 40px;
+        padding-top: 12px;
+        border-top: 1px solid #c9a84c;
+        color: #6b7280;
+        font-size: 12px;
+        letter-spacing: 1px;
+        text-align: center;
+      }
+      .ts-mock {
+        background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        color: #422006;
+        padding: 8px 12px;
+        margin-bottom: 16px;
+        text-align: center;
+        letter-spacing: 3px;
+        font-weight: 700;
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+      @media print {
+        body { padding: 0; }
+        .ts-no-print { display: none !important; }
+        a { color: #0d1b2a; text-decoration: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ts-mock" class="ts-mock" hidden>
+      ◆ Demo Data — Mock Mode Active ◆
+    </div>
+
+    <div class="ts-header">
+      <div>
+        <div class="ts-brand">Sells</div>
+        <div class="ts-brand-sub">M&amp;A Prospector Tearsheet</div>
+      </div>
+      <div class="ts-score-pill">
+        <div id="ts-score">—</div>
+        <small>Score / 10</small>
+      </div>
+    </div>
+
+    <h1 class="ts-name" id="ts-name">—</h1>
+    <div class="ts-loc" id="ts-loc">—</div>
+    <div><span class="ts-tier" id="ts-tier">—</span></div>
+
+    <section class="ts-section">
+      <div class="ts-section-title">Executive Summary</div>
+      <div class="ts-summary" id="ts-summary">—</div>
+    </section>
+
+    <section class="ts-section">
+      <div class="ts-section-title">Signal Breakdown</div>
+      <table class="ts-table">
+        <thead>
+          <tr><th>Signal</th><th>Weight</th><th>Raw</th><th>Notes</th><th>Score</th></tr>
+        </thead>
+        <tbody id="ts-signals"></tbody>
+      </table>
+    </section>
+
+    <section class="ts-section">
+      <div class="ts-section-title">Red Flags</div>
+      <div class="ts-flags" id="ts-flags"></div>
+    </section>
+
+    <section class="ts-section">
+      <div class="ts-section-title">Contact</div>
+      <div class="ts-contact" id="ts-contact"></div>
+    </section>
+
+    <section class="ts-section">
+      <div class="ts-section-title">Sources</div>
+      <div class="ts-sources" id="ts-sources"></div>
+    </section>
+
+    <div class="ts-footer">
+      Prepared by Sells M&amp;A Prospector &nbsp;&bull;&nbsp; <span id="ts-date"></span>
+    </div>
+
+    <script>
+      /*__DATA__*/
+
+      function escapeHtml(s) {
+        return String(s ?? '').replace(/[&<>"']/g, (c) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+        );
+      }
+      function tierClass(t) {
+        if (t === 'strong-buy') return 'tier-strong';
+        if (t === 'watchlist') return 'tier-watch';
+        if (t === 'pass') return 'tier-pass';
+        return '';
+      }
+      function tierLabel(t) {
+        if (t === 'strong-buy') return 'Likely to Sell';
+        if (t === 'watchlist') return 'Possible';
+        if (t === 'pass') return 'Unlikely';
+        return '—';
+      }
+
+      (function render() {
+        const data = window.__TEARSHEET_DATA__ || {};
+        const c = data.company || {};
+        const signals = data.signals || {};
+        const flags = data.flags || { hard_stops: [], yellow_flags: [] };
+        const sources = data.sources || [];
+
+        if (data.mockMode) document.getElementById('ts-mock').hidden = false;
+
+        document.getElementById('ts-score').textContent =
+          c.score != null ? Number(c.score).toFixed(1) : '—';
+        document.getElementById('ts-name').textContent = c.name || '—';
+        const loc = [c.city, c.state].filter(Boolean).join(', ');
+        document.getElementById('ts-loc').textContent = loc || '—';
+        const tierEl = document.getElementById('ts-tier');
+        tierEl.textContent = tierLabel(c.tier);
+        tierEl.className = `ts-tier ${tierClass(c.tier)}`;
+        document.getElementById('ts-summary').textContent = c.summary || '—';
+
+        const weights = {
+          revenue_proxy: 0.22,
+          operational_quality: 0.18,
+          succession_signal: 0.18,
+          growth_trajectory: 0.12,
+          deal_complexity: 0.1,
+          geographic_fit: 0.1,
+          market_quality: 0.1,
+        };
+        document.getElementById('ts-signals').innerHTML = Object.entries(weights)
+          .map(([k, w]) => {
+            const s = signals[k] || {};
+            return `
+              <tr>
+                <td>${escapeHtml(k.replace(/_/g, ' '))}</td>
+                <td>${Math.round(w * 100)}%</td>
+                <td>${escapeHtml(s.raw ?? '—')}</td>
+                <td>${escapeHtml(s.notes ?? '')}</td>
+                <td class="num">${s.score != null ? Number(s.score).toFixed(1) : '—'}</td>
+              </tr>
+            `;
+          })
+          .join('');
+
+        const hard = (flags.hard_stops || [])
+          .map((f) => `<div class="ts-flag hard"><strong>${escapeHtml(f.flag)}</strong> — ${escapeHtml(f.detail || '')}</div>`)
+          .join('');
+        const yellow = (flags.yellow_flags || [])
+          .map((f) => `<div class="ts-flag yellow"><strong>${escapeHtml(f.flag)}</strong> — ${escapeHtml(f.detail || '')}</div>`)
+          .join('');
+        document.getElementById('ts-flags').innerHTML =
+          hard + yellow || '<em>No flags identified.</em>';
+
+        document.getElementById('ts-contact').innerHTML = `
+          <div class="k">Owner</div><div>${escapeHtml(c.owner || '—')}</div>
+          <div class="k">Phone</div><div>${escapeHtml(c.phone || '—')}</div>
+          <div class="k">Email</div><div>${escapeHtml(c.email || '—')}</div>
+          <div class="k">Address</div><div>${escapeHtml(c.address || '—')}</div>
+          <div class="k">Website</div><div>${c.website ? `<a href="${escapeHtml(c.website)}">${escapeHtml(c.website)}</a>` : '—'}</div>
+          <div class="k">LinkedIn</div><div>${c.linkedin ? `<a href="${escapeHtml(c.linkedin)}">${escapeHtml(c.linkedin)}</a>` : '—'}</div>
+        `;
+
+        document.getElementById('ts-sources').innerHTML = sources.length
+          ? sources
+              .map((s) => `<a href="${escapeHtml(s.url || '#')}" target="_blank">${escapeHtml(s.title || s.url || 'source')}</a>`)
+              .join('')
+          : '<em>No sources recorded.</em>';
+
+        document.getElementById('ts-date').textContent =
+          new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
+        // Auto-trigger print dialog
+        setTimeout(() => window.print(), 350);
+      })();
+    </script>
+  </body>
+</html>
