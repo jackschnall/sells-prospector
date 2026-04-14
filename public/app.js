@@ -111,7 +111,7 @@ function renderCard(c) {
         .map((k) => {
           const v = signals[k] ?? 0;
           const score = typeof v === 'object' ? (v.score ?? 0) : v;
-          return `<div class="bar" title="${barLabels[k]}: ${score}/10"><span class="bar-label">${barLabels[k]}</span><i style="width:${Math.max(0, Math.min(10, score)) * 10}%"></i></div>`;
+          return `<div class="signal-col" title="${barLabels[k]}: ${score}/10"><span class="bar-label">${barLabels[k]}</span><div class="bar-track"><i style="width:${Math.max(0, Math.min(10, score)) * 10}%"></i></div></div>`;
         })
         .join('')
     : '';
