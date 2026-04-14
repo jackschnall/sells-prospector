@@ -738,6 +738,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .chip-processing { background: rgba(201,168,76,0.15); border-color: var(--gold); color: var(--gold-dark); }
 .chip-error      { background: rgba(181,75,58,0.12); border-color: var(--red); color: var(--red); }
 .chip-skip       { background: var(--bg-soft); border-color: var(--card-border); color: var(--text-muted); }
+.chip-outreach   { font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; font-weight: 700; border: 1px solid; }
+.chip-outreach-initial { background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.4); color: #2563EB; }
+.chip-outreach-rel     { background: rgba(46,139,87,0.12); border-color: rgba(46,139,87,0.3); color: var(--green); }
 
 .signals {
   display: grid;
@@ -1763,6 +1766,20 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   font-size: 0.82rem;
   padding: 8px 12px;
   text-decoration: none;
+}
+.d-outreach-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.select-sm {
+  font-size: 0.8rem;
+  padding: 5px 8px;
 }
 
 /* ---------- Toast ---------- */

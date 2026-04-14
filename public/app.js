@@ -2,7 +2,7 @@
 
 const state = {
   companies: [],
-  filter: { tier: '', search: '', sort: 'score_desc', hideCrm: false, stateFilter: '' },
+  filter: { tier: '', search: '', sort: 'score_desc', hideCrm: false, stateFilter: '', outreach: '' },
   view: 'grid',
   activeId: null,
   running: false,
@@ -73,6 +73,7 @@ async function loadCompanies() {
   if (state.filter.sort) params.set('sort', state.filter.sort);
   if (state.filter.hideCrm) params.set('crm_known', '0');
   if (state.filter.stateFilter) params.set('state', state.filter.stateFilter);
+  if (state.filter.outreach) params.set('outreach', state.filter.outreach);
   const res = await fetch(`/api/companies?${params}`);
   const data = await res.json();
   state.companies = data.companies || [];
@@ -123,6 +124,11 @@ function renderCard(c) {
       : c.status === 'skipped'
       ? '<span class="chip chip-skip">Skipped</span>'
       : '';
+  const outreachChip = c.outreach_status === 'initial_contact'
+    ? '<span class="chip chip-outreach chip-outreach-initial">Contacted</span>'
+    : c.outreach_status === 'relationship'
+    ? '<span class="chip chip-outreach chip-outreach-rel">Relationship</span>'
+    : '';
   return `
     <article class="card ${c.crm_known ? 'card-dim' : ''}" data-id="${c.id}">
       <div class="card-top">
@@ -133,7 +139,7 @@ function renderCard(c) {
         </div>
         <div class="card-tier ${tierClass(c.tier)}">${escapeHtml(tierLabel(c.tier))}</div>
       </div>
-      <div class="card-chips">${crmBadge}${status}</div>
+      <div class="card-chips">${crmBadge}${status}${outreachChip}</div>
       ${bars ? `<div class="signals">${bars}</div>` : ''}
       <div class="summary">${escapeHtml(c.summary || (c.status === 'pending' ? 'Not yet researched.' : ''))}</div>
       ${c.outreach_angle ? `<div class="outreach-angle">${escapeHtml(c.outreach_angle)}</div>` : ''}
@@ -359,7 +365,8 @@ function renderDetail(data) {
     : '<div class="sb-hint">No notes yet.</div>';
 
   // Actions
-  $('#d-outreach').textContent = c.marked_for_outreach ? 'Un-mark Outreach' : 'Mark for Outreach';
+  const outSel = $('#d-outreach-status');
+  if (outSel) outSel.value = c.outreach_status || 'no_contact';
   $('#d-override').textContent = c.crm_override ? 'Crm Override: ON' : 'Research Anyway';
   $('#d-override').hidden = !c.crm_known;
   $('#d-tearsheet').href = `/tearsheet/${c.id}`;
@@ -479,6 +486,10 @@ function bindToolbar() {
     state.filter.stateFilter = e.target.value;
     loadCompanies();
   });
+  $('#outreach-filter').addEventListener('change', (e) => {
+    state.filter.outreach = e.target.value;
+    loadCompanies();
+  });
   $('#view-grid').addEventListener('click', () => {
     state.view = 'grid';
     $('#view-grid').classList.add('active');
@@ -523,17 +534,19 @@ function bindDetailActions() {
       toast('Note saved', 'ok');
     }
   });
-  $('#d-outreach').addEventListener('click', async () => {
+  $('#d-outreach-status').addEventListener('change', async (e) => {
     if (!state.activeId) return;
-    const row = state.companies.find((c) => c.id === state.activeId);
-    const marked = !(row?.marked_for_outreach);
+    const outreach_status = e.target.value;
     await fetch(`/api/companies/${state.activeId}/outreach`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ marked }),
+      body: JSON.stringify({ outreach_status }),
     });
-    await loadCompanies();
-    openDetail(state.activeId);
+    const row = state.companies.find((c) => c.id === state.activeId);
+    if (row) row.outreach_status = outreach_status;
+    renderCompanies();
+    const labels = { no_contact: 'No Contact Made', initial_contact: 'Initial Contact Made', relationship: 'Relationship Established' };
+    toast(`Outreach: ${labels[outreach_status]}`, 'ok');
   });
   $('#d-override').addEventListener('click', async () => {
     if (!state.activeId) return;

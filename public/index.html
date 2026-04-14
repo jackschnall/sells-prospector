@@ -115,6 +115,12 @@
             <select id="state-filter" class="select" title="Filter by state">
               <option value="">All States</option>
             </select>
+            <select id="outreach-filter" class="select" title="Filter by outreach status">
+              <option value="">All Outreach</option>
+              <option value="no_contact">No Contact Made</option>
+              <option value="initial_contact">Initial Contact Made</option>
+              <option value="relationship">Relationship Established</option>
+            </select>
             <select id="sort" class="select">
               <option value="score_desc">Score (high &rarr; low)</option>
               <option value="score_asc">Score (low &rarr; high)</option>
@@ -124,6 +130,7 @@
               <option value="city_asc">City (A&ndash;Z)</option>
               <option value="name_asc">Name (A&ndash;Z)</option>
               <option value="recent">Recently Researched</option>
+              <option value="outreach">Outreach Status</option>
             </select>
             <div class="view-toggle">
               <button type="button" id="view-grid" class="active" title="Grid">&#9638;</button>
@@ -515,7 +522,13 @@
         </section>
 
         <div class="detail-actions">
-          <button type="button" class="btn-ghost" id="d-outreach">Mark for Outreach</button>
+          <label class="d-outreach-wrap">Outreach:
+            <select id="d-outreach-status" class="select select-sm">
+              <option value="no_contact">No Contact Made</option>
+              <option value="initial_contact">Initial Contact Made</option>
+              <option value="relationship">Relationship Established</option>
+            </select>
+          </label>
           <button type="button" class="btn-ghost" id="d-override">Research Anyway</button>
           <a class="btn-ghost" id="d-tearsheet" target="_blank" rel="noopener">Open Tearsheet</a>
           <button type="button" class="btn-primary" id="d-sf-push">Push to Salesforce</button>

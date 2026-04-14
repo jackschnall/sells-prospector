@@ -106,6 +106,15 @@ db.exec(`
   }
 }
 
+// Migration: add outreach_status column.
+{
+  const cols = db.prepare('PRAGMA table_info(companies)').all().map((c) => c.name);
+  if (!cols.includes('outreach_status')) {
+    db.exec("ALTER TABLE companies ADD COLUMN outreach_status TEXT DEFAULT 'no_contact'");
+    db.exec("UPDATE companies SET outreach_status = 'initial_contact' WHERE marked_for_outreach = 1");
+  }
+}
+
 function normalizeName(name) {
   return String(name || '')
     .toLowerCase()
@@ -164,7 +173,7 @@ function markCrmKnown(knownNames) {
   return result.changes;
 }
 
-function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilter } = {}) {
+function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilter, outreachStatus } = {}) {
   const where = [];
   const params = [];
   if (tier) {
@@ -182,6 +191,10 @@ function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilte
     where.push('UPPER(state) = ?');
     params.push(String(stateFilter).toUpperCase());
   }
+  if (outreachStatus) {
+    where.push('outreach_status = ?');
+    params.push(outreachStatus);
+  }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const orderMap = {
     score_desc: 'score DESC NULLS LAST, name ASC',
@@ -194,6 +207,7 @@ function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilte
     state_asc: 'state ASC NULLS LAST, city ASC, name ASC',
     city_asc: 'city ASC NULLS LAST, state ASC, name ASC',
     recent: 'last_researched_at DESC NULLS LAST, updated_at DESC',
+    outreach: "CASE outreach_status WHEN 'relationship' THEN 1 WHEN 'initial_contact' THEN 2 ELSE 3 END, score DESC",
   };
   const orderBy = orderMap[sort] || orderMap.score_desc;
 
@@ -243,6 +257,11 @@ function markOutreach(id, marked) {
   db.prepare('UPDATE companies SET marked_for_outreach = ? WHERE id = ?').run(marked ? 1 : 0, id);
 }
 
+function setOutreachStatus(id, outreachStatus) {
+  db.prepare("UPDATE companies SET outreach_status = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(outreachStatus, id);
+}
+
 function addNote(companyId, text) {
   const { nanoid } = require('nanoid');
   const id = nanoid();
@@ -269,7 +288,13 @@ function rollupStats() {
     .prepare('SELECT COUNT(*) AS n FROM companies WHERE crm_known = 1').get().n;
   const pending = db
     .prepare("SELECT COUNT(*) AS n FROM companies WHERE status = 'pending'").get().n;
-  return { total, researched, strongBuy, watchlist, pass, inCrm, pending };
+  const outreachNoContact = db
+    .prepare("SELECT COUNT(*) AS n FROM companies WHERE outreach_status = 'no_contact' AND status = 'done'").get().n;
+  const outreachContacted = db
+    .prepare("SELECT COUNT(*) AS n FROM companies WHERE outreach_status = 'initial_contact'").get().n;
+  const outreachRelationship = db
+    .prepare("SELECT COUNT(*) AS n FROM companies WHERE outreach_status = 'relationship'").get().n;
+  return { total, researched, strongBuy, watchlist, pass, inCrm, pending, outreachNoContact, outreachContacted, outreachRelationship };
 }
 
 function companiesToResearch() {
@@ -347,6 +372,7 @@ module.exports = {
   setCompanyStatus,
   setCompanyOverride,
   markOutreach,
+  setOutreachStatus,
   addNote,
   getNotes,
   rollupStats,

@@ -13,6 +13,7 @@ const {
   getConfig,
   setCompanyOverride,
   markOutreach,
+  setOutreachStatus,
   addNote,
   getNotes,
   rollupStats,
@@ -84,8 +85,8 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 
 // ---------- Companies ----------
 app.get('/api/companies', (req, res) => {
-  const { tier, crm_known: crmKnown, search, sort, state: stateFilter } = req.query;
-  const rows = listCompanies({ tier, crmKnown, search, sort, stateFilter });
+  const { tier, crm_known: crmKnown, search, sort, state: stateFilter, outreach: outreachStatus } = req.query;
+  const rows = listCompanies({ tier, crmKnown, search, sort, stateFilter, outreachStatus });
   // Keep payload light: omit raw_research from list view
   const slim = rows.map(({ raw_research, ...rest }) => rest);
   res.json({ companies: slim, stats: rollupStats() });
@@ -110,8 +111,10 @@ app.post('/api/companies/:id/override', (req, res) => {
 });
 
 app.post('/api/companies/:id/outreach', (req, res) => {
-  const { marked } = req.body || {};
-  markOutreach(req.params.id, !!marked);
+  const { outreach_status } = req.body || {};
+  const valid = ['no_contact', 'initial_contact', 'relationship'];
+  if (!valid.includes(outreach_status)) return res.status(400).json({ error: 'Invalid outreach_status' });
+  setOutreachStatus(req.params.id, outreach_status);
   res.json({ ok: true });
 });
 
