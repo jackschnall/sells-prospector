@@ -39,44 +39,6 @@
       <!-- Sidebar -->
       <aside class="sidebar">
         <section class="sb-section">
-          <div class="sb-title">Upload Targets</div>
-          <form id="upload-form">
-            <label class="dropzone" id="dropzone">
-              <input type="file" id="file-input" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden />
-              <div class="dz-inner">
-                <div class="dz-icon">&#8613;</div>
-                <div class="dz-text">Drop CSV / Excel or <u>browse</u></div>
-                <div class="dz-sub">accepted headers: name, city, state, phone, website, owner&hellip;</div>
-              </div>
-            </label>
-            <div id="upload-status" class="sb-status"></div>
-          </form>
-        </section>
-
-        <section class="sb-section">
-          <div class="sb-title">Salesforce CRM</div>
-          <textarea
-            id="sf-textarea"
-            class="sf-textarea"
-            placeholder="Paste company names already in Salesforce, one per line"
-            rows="5"
-          ></textarea>
-          <div class="sb-row">
-            <button type="button" class="btn-ghost" id="sf-save">Save List</button>
-            <span class="sb-hint" id="sf-count">0 names on file</span>
-          </div>
-        </section>
-
-        <section class="sb-section">
-          <div class="sb-title">Thesis</div>
-          <div class="field">
-            <label>Geography</label>
-            <input type="text" id="t-geo" placeholder="e.g. Dallas–Fort Worth, TX" />
-          </div>
-          <button type="button" class="btn-ghost" id="thesis-save">Save Thesis</button>
-        </section>
-
-        <section class="sb-section">
           <div class="sb-title">Filter by Tier</div>
           <div class="tier-filters" id="tier-filters">
             <button type="button" class="tier-chip all active" data-tier=""><span class="dot"></span>All</button>
@@ -88,13 +50,6 @@
             <input type="checkbox" id="hide-crm" />
             <span>Hide companies already in CRM</span>
           </label>
-        </section>
-
-        <section class="sb-section">
-          <div class="sb-title">Current Market</div>
-          <div id="market-widget" class="market-widget">
-            <div class="sb-hint">Set a geography in Thesis to see market data.</div>
-          </div>
         </section>
 
         <section class="sb-section">

@@ -53,11 +53,6 @@ async function loadStatus() {
   $('#mock-banner').hidden = !data.mockMode;
   document.body.classList.toggle('mock-on', !!data.mockMode);
   updateStats(data.stats);
-  $('#sf-count').textContent = `${data.crmKnownCount} names on file`;
-  if (data.thesis) {
-    if (data.thesis.geography) $('#t-geo').value = data.thesis.geography;
-  }
-  // Refresh market widget after thesis loads (geography may have been set)
   if (state.marketIntel.length) renderMarketWidget();
   if (data.run && data.run.running) setRunning(true, data.run);
 }
@@ -390,71 +385,6 @@ function renderDetail(data) {
 }
 
 // ---------- upload ----------
-function bindUpload() {
-  const dz = $('#dropzone');
-  const input = $('#file-input');
-  dz.addEventListener('click', () => input.click());
-  dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('drag'); });
-  dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
-  dz.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dz.classList.remove('drag');
-    if (e.dataTransfer.files?.[0]) uploadFile(e.dataTransfer.files[0]);
-  });
-  input.addEventListener('change', () => {
-    if (input.files?.[0]) uploadFile(input.files[0]);
-  });
-}
-
-async function uploadFile(file) {
-  const fd = new FormData();
-  fd.append('file', file);
-  $('#upload-status').textContent = 'Uploading…';
-  try {
-    const res = await fetch('/api/upload', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Upload failed');
-    $('#upload-status').textContent = `Inserted ${data.inserted}/${data.parsed} companies`;
-    toast(`Uploaded ${data.inserted} companies`, 'ok');
-    await loadCompanies();
-  } catch (err) {
-    $('#upload-status').textContent = err.message;
-    toast(err.message, 'error');
-  }
-}
-
-// ---------- thesis / SF ----------
-async function saveThesis() {
-  const thesis = {
-    geography: $('#t-geo').value.trim(),
-  };
-  await fetch('/api/thesis', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(thesis),
-  });
-  toast('Thesis saved', 'ok');
-}
-
-async function saveSfNames() {
-  const text = $('#sf-textarea').value;
-  const res = await fetch('/api/salesforce/known-names', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ names: text }),
-  });
-  const data = await res.json();
-  $('#sf-count').textContent = `${data.count} names on file`;
-  toast(`Matched ${data.marked} companies`, 'ok');
-  await loadCompanies();
-}
-
-async function loadSfNames() {
-  const res = await fetch('/api/salesforce/known-names');
-  const data = await res.json();
-  $('#sf-textarea').value = (data.names || []).join('\n');
-}
-
 // ---------- markets ----------
 async function loadMarkets() {
   try {
@@ -529,44 +459,7 @@ function renderMarketsTab(markets) {
 }
 
 function renderMarketWidget() {
-  const host = $('#market-widget');
-  if (!host) return;
-  const geo = ($('#t-geo')?.value || '').trim();
-  if (!geo || !state.marketIntel?.length) {
-    host.innerHTML = '<div class="sb-hint">Set a geography in Thesis to see market data.</div>';
-    return;
-  }
-  // Try to match the geography to a market
-  const geoLower = geo.toLowerCase();
-  const match = state.marketIntel.find((m) =>
-    geoLower.includes(m.city.toLowerCase()) ||
-    geoLower.includes(m.msa_name?.toLowerCase() || '') ||
-    (m.state && geoLower.includes(m.state.toLowerCase()))
-  );
-  if (!match) {
-    host.innerHTML = `<div class="sb-hint">No market data for "${escapeHtml(geo)}".</div>`;
-    return;
-  }
-  const scoreClass = (match.market_score || 0) >= 7 ? 'score-high' : (match.market_score || 0) >= 5 ? 'score-mid' : 'score-low';
-  const satClass = match.saturation_status === 'Saturated' ? 'sat-full' :
-                   match.saturation_status === 'Active' ? 'sat-active' : 'sat-fresh';
-  host.innerHTML = `
-    <div class="mw-score ${scoreClass}">
-      <div class="mw-score-val">${(match.market_score || 0).toFixed(1)}</div>
-      <div class="mw-score-label">Market Score</div>
-    </div>
-    <div class="mw-details">
-      <div class="mw-name">${escapeHtml(match.city)}, ${escapeHtml(match.state)}</div>
-      <div class="mw-pop">${fmtPop(match.population)} pop · ${match.population_growth?.toFixed(1) || '?'}% growth</div>
-      <div class="mw-sat">
-        <div class="sat-bar-wrap small">
-          <div class="sat-bar ${satClass}" style="width:${Math.min(100, match.coverage_pct || 0)}%"></div>
-          <span class="sat-pct">${match.coverage_pct || 0}%</span>
-        </div>
-        <span class="sat-chip ${satClass}">${escapeHtml(match.saturation_status || 'Fresh')}</span>
-      </div>
-    </div>
-  `;
+  // No-op — market widget removed from sidebar
 }
 
 function fmtPop(n) {
@@ -867,15 +760,9 @@ function bindDetailActions() {
 
 // ---------- init ----------
 function init() {
-  bindUpload();
   bindToolbar();
   bindDetailActions();
   bindTabs();
-  $('#thesis-save').addEventListener('click', async () => {
-    await saveThesis();
-    renderMarketWidget();
-  });
-  $('#sf-save').addEventListener('click', saveSfNames);
   $('#run-btn').addEventListener('click', startRun);
   $('#stop-btn').addEventListener('click', stopRun);
   $('#markets-refresh')?.addEventListener('click', async () => {
@@ -889,7 +776,6 @@ function init() {
   });
 
   loadStatus();
-  loadSfNames();
   loadCompanies();
   loadMarkets();
 }
