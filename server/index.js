@@ -18,7 +18,7 @@ const {
   rollupStats,
   markCrmKnown,
 } = require('./db');
-const { parseCsvBuffer, companiesToCsv } = require('./csv');
+const { parseCsvBuffer, parseXlsxBuffer, companiesToCsv } = require('./csv');
 const { startRun, stopRun, getRunState, addListener, removeListener, emit } = require('./agent');
 const sf = require('./salesforce');
 const { providerStatus } = require('./providers');
@@ -44,12 +44,14 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// ---------- Upload CSV ----------
+// ---------- Upload CSV / XLSX ----------
 app.post('/api/upload', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+  const filename = (req.file.originalname || '').toLowerCase();
+  const isXlsx = filename.endsWith('.xlsx') || filename.endsWith('.xls');
   let rows;
   try {
-    rows = parseCsvBuffer(req.file.buffer);
+    rows = isXlsx ? parseXlsxBuffer(req.file.buffer) : parseCsvBuffer(req.file.buffer);
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
