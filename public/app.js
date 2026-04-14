@@ -391,7 +391,7 @@ function renderMarketsTab(markets) {
   const rankerBody = $('#markets-ranker tbody');
   if (rankerBody) {
     if (!markets.length) {
-      rankerBody.innerHTML = '<tr><td colspan="8" class="markets-empty">No market data yet. Click Refresh Data.</td></tr>';
+      rankerBody.innerHTML = '<tr><td colspan="9" class="markets-empty">No market data yet. Click Refresh Data.</td></tr>';
     } else {
       rankerBody.innerHTML = markets
         .sort((a, b) => (b.market_score || 0) - (a.market_score || 0))
@@ -403,6 +403,7 @@ function renderMarketsTab(markets) {
               <td><strong>${escapeHtml(m.city)}, ${escapeHtml(m.state)}</strong><div class="msa-sub">${escapeHtml(m.msa_name || '')}</div></td>
               <td>${fmtPop(m.population)}</td>
               <td>${m.population_growth != null ? m.population_growth.toFixed(1) + '%' : '—'}</td>
+              <td>${m.home_sales_volume ? fmtNum(m.home_sales_volume) : '—'}</td>
               <td>${m.median_home_value ? '$' + fmtNum(m.median_home_value) : '—'}</td>
               <td>${m.housing_permits ? fmtNum(m.housing_permits) : '—'}</td>
               <td>${m.ma_activity_score != null ? renderMiniBar(m.ma_activity_score) : '—'}</td>
