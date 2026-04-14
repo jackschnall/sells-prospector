@@ -228,10 +228,17 @@ async function main() {
       const root = require('path').resolve(__dirname, '..');
       const run = (cmd) => execSync(cmd, { cwd: root, stdio: 'pipe' }).toString().trim();
 
-      // Checkpoint WAL so the DB is a single file
-      const db = require('better-sqlite3')(require('path').join(root, 'data', 'prospector.db'));
-      db.pragma('wal_checkpoint(TRUNCATE)');
-      db.close();
+      // Ask the running server to flush WAL into the main DB file
+      try {
+        const cpRes = await fetch(`http://localhost:${PORT}/api/_checkpoint`, { method: 'POST' });
+        if (!cpRes.ok) throw new Error(`checkpoint returned ${cpRes.status}`);
+      } catch (err) {
+        // Server not running — open DB directly to checkpoint
+        const dbPath = require('path').join(root, 'data', 'prospector.db');
+        const directDb = require('better-sqlite3')(dbPath);
+        directDb.pragma('wal_checkpoint(TRUNCATE)');
+        directDb.close();
+      }
 
       // Stage, commit, push
       run('git add data/prospector.db');

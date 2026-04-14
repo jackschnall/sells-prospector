@@ -244,6 +244,16 @@ app.get('/tearsheet/:id', (req, res) => {
   res.send(filled);
 });
 
+// ---------- WAL Checkpoint (used by cc-inject sync) ----------
+app.post('/api/_checkpoint', (req, res) => {
+  try {
+    db.pragma('wal_checkpoint(TRUNCATE)');
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ---------- Utilities ----------
 function safeJson(s) {
   if (!s) return null;
