@@ -223,9 +223,32 @@ async function main() {
       break;
     }
 
+    case 'sync': {
+      const { execSync } = require('child_process');
+      const root = require('path').resolve(__dirname, '..');
+      const run = (cmd) => execSync(cmd, { cwd: root, stdio: 'pipe' }).toString().trim();
+
+      // Checkpoint WAL so the DB is a single file
+      const db = require('better-sqlite3')(require('path').join(root, 'data', 'prospector.db'));
+      db.pragma('wal_checkpoint(TRUNCATE)');
+      db.close();
+
+      // Stage, commit, push
+      run('git add data/prospector.db');
+      const status = run('git status --porcelain data/prospector.db');
+      if (!status) {
+        console.log(JSON.stringify({ ok: true, action: 'no-op', message: 'DB unchanged, nothing to push' }));
+        break;
+      }
+      run('git commit -m "Update research data\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"');
+      run('git push');
+      console.log(JSON.stringify({ ok: true, action: 'pushed', message: 'DB pushed to GitHub — Railway will redeploy' }));
+      break;
+    }
+
     default:
       console.error(`Unknown command: ${cmd || '(none)'}`);
-      console.error('Commands: list-pending, get <id>, inject <id>, stats, set-status <id> <status>, add, list-all');
+      console.error('Commands: list-pending, get <id>, inject <id>, stats, set-status <id> <status>, add, list-all, sync');
       process.exit(1);
   }
 }
