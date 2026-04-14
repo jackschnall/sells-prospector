@@ -52,17 +52,6 @@
           </label>
         </section>
 
-        <section class="sb-section">
-          <div class="sb-title">Agent</div>
-          <div class="run-controls">
-            <button type="button" class="btn-primary" id="run-btn">Find Prospects</button>
-            <button type="button" class="btn-stop" id="stop-btn" hidden>Stop</button>
-          </div>
-          <div id="run-progress" class="run-progress" hidden>
-            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-            <div class="progress-label" id="progress-label">&nbsp;</div>
-          </div>
-        </section>
       </aside>
 
       <!-- Main -->
@@ -217,63 +206,113 @@
 
         <!-- AGENT TAB -->
         <div id="tab-agent" class="tab-panel">
-          <div id="agent-idle" class="agent-idle">
-            <div class="agent-idle-icon">&#9670;</div>
-            <div class="agent-idle-title">Agent is idle</div>
-            <div class="agent-idle-body">
-              The research pipeline will appear here when a run is active.
-              Click <strong>Find Prospects</strong> in the sidebar to kick off
-              discovery. The orchestrator runs Discovery first to surface
-              net-new candidates, then processes each sequentially through
-              Research &rarr; Scoring &rarr; Flags.
+          <div class="method-page">
+
+            <div class="method-header">
+              <div class="method-icon">&#9670;</div>
+              <h2 class="method-title">AI Research Agent</h2>
+              <p class="method-subtitle">How Claude Code discovers, researches, and scores M&amp;A targets</p>
             </div>
+
+            <!-- Pipeline flow -->
+            <div class="method-flow">
+              <div class="method-step">
+                <div class="method-step-num">1</div>
+                <div class="method-step-body">
+                  <h3>Market Intelligence</h3>
+                  <p>40 US metros ranked by population growth, housing permits, median home value, plumbing density, and M&amp;A activity. Identifies high-opportunity geographies in the Sun Belt and Southeast.</p>
+                  <div class="method-tags">
+                    <span class="method-tag">Census ACS</span>
+                    <span class="method-tag">HUD Permits</span>
+                    <span class="method-tag">Zillow ZHVI</span>
+                    <span class="method-tag">PitchBook</span>
+                  </div>
+                </div>
+              </div>
+              <div class="method-connector"></div>
+              <div class="method-step">
+                <div class="method-step-num">2</div>
+                <div class="method-step-body">
+                  <h3>Discovery</h3>
+                  <p>Web search across target markets to surface plumbing, HVAC, and mechanical contractors. Each candidate is fuzzy-matched against the P3 Services Universe (1,443 companies) and existing database to prevent duplicates.</p>
+                  <div class="method-tags">
+                    <span class="method-tag">Google Search</span>
+                    <span class="method-tag">BBB Directories</span>
+                    <span class="method-tag">Yelp</span>
+                    <span class="method-tag">Angi</span>
+                    <span class="method-tag">State License DBs</span>
+                  </div>
+                </div>
+              </div>
+              <div class="method-connector"></div>
+              <div class="method-step">
+                <div class="method-step-num">3</div>
+                <div class="method-step-body">
+                  <h3>Deep Research</h3>
+                  <p>Each company is researched across multiple vectors: ownership &amp; succession, revenue indicators, operational quality, reputation, litigation, and PE/acquisition history. 5 parallel agents process batches of 30&ndash;35 companies simultaneously.</p>
+                  <div class="method-tags">
+                    <span class="method-tag">BBB Profiles</span>
+                    <span class="method-tag">Google Reviews</span>
+                    <span class="method-tag">Secretary of State</span>
+                    <span class="method-tag">LinkedIn</span>
+                    <span class="method-tag">ZoomInfo</span>
+                    <span class="method-tag">Court Records</span>
+                  </div>
+                </div>
+              </div>
+              <div class="method-connector"></div>
+              <div class="method-step">
+                <div class="method-step-num">4</div>
+                <div class="method-step-body">
+                  <h3>Scoring &amp; Tiering</h3>
+                  <p>7 weighted signals produce a composite score. Hard stops (PE-backed, acquired, too large, out of business) are flagged automatically. Companies are tiered into Likely to Sell, Possible, or Unlikely.</p>
+                  <div class="method-rubric">
+                    <div class="rubric-row"><span class="rubric-label">Est. Revenue</span><span class="rubric-weight">22%</span></div>
+                    <div class="rubric-row"><span class="rubric-label">Operational Quality</span><span class="rubric-weight">18%</span></div>
+                    <div class="rubric-row"><span class="rubric-label">Succession Signal</span><span class="rubric-weight">18%</span></div>
+                    <div class="rubric-row"><span class="rubric-label">Growth Trajectory</span><span class="rubric-weight">12%</span></div>
+                    <div class="rubric-row"><span class="rubric-label">Deal Complexity</span><span class="rubric-weight">10%</span></div>
+                    <div class="rubric-row"><span class="rubric-label">Geographic Fit</span><span class="rubric-weight">10%</span></div>
+                    <div class="rubric-row"><span class="rubric-label">Market Quality</span><span class="rubric-weight">10%</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="method-connector"></div>
+              <div class="method-step">
+                <div class="method-step-num">5</div>
+                <div class="method-step-body">
+                  <h3>Output</h3>
+                  <p>Each researched company gets an analyst summary, outreach angle, contact info, signal scores, and flag report. Results are injected into the database and available immediately in the Companies tab, tearsheets, and Excel export.</p>
+                  <div class="method-tags">
+                    <span class="method-tag">Tearsheets</span>
+                    <span class="method-tag">Excel Export</span>
+                    <span class="method-tag">Outreach Angles</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stats footer -->
+            <div class="method-stats">
+              <div class="method-stat">
+                <div class="method-stat-val" id="method-total">285</div>
+                <div class="method-stat-label">Companies Researched</div>
+              </div>
+              <div class="method-stat">
+                <div class="method-stat-val">20+</div>
+                <div class="method-stat-label">States Covered</div>
+              </div>
+              <div class="method-stat">
+                <div class="method-stat-val">40</div>
+                <div class="method-stat-label">Markets Analyzed</div>
+              </div>
+              <div class="method-stat">
+                <div class="method-stat-val">7</div>
+                <div class="method-stat-label">Scoring Signals</div>
+              </div>
+            </div>
+
           </div>
-
-          <section id="pipeline" class="pipeline" hidden>
-            <div class="pipeline-header">
-              <div class="pipeline-title">
-                <span class="diamond">&#9670;</span> Agent Pipeline
-              </div>
-              <div class="pipeline-current" id="pipeline-current">Idle</div>
-            </div>
-            <div class="pipeline-tree">
-              <div class="pipeline-node orchestrator" id="pipeline-orchestrator" data-status="idle">
-                <div class="node-label">Orchestrator</div>
-                <div class="node-sub">Opus 4.6</div>
-                <span class="node-status"></span>
-              </div>
-              <div class="pipeline-trunk"></div>
-              <div class="pipeline-branches">
-                <div class="pipeline-node worker" data-stage="discovery" data-status="idle">
-                  <div class="node-label">Discovery</div>
-                  <div class="node-sub">Sonnet + web_search</div>
-                  <span class="node-status"></span>
-                </div>
-                <div class="pipeline-node worker" data-stage="research" data-status="idle">
-                  <div class="node-label">Research</div>
-                  <div class="node-sub">Sonnet + web_search</div>
-                  <span class="node-status"></span>
-                </div>
-                <div class="pipeline-node worker" data-stage="scoring" data-status="idle">
-                  <div class="node-label">Scoring</div>
-                  <div class="node-sub">Opus 4.6</div>
-                  <span class="node-status"></span>
-                </div>
-                <div class="pipeline-node worker" data-stage="flags" data-status="idle">
-                  <div class="node-label">Flags</div>
-                  <div class="node-sub">Sonnet 4.6</div>
-                  <span class="node-status"></span>
-                </div>
-              </div>
-            </div>
-
-            <div class="agent-log-wrap">
-              <div class="agent-log-title">Activity Log</div>
-              <div id="agent-log" class="agent-log">
-                <div class="agent-log-empty">Awaiting events&hellip;</div>
-              </div>
-            </div>
-          </section>
         </div>
 
         <!-- EXPORT TAB -->

@@ -54,7 +54,6 @@ async function loadStatus() {
   document.body.classList.toggle('mock-on', !!data.mockMode);
   updateStats(data.stats);
   if (state.marketIntel.length) renderMarketWidget();
-  if (data.run && data.run.running) setRunning(true, data.run);
 }
 
 function updateStats(stats) {
@@ -63,6 +62,8 @@ function updateStats(stats) {
   $('#stat-done').textContent = stats.researched ?? 0;
   $('#stat-strong').textContent = stats.strongBuy ?? 0;
   $('#stat-crm').textContent = stats.inCrm ?? 0;
+  const mt = $('#method-total');
+  if (mt) mt.textContent = stats.researched ?? 0;
 }
 
 async function loadCompanies() {
@@ -269,26 +270,6 @@ function bindTabs() {
   });
 }
 
-// ---------- agent log ----------
-function appendAgentLog(text, kind = 'info') {
-  const host = $('#agent-log');
-  if (!host) return;
-  const empty = host.querySelector('.agent-log-empty');
-  if (empty) empty.remove();
-  const row = document.createElement('div');
-  row.className = `agent-log-row agent-log-${kind}`;
-  const ts = new Date().toLocaleTimeString();
-  row.innerHTML = `<span class="agent-log-time">${escapeHtml(ts)}</span><span class="agent-log-msg">${escapeHtml(text)}</span>`;
-  host.appendChild(row);
-  host.scrollTop = host.scrollHeight;
-}
-
-function clearAgentLog() {
-  const host = $('#agent-log');
-  if (!host) return;
-  host.innerHTML = '<div class="agent-log-empty">Awaiting events&hellip;</div>';
-}
-
 // ---------- detail panel ----------
 async function openDetail(id) {
   state.activeId = id;
@@ -479,186 +460,8 @@ function renderMiniBar(val) {
   return `<div class="mini-bar"><div class="mini-fill" style="width:${pct}%"></div><span>${val.toFixed(1)}</span></div>`;
 }
 
-// ---------- run controls ----------
-async function startRun() {
-  const res = await fetch('/api/run', { method: 'POST' });
-  const data = await res.json();
-  if (!res.ok) {
-    toast(data.reason || 'Could not start run', 'error');
-    return;
-  }
-  // Auto-switch to Agent tab
-  $$('.tab', $('#main-tabs')).forEach((t) => t.classList.toggle('active', t.dataset.tab === 'agent'));
-  $$('.tab-panel').forEach((p) => p.classList.toggle('active', p.id === 'tab-agent'));
-  setRunning(true);
-}
+// ---------- run controls (legacy — research is done via Claude Code CLI) ----------
 
-async function stopRun() {
-  await fetch('/api/run/stop', { method: 'POST' });
-  toast('Stopping…', 'info');
-}
-
-function setRunning(running, initial = null) {
-  state.running = running;
-  $('#run-btn').hidden = running;
-  $('#stop-btn').hidden = !running;
-  $('#run-progress').hidden = !running;
-  showPipeline(running);
-  if (running) {
-    setPipelineOrchestrator('running');
-    resetPipelineStages('pending');
-    if (!initial) {
-      clearAgentLog();
-      appendAgentLog('Research run started', 'start');
-    }
-    if (initial) {
-      updateProgress(initial.currentIndex, initial.total, initial.currentCompany?.name);
-      setPipelineCompany(initial.currentCompany?.name || '');
-    }
-    connectSse();
-  } else {
-    updateProgress(0, 0, '');
-    setPipelineOrchestrator('idle');
-    resetPipelineStages('idle');
-    setPipelineCompany('');
-  }
-}
-
-function updateProgress(idx, total, label) {
-  const pct = total > 0 ? Math.round((idx / total) * 100) : 0;
-  $('#progress-fill').style.width = `${pct}%`;
-  $('#progress-label').textContent = total
-    ? `${idx}/${total}${label ? ' — ' + label : ''}`
-    : '';
-}
-
-function connectSse() {
-  if (state.sse) state.sse.close();
-  const sse = new EventSource('/api/run/stream');
-  state.sse = sse;
-  sse.onmessage = (e) => {
-    try {
-      const ev = JSON.parse(e.data);
-      handleSseEvent(ev);
-    } catch {}
-  };
-  sse.onerror = () => {
-    sse.close();
-    state.sse = null;
-  };
-}
-
-function handleSseEvent(ev) {
-  switch (ev.type) {
-    case 'hello':
-      if (!ev.running) setRunning(false);
-      break;
-    case 'start':
-      updateProgress(0, ev.total, '');
-      setPipelineCompany('');
-      setPipelineOrchestrator('running');
-      resetPipelineStages('idle');
-      appendAgentLog(`Run started — ${ev.total} compan${ev.total === 1 ? 'y' : 'ies'} queued`, 'start');
-      break;
-    case 'progress':
-      updateProgress(ev.index, ev.total, ev.company?.name);
-      setPipelineCompany(ev.company?.name || '');
-      resetPipelineStages('pending');
-      if (ev.company?.name) {
-        appendAgentLog(`[${ev.index}/${ev.total}] Processing ${ev.company.name}`, 'progress');
-      }
-      break;
-    case 'stage':
-      setPipelineStage(ev.stage, ev.status);
-      if (ev.status === 'running') {
-        appendAgentLog(`  → ${ev.stage}`, 'stage');
-      } else if (ev.status === 'error') {
-        appendAgentLog(`  ✗ ${ev.stage} failed`, 'error');
-      }
-      break;
-    case 'markets_start':
-      setPipelineCompany(ev.total ? `Analyzing ${ev.total} market${ev.total === 1 ? '' : 's'}…` : '');
-      if (ev.total) appendAgentLog(`Analyzing ${ev.total} market${ev.total === 1 ? '' : 's'}`, 'progress');
-      break;
-    case 'market':
-      loadMarkets();
-      break;
-    case 'markets_done':
-      loadMarkets();
-      setPipelineCompany('');
-      appendAgentLog('Market analysis complete', 'ok');
-      break;
-    case 'company_done':
-      loadCompanies();
-      if (ev.name) {
-        const tierTxt = ev.tier ? ` — ${tierLabel(ev.tier)}` : '';
-        const scoreTxt = ev.score != null ? ` (${fmtScore(ev.score)})` : '';
-        appendAgentLog(`  ✓ ${ev.name}${tierTxt}${scoreTxt}`, 'ok');
-      }
-      if (state.activeId === ev.id) openDetail(ev.id);
-      break;
-    case 'company_error':
-      toast(`Error on ${ev.name}: ${ev.error}`, 'error');
-      appendAgentLog(`  ✗ ${ev.name}: ${ev.error}`, 'error');
-      loadCompanies();
-      break;
-    case 'stopped':
-      toast('Run stopped', 'info');
-      appendAgentLog('Run stopped by user', 'stopped');
-      setRunning(false);
-      loadCompanies();
-      break;
-    case 'done':
-      toast('Research run complete', 'ok');
-      setPipelineOrchestrator('done');
-      appendAgentLog('Run complete', 'done');
-      setRunning(false);
-      loadCompanies();
-      break;
-    case 'error':
-      toast(`Run failed: ${ev.error}`, 'error');
-      appendAgentLog(`Run failed: ${ev.error}`, 'error');
-      setPipelineOrchestrator('error');
-      setRunning(false);
-      break;
-  }
-}
-
-// ---------- pipeline visualization ----------
-const PIPELINE_STAGES = ['discovery', 'research', 'scoring', 'flags'];
-
-function setPipelineOrchestrator(status) {
-  const node = $('#pipeline-orchestrator');
-  if (!node) return;
-  node.dataset.status = status;
-}
-
-function resetPipelineStages(status) {
-  PIPELINE_STAGES.forEach((s) => setPipelineStage(s, status));
-}
-
-function setPipelineStage(stage, status) {
-  const node = document.querySelector(`.pipeline-node[data-stage="${stage}"]`);
-  if (!node) return;
-  node.dataset.status = status;
-}
-
-function setPipelineCompany(name) {
-  const el = $('#pipeline-current');
-  if (!el) return;
-  el.textContent = name ? `Processing: ${name}` : 'Idle';
-}
-
-function showPipeline(show) {
-  // Pipeline + activity log replace the idle state during a run.
-  const idle = $('#agent-idle');
-  const pipe = $('#pipeline');
-  if (idle) idle.hidden = !!show;
-  if (pipe) {
-    pipe.hidden = !show;
-    pipe.classList.toggle('is-active', !!show);
-  }
-}
 
 // ---------- toolbar ----------
 function bindToolbar() {
@@ -763,8 +566,6 @@ function init() {
   bindToolbar();
   bindDetailActions();
   bindTabs();
-  $('#run-btn').addEventListener('click', startRun);
-  $('#stop-btn').addEventListener('click', stopRun);
   $('#markets-refresh')?.addEventListener('click', async () => {
     const res = await fetch('/api/market-intel/seed', { method: 'POST' });
     const data = await res.json();

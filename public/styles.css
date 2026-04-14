@@ -1790,6 +1790,140 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   pointer-events: auto;
 }
 
+/* ---------- Agent Methodology Page ---------- */
+
+.method-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px 0 60px;
+}
+.method-header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+.method-icon {
+  font-size: 1.6rem;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.method-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--head);
+  margin: 0 0 6px;
+}
+.method-subtitle {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.method-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.method-step {
+  display: flex;
+  gap: 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 20px;
+}
+.method-step-num {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+}
+.method-step-body h3 {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--head);
+  margin: 0 0 6px;
+}
+.method-step-body p {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+  line-height: 1.55;
+}
+.method-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.method-tag {
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  border: 1px solid var(--card-border);
+}
+.method-connector {
+  width: 2px;
+  height: 20px;
+  background: var(--gold);
+  opacity: 0.35;
+  margin: 0 auto;
+}
+
+.method-rubric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.rubric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: var(--bg-soft);
+}
+.rubric-label { color: var(--text); }
+.rubric-weight {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--gold-dark);
+}
+
+.method-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-top: 36px;
+  text-align: center;
+}
+.method-stat-val {
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--head);
+}
+.method-stat-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 900px) {
