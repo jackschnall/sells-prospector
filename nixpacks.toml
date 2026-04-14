@@ -1,0 +1,12 @@
+[phases.setup]
+nixPkgs = ["nodejs_22"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+# Copy everything including data/ into the final image
+[phases.build]
+cmds = ["echo 'Build complete'"]
+
+[start]
+cmd = "npm start"
