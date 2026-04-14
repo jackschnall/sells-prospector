@@ -1,6 +1,6 @@
 {
   "name": "sells-prospector",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Sells M&A Prospector — local AI-powered research tool for plumbing company acquisition targets",
   "private": true,
   "type": "commonjs",
