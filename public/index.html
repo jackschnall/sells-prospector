@@ -168,10 +168,18 @@
           <div class="toolbar">
             <input type="search" id="search" class="search" placeholder="Search companies&hellip;" />
             <div class="toolbar-spacer"></div>
+            <select id="state-filter" class="select" title="Filter by state">
+              <option value="">All States</option>
+            </select>
             <select id="sort" class="select">
-              <option value="score_desc">Score (high to low)</option>
-              <option value="name_asc">Name (A–Z)</option>
-              <option value="recent">Recently researched</option>
+              <option value="score_desc">Score (high &rarr; low)</option>
+              <option value="score_asc">Score (low &rarr; high)</option>
+              <option value="revenue_desc">Est. Revenue (high &rarr; low)</option>
+              <option value="succession_desc">Succession Signal</option>
+              <option value="state_asc">State &rarr; City</option>
+              <option value="city_asc">City (A&ndash;Z)</option>
+              <option value="name_asc">Name (A&ndash;Z)</option>
+              <option value="recent">Recently Researched</option>
             </select>
             <div class="view-toggle">
               <button type="button" id="view-grid" class="active" title="Grid">&#9638;</button>

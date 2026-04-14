@@ -2,7 +2,7 @@
 
 const state = {
   companies: [],
-  filter: { tier: '', search: '', sort: 'score_desc', hideCrm: false },
+  filter: { tier: '', search: '', sort: 'score_desc', hideCrm: false, stateFilter: '' },
   view: 'grid',
   activeId: null,
   running: false,
@@ -76,6 +76,7 @@ async function loadCompanies() {
   if (state.filter.search) params.set('search', state.filter.search);
   if (state.filter.sort) params.set('sort', state.filter.sort);
   if (state.filter.hideCrm) params.set('crm_known', '0');
+  if (state.filter.stateFilter) params.set('state', state.filter.stateFilter);
   const res = await fetch(`/api/companies?${params}`);
   const data = await res.json();
   state.companies = data.companies || [];
@@ -83,6 +84,7 @@ async function loadCompanies() {
   renderCompanies();
   renderDashboard(data.stats);
   renderExport();
+  populateStateFilter();
 }
 
 // ---------- rendering ----------
@@ -103,11 +105,13 @@ function renderCompanies() {
 
 function renderCard(c) {
   const signals = c.signals_json ? safeParse(c.signals_json) : null;
+  const barLabels = { revenue_proxy: 'Revenue', operational_quality: 'Quality', succession_signal: 'Succession', growth_trajectory: 'Growth' };
   const bars = signals
     ? ['revenue_proxy', 'operational_quality', 'succession_signal', 'growth_trajectory']
         .map((k) => {
-          const v = signals[k]?.score ?? 0;
-          return `<div class="bar" title="${escapeHtml(k)}"><i style="width:${Math.max(0, Math.min(10, v)) * 10}%"></i></div>`;
+          const v = signals[k] ?? 0;
+          const score = typeof v === 'object' ? (v.score ?? 0) : v;
+          return `<div class="bar" title="${barLabels[k]}: ${score}/10"><span class="bar-label">${barLabels[k]}</span><i style="width:${Math.max(0, Math.min(10, score)) * 10}%"></i></div>`;
         })
         .join('')
     : '';
@@ -147,6 +151,24 @@ function renderCard(c) {
 
 function safeParse(s) {
   try { return JSON.parse(s); } catch { return null; }
+}
+
+let _stateListPopulated = false;
+async function populateStateFilter() {
+  if (_stateListPopulated) return;
+  const sel = $('#state-filter');
+  if (!sel) return;
+  const res = await fetch('/api/companies?sort=state_asc');
+  const data = await res.json();
+  const states = [...new Set((data.companies || []).map((c) => c.state).filter(Boolean))].sort();
+  if (states.length === 0) return;
+  _stateListPopulated = true;
+  states.forEach((s) => {
+    const opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    sel.appendChild(opt);
+  });
 }
 
 // ---------- dashboard tab ----------
@@ -755,6 +777,10 @@ function bindToolbar() {
   });
   $('#sort').addEventListener('change', (e) => {
     state.filter.sort = e.target.value;
+    loadCompanies();
+  });
+  $('#state-filter').addEventListener('change', (e) => {
+    state.filter.stateFilter = e.target.value;
     loadCompanies();
   });
   $('#view-grid').addEventListener('click', () => {

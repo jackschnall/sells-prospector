@@ -84,8 +84,8 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 
 // ---------- Companies ----------
 app.get('/api/companies', (req, res) => {
-  const { tier, crm_known: crmKnown, search, sort } = req.query;
-  const rows = listCompanies({ tier, crmKnown, search, sort });
+  const { tier, crm_known: crmKnown, search, sort, state: stateFilter } = req.query;
+  const rows = listCompanies({ tier, crmKnown, search, sort, stateFilter });
   // Keep payload light: omit raw_research from list view
   const slim = rows.map(({ raw_research, ...rest }) => rest);
   res.json({ companies: slim, stats: rollupStats() });

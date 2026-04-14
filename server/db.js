@@ -164,7 +164,7 @@ function markCrmKnown(knownNames) {
   return result.changes;
 }
 
-function listCompanies({ tier, crmKnown, search, sort = 'score_desc' } = {}) {
+function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilter } = {}) {
   const where = [];
   const params = [];
   if (tier) {
@@ -178,14 +178,22 @@ function listCompanies({ tier, crmKnown, search, sort = 'score_desc' } = {}) {
     const s = `%${String(search).toLowerCase()}%`;
     params.push(s, s, s);
   }
+  if (stateFilter) {
+    where.push('UPPER(state) = ?');
+    params.push(String(stateFilter).toUpperCase());
+  }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-
   const orderMap = {
     score_desc: 'score DESC NULLS LAST, name ASC',
     score_asc: 'score ASC NULLS LAST, name ASC',
     name_asc: 'name ASC',
     name_desc: 'name DESC',
     tier: "CASE tier WHEN 'strong-buy' THEN 1 WHEN 'watchlist' THEN 2 WHEN 'pass' THEN 3 ELSE 4 END, score DESC",
+    revenue_desc: "COALESCE(CAST(json_extract(signals_json, '$.revenue_proxy.score') AS REAL), CAST(json_extract(signals_json, '$.revenue_proxy') AS REAL)) DESC NULLS LAST, score DESC",
+    succession_desc: "COALESCE(CAST(json_extract(signals_json, '$.succession_signal.score') AS REAL), CAST(json_extract(signals_json, '$.succession_signal') AS REAL)) DESC NULLS LAST, score DESC",
+    state_asc: 'state ASC NULLS LAST, city ASC, name ASC',
+    city_asc: 'city ASC NULLS LAST, state ASC, name ASC',
+    recent: 'last_researched_at DESC NULLS LAST, updated_at DESC',
   };
   const orderBy = orderMap[sort] || orderMap.score_desc;
 

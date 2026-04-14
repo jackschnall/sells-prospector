@@ -745,6 +745,27 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   gap: 8px;
   margin: 12px 0 10px;
 }
+.signals .bar {
+  height: 4px;
+  background: var(--bg-soft);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+.signals .bar i {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  border-radius: 2px;
+}
+.signals .bar-label {
+  display: block;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
 .signal-bar {
   font-size: 0.64rem;
   letter-spacing: 0.06em;
