@@ -42,10 +42,10 @@
           <div class="sb-title">Upload Targets</div>
           <form id="upload-form">
             <label class="dropzone" id="dropzone">
-              <input type="file" id="file-input" accept=".csv,text/csv" hidden />
+              <input type="file" id="file-input" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden />
               <div class="dz-inner">
                 <div class="dz-icon">&#8613;</div>
-                <div class="dz-text">Drop CSV or <u>browse</u></div>
+                <div class="dz-text">Drop CSV / Excel or <u>browse</u></div>
                 <div class="dz-sub">accepted headers: name, city, state, phone, website, owner&hellip;</div>
               </div>
             </label>
@@ -91,9 +91,9 @@
         </section>
 
         <section class="sb-section">
-          <div class="sb-title">Markets</div>
-          <div id="markets-list" class="markets-list">
-            <div class="sb-hint">No markets analyzed yet.</div>
+          <div class="sb-title">Current Market</div>
+          <div id="market-widget" class="market-widget">
+            <div class="sb-hint">Set a geography in Thesis to see market data.</div>
           </div>
         </section>
 
@@ -115,6 +115,7 @@
         <nav class="tabs" id="main-tabs" role="tablist">
           <button type="button" class="tab active" data-tab="dashboard" role="tab">Dashboard</button>
           <button type="button" class="tab" data-tab="companies" role="tab">Companies</button>
+          <button type="button" class="tab" data-tab="markets" role="tab">Markets</button>
           <button type="button" class="tab" data-tab="agent" role="tab">Agent</button>
           <button type="button" class="tab" data-tab="export" role="tab">Export</button>
         </nav>
@@ -187,6 +188,68 @@
               Upload a CSV of target companies to begin prospecting.
             </div>
           </div>
+        </div>
+
+        <!-- MARKETS TAB -->
+        <div id="tab-markets" class="tab-panel">
+          <div class="markets-header">
+            <div class="markets-title">Market Intelligence</div>
+            <div class="markets-sub">Top US metros ranked for plumbing M&A prospecting based on a weighted composite score.</div>
+          </div>
+
+          <div class="markets-methodology">
+            <div class="methodology-title">Methodology</div>
+            <div class="methodology-body">
+              Each metro is scored 0&ndash;10 using a three-tier signal framework:
+              <strong>Tier 1 (60%)</strong> &mdash; Market fundamentals: MSA population size, population growth rate, median home value, new housing permit volume, housing stock age, and plumbing company density.
+              <strong>Tier 2 (25%)</strong> &mdash; Deal activity: estimated M&A activity in the residential trades space, PE platform presence, and owner age demographics.
+              <strong>Tier 3 (15%)</strong> &mdash; Geographic fit: Southeast US and Sun Belt markets are weighted higher based on Sells&rsquo; existing deal flow and travel logistics.
+              Population and housing data are sourced from U.S. Census Bureau estimates and building permit surveys. Plumbing density is derived from BLS QCEW establishment counts. M&A activity scores reflect observed platform and sponsor activity in each metro. Saturation tracks how many target-size companies ($5&ndash;50M revenue) have been identified versus the estimated addressable universe (~1 per 250K population).
+            </div>
+          </div>
+
+          <div class="markets-actions">
+            <button type="button" class="btn-ghost" id="markets-refresh">Refresh Data</button>
+          </div>
+
+          <section class="markets-section">
+            <div class="markets-section-title"><span class="diamond">&#9670;</span> Market Ranker</div>
+            <div class="markets-table-wrap">
+              <table class="markets-table" id="markets-ranker">
+                <thead>
+                  <tr>
+                    <th class="rank-col">#</th>
+                    <th>Metro</th>
+                    <th>Population</th>
+                    <th>Growth</th>
+                    <th>Home Value</th>
+                    <th>Permits</th>
+                    <th>M&A Activity</th>
+                    <th>Score</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="markets-section">
+            <div class="markets-section-title"><span class="diamond">&#9670;</span> Saturation Tracker</div>
+            <div class="markets-table-wrap">
+              <table class="markets-table" id="markets-saturation">
+                <thead>
+                  <tr>
+                    <th>Metro</th>
+                    <th>Found</th>
+                    <th>Addressable</th>
+                    <th>Coverage</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
         </div>
 
         <!-- AGENT TAB -->

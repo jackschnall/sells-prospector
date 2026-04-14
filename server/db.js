@@ -86,6 +86,26 @@ db.exec(`
   }
 }
 
+// Migration: add market intelligence columns to markets table.
+{
+  const cols = db.prepare('PRAGMA table_info(markets)').all().map((c) => c.name);
+  const newCols = [
+    ['population_growth', 'REAL'],
+    ['median_home_value', 'INTEGER'],
+    ['housing_permits', 'INTEGER'],
+    ['housing_age_score', 'REAL'],
+    ['plumbing_density', 'REAL'],
+    ['ma_activity_score', 'REAL'],
+    ['market_score', 'REAL'],
+    ['saturation_status', 'TEXT'],
+  ];
+  for (const [name, type] of newCols) {
+    if (!cols.includes(name)) {
+      db.exec(`ALTER TABLE markets ADD COLUMN ${name} ${type}`);
+    }
+  }
+}
+
 function normalizeName(name) {
   return String(name || '')
     .toLowerCase()

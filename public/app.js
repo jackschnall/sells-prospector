@@ -7,6 +7,7 @@ const state = {
   activeId: null,
   running: false,
   sse: null,
+  marketIntel: [],
 };
 
 // ---------- helpers ----------
@@ -56,6 +57,8 @@ async function loadStatus() {
   if (data.thesis) {
     if (data.thesis.geography) $('#t-geo').value = data.thesis.geography;
   }
+  // Refresh market widget after thesis loads (geography may have been set)
+  if (state.marketIntel.length) renderMarketWidget();
   if (data.run && data.run.running) setRunning(true, data.run);
 }
 
@@ -433,38 +436,132 @@ async function loadSfNames() {
 // ---------- markets ----------
 async function loadMarkets() {
   try {
-    const res = await fetch('/api/markets');
+    const res = await fetch('/api/market-intel');
     const data = await res.json();
-    renderMarkets(data.markets || []);
+    state.marketIntel = data.markets || [];
+    renderMarketsTab(state.marketIntel);
+    renderMarketWidget();
   } catch (err) {
     console.warn('Failed to load markets:', err);
   }
 }
 
-function renderMarkets(markets) {
-  const host = $('#markets-list');
+function renderMarketsTab(markets) {
+  // Market Ranker table
+  const rankerBody = $('#markets-ranker tbody');
+  if (rankerBody) {
+    if (!markets.length) {
+      rankerBody.innerHTML = '<tr><td colspan="8" class="markets-empty">No market data yet. Click Refresh Data.</td></tr>';
+    } else {
+      rankerBody.innerHTML = markets
+        .sort((a, b) => (b.market_score || 0) - (a.market_score || 0))
+        .map((m, i) => {
+          const scoreClass = (m.market_score || 0) >= 7 ? 'score-high' : (m.market_score || 0) >= 5 ? 'score-mid' : 'score-low';
+          return `
+            <tr class="${scoreClass}">
+              <td class="rank-col">${i + 1}</td>
+              <td><strong>${escapeHtml(m.city)}, ${escapeHtml(m.state)}</strong><div class="msa-sub">${escapeHtml(m.msa_name || '')}</div></td>
+              <td>${fmtPop(m.population)}</td>
+              <td>${m.population_growth != null ? m.population_growth.toFixed(1) + '%' : '—'}</td>
+              <td>${m.median_home_value ? '$' + fmtNum(m.median_home_value) : '—'}</td>
+              <td>${m.housing_permits ? fmtNum(m.housing_permits) : '—'}</td>
+              <td>${m.ma_activity_score != null ? renderMiniBar(m.ma_activity_score) : '—'}</td>
+              <td class="score-cell"><span class="market-score-badge ${scoreClass}">${(m.market_score || 0).toFixed(1)}</span></td>
+            </tr>
+          `;
+        })
+        .join('');
+    }
+  }
+
+  // Saturation Tracker table
+  const satBody = $('#markets-saturation tbody');
+  if (satBody) {
+    const withCompanies = markets.filter((m) => m.loaded > 0);
+    if (!withCompanies.length) {
+      satBody.innerHTML = '<tr><td colspan="5" class="markets-empty">No companies discovered yet. Run discovery to see saturation data.</td></tr>';
+    } else {
+      satBody.innerHTML = withCompanies
+        .sort((a, b) => (b.coverage_pct || 0) - (a.coverage_pct || 0))
+        .map((m) => {
+          const satClass = m.saturation_status === 'Saturated' ? 'sat-full' :
+                           m.saturation_status === 'Active' ? 'sat-active' : 'sat-fresh';
+          return `
+            <tr>
+              <td><strong>${escapeHtml(m.city)}, ${escapeHtml(m.state)}</strong></td>
+              <td>${m.loaded}</td>
+              <td>${m.addressable}</td>
+              <td>
+                <div class="sat-bar-wrap">
+                  <div class="sat-bar ${satClass}" style="width:${Math.min(100, m.coverage_pct || 0)}%"></div>
+                  <span class="sat-pct">${m.coverage_pct || 0}%</span>
+                </div>
+              </td>
+              <td><span class="sat-chip ${satClass}">${escapeHtml(m.saturation_status || 'Fresh')}</span></td>
+            </tr>
+          `;
+        })
+        .join('');
+    }
+  }
+}
+
+function renderMarketWidget() {
+  const host = $('#market-widget');
   if (!host) return;
-  if (!markets.length) {
-    host.innerHTML = '<div class="sb-hint">No markets analyzed yet.</div>';
+  const geo = ($('#t-geo')?.value || '').trim();
+  if (!geo || !state.marketIntel?.length) {
+    host.innerHTML = '<div class="sb-hint">Set a geography in Thesis to see market data.</div>';
     return;
   }
-  host.innerHTML = markets
-    .map((m) => {
-      const tier = m.tier || 'cold';
-      const loc = `${escapeHtml(m.city)}, ${escapeHtml(m.state)}`;
-      const cov = m.addressable
-        ? `${m.loaded}/${m.addressable}`
-        : `${m.loaded}`;
-      const label = tier === 'hot' ? 'Hot' : tier === 'warm' ? 'Warm' : 'Cold';
-      return `
-        <div class="market-row tier-${escapeHtml(tier)}">
-          <div class="market-name" title="${loc}">${loc}</div>
-          <div class="market-coverage" title="loaded / addressable">${cov}</div>
-          <div class="market-tier-chip tier-${escapeHtml(tier)}">${label}</div>
+  // Try to match the geography to a market
+  const geoLower = geo.toLowerCase();
+  const match = state.marketIntel.find((m) =>
+    geoLower.includes(m.city.toLowerCase()) ||
+    geoLower.includes(m.msa_name?.toLowerCase() || '') ||
+    (m.state && geoLower.includes(m.state.toLowerCase()))
+  );
+  if (!match) {
+    host.innerHTML = `<div class="sb-hint">No market data for "${escapeHtml(geo)}".</div>`;
+    return;
+  }
+  const scoreClass = (match.market_score || 0) >= 7 ? 'score-high' : (match.market_score || 0) >= 5 ? 'score-mid' : 'score-low';
+  const satClass = match.saturation_status === 'Saturated' ? 'sat-full' :
+                   match.saturation_status === 'Active' ? 'sat-active' : 'sat-fresh';
+  host.innerHTML = `
+    <div class="mw-score ${scoreClass}">
+      <div class="mw-score-val">${(match.market_score || 0).toFixed(1)}</div>
+      <div class="mw-score-label">Market Score</div>
+    </div>
+    <div class="mw-details">
+      <div class="mw-name">${escapeHtml(match.city)}, ${escapeHtml(match.state)}</div>
+      <div class="mw-pop">${fmtPop(match.population)} pop · ${match.population_growth?.toFixed(1) || '?'}% growth</div>
+      <div class="mw-sat">
+        <div class="sat-bar-wrap small">
+          <div class="sat-bar ${satClass}" style="width:${Math.min(100, match.coverage_pct || 0)}%"></div>
+          <span class="sat-pct">${match.coverage_pct || 0}%</span>
         </div>
-      `;
-    })
-    .join('');
+        <span class="sat-chip ${satClass}">${escapeHtml(match.saturation_status || 'Fresh')}</span>
+      </div>
+    </div>
+  `;
+}
+
+function fmtPop(n) {
+  if (!n) return '—';
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return Math.round(n / 1000) + 'K';
+  return String(n);
+}
+
+function fmtNum(n) {
+  if (!n) return '0';
+  return Number(n).toLocaleString();
+}
+
+function renderMiniBar(val) {
+  const pct = Math.max(0, Math.min(100, (val / 10) * 100));
+  return `<div class="mini-bar"><div class="mini-fill" style="width:${pct}%"></div><span>${val.toFixed(1)}</span></div>`;
 }
 
 // ---------- run controls ----------
@@ -748,10 +845,19 @@ function init() {
   bindToolbar();
   bindDetailActions();
   bindTabs();
-  $('#thesis-save').addEventListener('click', saveThesis);
+  $('#thesis-save').addEventListener('click', async () => {
+    await saveThesis();
+    renderMarketWidget();
+  });
   $('#sf-save').addEventListener('click', saveSfNames);
   $('#run-btn').addEventListener('click', startRun);
   $('#stop-btn').addEventListener('click', stopRun);
+  $('#markets-refresh')?.addEventListener('click', async () => {
+    const res = await fetch('/api/market-intel/seed', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) toast(`Refreshed ${data.count} markets`, 'ok');
+    await loadMarkets();
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('#detail-panel').hidden) closeDetail();
   });

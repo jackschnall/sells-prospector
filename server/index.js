@@ -23,6 +23,7 @@ const { startRun, stopRun, getRunState, addListener, removeListener, emit } = re
 const sf = require('./salesforce');
 const { providerStatus } = require('./providers');
 const markets = require('./markets');
+const marketIntel = require('./market-intel');
 const { buildWorkbook, workbookToBuffer, buildFilename } = require('./xlsx-export');
 
 const app = express();
@@ -155,6 +156,17 @@ app.get('/api/markets', (req, res) => {
   res.json({ markets: markets.listAll() });
 });
 
+// ---------- Market Intelligence ----------
+app.get('/api/market-intel', (req, res) => {
+  const rankings = marketIntel.getRankings();
+  res.json({ markets: rankings });
+});
+
+app.post('/api/market-intel/seed', (req, res) => {
+  const results = marketIntel.seedMarkets();
+  res.json({ ok: true, count: results.length });
+});
+
 // ---------- Run control ----------
 app.post('/api/run', (req, res) => {
   const result = startRun();
@@ -263,6 +275,16 @@ function safeJson(s) {
     return JSON.parse(s);
   } catch {
     return null;
+  }
+}
+
+// ---------- Auto-seed market intelligence if empty ----------
+{
+  const { db } = require('./db');
+  const count = db.prepare('SELECT COUNT(*) AS n FROM markets').get().n;
+  if (count === 0) {
+    console.log('Seeding market intelligence data…');
+    marketIntel.seedMarkets();
   }
 }
 
