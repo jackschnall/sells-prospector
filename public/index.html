@@ -206,12 +206,133 @@
 
         <!-- AGENT TAB -->
         <div id="tab-agent" class="tab-panel">
+
+          <!-- Architecture Web -->
+          <div class="arch-web">
+            <div class="arch-title">M&amp;A Research Agent Architecture</div>
+
+            <!-- INPUTS row -->
+            <div class="arch-label">Inputs</div>
+            <div class="arch-row arch-inputs">
+              <div class="arch-node arch-input">
+                <div class="arch-node-name">Market Intelligence</div>
+                <div class="arch-node-desc">40 metros, growth data, housing permits</div>
+              </div>
+              <div class="arch-node arch-input">
+                <div class="arch-node-name">Company Universe</div>
+                <div class="arch-node-desc">Web discovery + CSV imports</div>
+              </div>
+              <div class="arch-node arch-input">
+                <div class="arch-node-name">Exclusion Lists</div>
+                <div class="arch-node-desc">P3 Universe, CRM dedup</div>
+              </div>
+              <div class="arch-node arch-input">
+                <div class="arch-node-name">Deal Thesis</div>
+                <div class="arch-node-desc">Sector, size, geography filters</div>
+              </div>
+            </div>
+
+            <!-- Lines down -->
+            <div class="arch-lines">
+              <svg class="arch-svg arch-svg-top" viewBox="0 0 800 40" preserveAspectRatio="none">
+                <line x1="100" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="300" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="500" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="700" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+              </svg>
+            </div>
+
+            <!-- ORCHESTRATOR -->
+            <div class="arch-row arch-center">
+              <div class="arch-node arch-orch">
+                <div class="arch-node-name">Orchestrator</div>
+                <div class="arch-node-desc">Claude Code &mdash; routes tasks, manages batches, merges results</div>
+              </div>
+            </div>
+
+            <!-- Lines to agents -->
+            <div class="arch-lines">
+              <svg class="arch-svg arch-svg-mid" viewBox="0 0 800 40" preserveAspectRatio="none">
+                <line x1="400" y1="0" x2="100" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="300" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="500" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="700" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+              </svg>
+            </div>
+
+            <!-- AGENT CORE row -->
+            <div class="arch-label">Agent Core</div>
+            <div class="arch-row arch-agents">
+              <div class="arch-node arch-agent">
+                <div class="arch-node-name">Discovery Agent</div>
+                <div class="arch-node-desc">Web search, BBB, Yelp, Angi, state license DBs</div>
+              </div>
+              <div class="arch-node arch-agent">
+                <div class="arch-node-name">Research Agent</div>
+                <div class="arch-node-desc">Owner/succession, revenue, reviews, litigation</div>
+              </div>
+              <div class="arch-node arch-agent">
+                <div class="arch-node-name">Scoring Agent</div>
+                <div class="arch-node-desc">7-signal rubric, weighted composite, tier assignment</div>
+              </div>
+              <div class="arch-node arch-agent">
+                <div class="arch-node-name">Flag Agent</div>
+                <div class="arch-node-desc">Hard stops, yellow flags, PE/acquisition checks</div>
+              </div>
+            </div>
+
+            <!-- Lines to synthesis -->
+            <div class="arch-lines">
+              <svg class="arch-svg arch-svg-mid" viewBox="0 0 800 40" preserveAspectRatio="none">
+                <line x1="100" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="300" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="500" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="700" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+              </svg>
+            </div>
+
+            <!-- SYNTHESIS -->
+            <div class="arch-row arch-center">
+              <div class="arch-node arch-synth">
+                <div class="arch-node-name">Synthesis + Persistence</div>
+                <div class="arch-node-desc">Rank, inject into database, generate summaries &amp; outreach angles</div>
+              </div>
+            </div>
+
+            <!-- Lines to outputs -->
+            <div class="arch-lines">
+              <svg class="arch-svg arch-svg-bot" viewBox="0 0 800 40" preserveAspectRatio="none">
+                <line x1="400" y1="0" x2="160" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="640" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+              </svg>
+            </div>
+
+            <!-- OUTPUTS row -->
+            <div class="arch-label">Outputs</div>
+            <div class="arch-row arch-outputs">
+              <div class="arch-node arch-output">
+                <div class="arch-node-name">Target Tearsheet</div>
+                <div class="arch-node-desc">One page per company</div>
+              </div>
+              <div class="arch-node arch-output">
+                <div class="arch-node-name">Priority List</div>
+                <div class="arch-node-desc">Ranked with scores &amp; tiers</div>
+              </div>
+              <div class="arch-node arch-output">
+                <div class="arch-node-name">Excel Export</div>
+                <div class="arch-node-desc">Full dataset, signals, contacts</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Methodology detail (existing) -->
           <div class="method-page">
 
             <div class="method-header">
               <div class="method-icon">&#9670;</div>
-              <h2 class="method-title">AI Research Agent</h2>
-              <p class="method-subtitle">How Claude Code discovers, researches, and scores M&amp;A targets</p>
+              <h2 class="method-title">Pipeline Detail</h2>
+              <p class="method-subtitle">Step-by-step breakdown of how each stage works</p>
             </div>
 
             <!-- Pipeline flow -->
