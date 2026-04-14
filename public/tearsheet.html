@@ -144,6 +144,16 @@
         display: block;
         margin-bottom: 4px;
       }
+      .ts-outreach-angle {
+        background: #fef9e7;
+        border-left: 4px solid #c9a84c;
+        padding: 14px 18px;
+        font-style: italic;
+        font-size: 16px;
+        line-height: 1.5;
+        color: #6b5b1f;
+        margin-top: 16px;
+      }
       .ts-footer {
         margin-top: 40px;
         padding-top: 12px;
@@ -194,6 +204,7 @@
     <section class="ts-section">
       <div class="ts-section-title">Executive Summary</div>
       <div class="ts-summary" id="ts-summary">—</div>
+      <div class="ts-outreach-angle" id="ts-outreach-angle" hidden></div>
     </section>
 
     <section class="ts-section">
@@ -240,7 +251,7 @@
         return '';
       }
       function tierLabel(t) {
-        if (t === 'strong-buy') return 'Likely to Sell';
+        if (t === 'strong-buy') return 'Prime';
         if (t === 'watchlist') return 'Possible';
         if (t === 'pass') return 'Unlikely';
         return '—';
@@ -264,6 +275,11 @@
         tierEl.textContent = tierLabel(c.tier);
         tierEl.className = `ts-tier ${tierClass(c.tier)}`;
         document.getElementById('ts-summary').textContent = c.summary || '—';
+        if (c.outreach_angle) {
+          const oaEl = document.getElementById('ts-outreach-angle');
+          oaEl.textContent = c.outreach_angle;
+          oaEl.hidden = false;
+        }
 
         const weights = {
           revenue_proxy: 0.22,

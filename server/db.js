@@ -106,6 +106,14 @@ db.exec(`
   }
 }
 
+// Migration: add home_sales_volume to markets table.
+{
+  const cols = db.prepare('PRAGMA table_info(markets)').all().map((c) => c.name);
+  if (!cols.includes('home_sales_volume')) {
+    db.exec('ALTER TABLE markets ADD COLUMN home_sales_volume INTEGER');
+  }
+}
+
 // Migration: add outreach_status column.
 {
   const cols = db.prepare('PRAGMA table_info(companies)').all().map((c) => c.name);

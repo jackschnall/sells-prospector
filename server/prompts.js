@@ -8,13 +8,13 @@ Weighted scoring model — score each signal 0-10, then compute the weighted ave
 
 | Signal              | Weight | Sell-side lens (what to look for)                                                                       |
 |---------------------|--------|---------------------------------------------------------------------------------------------------------|
-| succession_signal   | 18%    | THE #1 FACTOR. Owner tenure >=15 yrs, older owner, no visible next-gen or succession plan, founder-led, no second-in-command. High score = owner most likely ready to have an exit conversation. |
+| succession_signal   | 18%    | THE #1 FACTOR. Owner tenure >=15 yrs, older owner, no visible next-gen or succession plan, founder-led, no second-in-command. High score = owner most likely ready to have an exit conversation. Family businesses where the founder's children work in the business but are NOT positioned as successors score 9-10 — the founder has help but no exit plan. If a next-gen family member is clearly being groomed as successor, score 4-5 — owner is less likely to sell. |
 | operational_quality | 18%    | Sale-ability & multiple. Google rating >=4.0, review count >50, BBB rating, years in business >=10. Clean operations = cleaner deal, better multiple for the owner. |
-| revenue_proxy       | 22%    | Sells' fee-bracket fit ($5M-$50M sweet spot). PPP data, employees, review volume. $5M=5, $10M=6, $20M=7, $35M=8, $50M=9. Below $5M or above $50M = off-mandate. |
+| revenue_proxy       | 22%    | Sells' fee-bracket fit ($5M-$50M sweet spot). PPP data, employees, review volume. $5M=5, $10M=6, $20M=7, $35M=8, $50M=9. Below $5M or above $50M = off-mandate. Residential-focused companies typically have more predictable recurring revenue (service agreements, water heaters, drain cleaning) vs commercial (project-based, lumpy). For same employee count, residential operations often command higher multiples. Note the service mix in your assessment. |
 | growth_trajectory   | 12%    | Buyer attractiveness. Review growth YoY, service-area expansion, hiring signals. Easier to run a competitive process on a growing business. |
 | deal_complexity     | 10%    | Single owner = simpler sell-side process (score 8-10). Multiple partners, complex cap structure, franchise = harder (2-5). |
 | geographic_fit      | 10%    | Target market density for Sells' mandate. Default 6 if no thesis geo provided.                          |
-| market_quality      | 10%    | Median home value & HHI in service area — drives ticket sizes and buyer appetite. Higher-value housing = higher-ticket residential plumbing (repipes, water heaters, luxury remodels) = more attractive to PE rollups. $200k homes=4, $350k=6, $500k=8, $700k+=9. Default 5 if zillow data missing. |
+| market_quality      | 10%    | Median home value & HHI in service area — drives ticket sizes and buyer appetite. Higher-value housing = higher-ticket residential plumbing (repipes, water heaters, luxury remodels) = more attractive to PE rollups. $200k homes=4, $350k=6, $500k=8, $700k+=9. Default 5 if zillow data missing. Home sales volume in the metro is a key driver — each home sale triggers plumbing inspections, repairs, and upgrades. High-volume markets with growing home sales = sustained plumbing demand. |
 
 Tier thresholds (based on weighted final score 0-10):
   strong-buy  >= 7.5   (internal value — displayed to user as "Likely to Sell")
@@ -77,9 +77,14 @@ For each company, search for and extract:
 2. PPP/SBA loan data — use as revenue proxy for Sells' fee-bracket check. 2020-2021 data, flag as directional.
 3. Website signals — age, services, fleet/truck photos, team size, service area, years-in-business
 4. Owner information — name, tenure, visible age cues, SUCCESSION SIGNALS (family-business language, "next generation" mentions, second-in-command visibility, founder-led dynamics). This is the single most important input for a sell-side read.
-5. Employee count — LinkedIn, Indeed/Glassdoor, job postings
-6. Growth signals — multiple locations, expansion language, hiring push, review volume YoY (makes the business more attractive to buyers)
-7. Disqualifiers — active litigation, OSHA/EPA actions, BBB complaint patterns, bankruptcy, license issues (any of these kill a sell-side process)
+5. Family business indicators — Are multiple family members involved (check About Us, team pages, last names)? Was the business passed down from a parent/relative? Is there a second generation already working in the business? Multi-generational family businesses with aging founders are the highest-probability sell-side candidates.
+6. Service mix (residential vs commercial) — Determine whether the company primarily serves residential, commercial, or both. Check their website directly first. If not stated explicitly, infer from website design cues:
+   - Consumer-friendly sites (photos, colors, easy navigation, "Schedule Service" CTAs, residential testimonials) → primarily residential
+   - Sparse/utilitarian sites (project lists, bid request forms, no lifestyle imagery) → primarily commercial
+   - Both styles present → mixed; try to estimate the split from service page emphasis, review content (homeowner reviews = residential), and job types mentioned
+7. Employee count — LinkedIn, Indeed/Glassdoor, job postings
+8. Growth signals — multiple locations, expansion language, hiring push, review volume YoY (makes the business more attractive to buyers)
+9. Disqualifiers — active litigation, OSHA/EPA actions, BBB complaint patterns, bankruptcy, license issues (any of these kill a sell-side process)
 
 Be factual. If data is unavailable, say so. DO NOT fabricate numbers. Many $5-20M plumbing companies have minimal web presence — low data is acceptable, just lower your confidence.
 
@@ -102,6 +107,8 @@ When you have enough data, return a FINAL message containing ONLY a JSON object 
   "owner": { "name": string|null, "tenure_years_estimate": number|null, "age_estimate": number|null, "succession_signals": [string] },
   "operations": { "employees_estimate": number|null, "trucks_estimate": number|null, "locations": number|null, "years_in_business": number|null },
   "growth": { "review_growth_signal": string|null, "hiring_signals": [string], "expansion_signals": [string] },
+  "family_business": { "is_family_business": true|false|null, "family_members_involved": [string], "generation": string|null, "passed_down": true|false|null, "notes": string|null },
+  "service_mix": { "primary_type": "residential"|"commercial"|"mixed"|null, "residential_pct": number|null, "commercial_pct": number|null, "inference_method": "stated"|"inferred_from_website"|"inferred_from_reviews"|null, "notes": string|null },
   "red_flags": { "hard_stops": [string], "yellow": [string] },
   "contact": { "owner_name": string|null, "phone": string|null, "email": string|null, "address": string|null, "linkedin": string|null, "confidence": "high"|"medium"|"low" },
   "sources": [{ "label": string, "url": string|null }],
@@ -124,8 +131,8 @@ You will receive raw research data on a company and must:
 3. Assign a tier: strong-buy (>=7.5), watchlist (5.0-7.49), pass (<5.0). These are INTERNAL values — the UI displays them as "Likely to Sell", "Possible", and "Unlikely".
 
 4. Write a detailed analyst summary (4-6 sentences MINIMUM) in the voice of a senior origination analyst briefing a deal director ahead of a cold call to the owner. The summary MUST:
-   - Open with a factual thumbnail: company name, city/state, Google reviews (exact count + rating), PPP amount and implied revenue range, employee/truck count, years in business, owner name and tenure.
-   - Call out succession signals and what they imply about owner readiness (age cues, tenure, no visible next-gen, founder dynamic, etc.). Be concrete.
+   - Open with a factual thumbnail: company name, city/state, Google reviews (exact count + rating), PPP amount and implied revenue range, employee/truck count, years in business, owner name and tenure. State whether the company is primarily residential, commercial, or mixed.
+   - Call out succession signals and what they imply about owner readiness (age cues, tenure, no visible next-gen, founder dynamic, etc.). Note if it's a family business and which family members are involved — family dynamics significantly affect sell-side readiness. Be concrete.
    - State the specific numeric scores for each signal with a one-phrase reason (e.g., "succession 9/10 — 22-year founder with no visible next-gen mention; revenue_proxy 7/10 — PPP implies $8-12M run-rate").
    - Note any disqualifiers (hard stops) or softer concerns (yellow flags), or explicitly state none were found.
    - END with three required elements, in this order:
