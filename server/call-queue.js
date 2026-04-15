@@ -2,7 +2,8 @@
 // Call Queue — priority algorithm for the analyst's daily call surface.
 //
 // Buckets (in priority order, de-duped across buckets):
-//   1. Scheduled callback due today or overdue (from a completed debrief)
+//   1. Scheduled callback due today or overdue (from a completed debrief OR
+//      a manually-added calendar event tied to a company)
 //   2. Prime never contacted (strong-buy, no call_logs)
 //   3. Prime no-answer (strong-buy, most recent sentiment == 'No Answer')
 //   4. Emerging never contacted (watchlist, no call_logs)
@@ -66,6 +67,7 @@ async function buildQueue(user, opts = {}) {
 
   // Pull each company with: last-call info + next scheduled callback (if any).
   // We left-join the MOST RECENT call_log per company and a pending callback event.
+  // We also left-join the SOONEST upcoming manual calendar event (today or overdue).
   const sql = `
     WITH last_call AS (
       SELECT DISTINCT ON (company_id)
@@ -88,23 +90,40 @@ async function buildQueue(user, opts = {}) {
         AND cl.debrief_status = 'complete'
         AND cl.scheduled_callback_date <= CURRENT_DATE
       ORDER BY cl.company_id, cl.scheduled_callback_date ASC
+    ),
+    pending_event AS (
+      SELECT DISTINCT ON (ce.company_id)
+        ce.company_id,
+        ce.id         AS event_id,
+        ce.starts_at  AS event_starts_at,
+        ce.title      AS event_title,
+        ce.description AS event_description,
+        ce.source     AS event_source
+      FROM calendar_events ce
+      WHERE ce.company_id IS NOT NULL
+        AND COALESCE(ce.completed, FALSE) = FALSE
+        AND ce.starts_at::date <= CURRENT_DATE
+      ORDER BY ce.company_id, ce.starts_at ASC
     )
     SELECT
       c.id, c.name, c.city, c.state, c.phone, c.owner, c.email,
       c.score, c.tier, c.outreach_angle, c.pipeline_stage,
       lc.last_call_id, lc.last_called_at, lc.last_sentiment,
       lc.last_status, lc.last_debrief_status,
-      pc.scheduled_callback_date, pc.call_log_id AS callback_call_log_id
+      pc.scheduled_callback_date, pc.call_log_id AS callback_call_log_id,
+      pe.event_id, pe.event_starts_at, pe.event_title, pe.event_description, pe.event_source
     FROM companies c
     LEFT JOIN last_call lc ON lc.company_id = c.id
     LEFT JOIN pending_callback pc ON pc.company_id = c.id
+    LEFT JOIN pending_event pe ON pe.company_id = c.id
     WHERE (c.pipeline_stage IS NULL OR NOT (c.pipeline_stage = ANY($${terminalIdx}::text[])))
       ${territoryFilter}
-      -- cooldown: exclude if last call within cooldown_days AND no pending callback due
+      -- cooldown: exclude if last call within cooldown_days AND no pending callback/event due
       AND (
         lc.last_called_at IS NULL
         OR lc.last_called_at < NOW() - ($${cooldownIdx} || ' days')::interval
         OR pc.scheduled_callback_date IS NOT NULL
+        OR pe.event_id IS NOT NULL
       )
     ORDER BY c.score DESC NULLS LAST, c.name ASC
   `;
@@ -150,6 +169,15 @@ async function buildQueue(user, opts = {}) {
             call_log_id: row.callback_call_log_id,
           }
         : null,
+      event: row.event_id
+        ? {
+            id: row.event_id,
+            starts_at: row.event_starts_at,
+            title: row.event_title,
+            description: row.event_description,
+            source: row.event_source,
+          }
+        : null,
     });
   }
 
@@ -159,7 +187,7 @@ async function buildQueue(user, opts = {}) {
   }
 
   for (const row of usable) {
-    // Bucket 1: scheduled callback due (date <= today)
+    // Bucket 1a: scheduled callback due (from completed debrief)
     if (row.scheduled_callback_date) {
       const when = new Date(row.scheduled_callback_date);
       const today = new Date();
@@ -167,6 +195,21 @@ async function buildQueue(user, opts = {}) {
       const whenDay = new Date(when.getFullYear(), when.getMonth(), when.getDate());
       const overdue = whenDay < today;
       push(1, row, overdue ? 'Callback overdue' : 'Callback due today');
+      continue;
+    }
+    // Bucket 1b: manual calendar event for today or overdue
+    if (row.event_id) {
+      const when = new Date(row.event_starts_at);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const whenDay = new Date(when.getFullYear(), when.getMonth(), when.getDate());
+      const overdue = whenDay < today;
+      const timeStr = when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const title = row.event_title || 'Scheduled task';
+      const reason = overdue
+        ? `Overdue: ${title}`
+        : `${timeStr} — ${title}`;
+      push(1, row, reason);
       continue;
     }
     const hasCall = !!row.last_call_id;

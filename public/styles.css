@@ -3578,3 +3578,99 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   line-height: 1;
 }
 .ctm-company-picked-clear:hover { color: #e74c3c; }
+
+/* Add Company notes textarea */
+.cm-notes {
+  min-height: 80px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+/* ───────────────────────────────────────────────────────────
+   Detail panel: Notes section + enlarged activity compose
+   ─────────────────────────────────────────────────────────── */
+.d-notes-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.d-notes-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(13, 27, 42, 0.025);
+  border: 1px solid rgba(13, 27, 42, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+}
+.d-notes-input {
+  min-height: 90px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  width: 100%;
+}
+.d-notes-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.d-notes-spacer { flex: 1; }
+.d-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+.d-note-item {
+  background: #fff;
+  border: 1px solid rgba(13, 27, 42, 0.08);
+  border-left: 3px solid var(--gold);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: rgba(13, 27, 42, 0.88);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.d-note-meta {
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  color: rgba(13, 27, 42, 0.45);
+  margin-top: 6px;
+  letter-spacing: 0.03em;
+}
+.d-notes-empty {
+  font-size: 12px;
+  color: rgba(13, 27, 42, 0.45);
+  font-style: italic;
+  padding: 4px 2px;
+}
+
+/* Enlarged Activity Timeline compose */
+.activity-compose-tall {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(13, 27, 42, 0.025);
+  border: 1px solid rgba(13, 27, 42, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+}
+.activity-compose-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.d-activity-summary {
+  min-height: 72px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  width: 100%;
+}
+

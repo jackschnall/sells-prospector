@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260415e" />
+    <link rel="stylesheet" href="/styles.css?v=20260415f" />
   </head>
   <body>
     <div id="mock-banner" class="mock-banner" hidden>
@@ -551,6 +551,10 @@
                   <div class="qp-label">Owner</div>
                   <div class="qp-value" id="qp-owner">—</div>
                 </div>
+                <div class="qp-section qp-event-section" id="qp-event-section" hidden>
+                  <div class="qp-section-title">Scheduled Task</div>
+                  <div class="qp-section-body" id="qp-event">—</div>
+                </div>
                 <div class="qp-section" id="qp-angle-section" hidden>
                   <div class="qp-section-title">Outreach Angle</div>
                   <div class="qp-section-body" id="qp-angle">—</div>
@@ -686,6 +690,7 @@
           <input type="email" id="cm-email" class="cf-input" placeholder="Email" />
           <input type="text" id="cm-address" class="cf-input" placeholder="Address" />
           <input type="text" id="cm-linkedin" class="cf-input" placeholder="LinkedIn URL" />
+          <textarea id="cm-notes" class="cf-input cm-notes" placeholder="Notes"></textarea>
           <div class="cal-ev-actions">
             <button type="button" class="btn-ghost" id="cm-cancel">Cancel</button>
             <button type="button" class="btn-primary" id="cm-save">Save Company</button>
@@ -822,6 +827,24 @@
         </section>
 
         <section class="d-section">
+          <div class="d-section-title d-section-title-toggle" id="d-notes-toggle">
+            Notes <span class="d-section-count" id="d-notes-count">0</span>
+            <span class="d-section-arrow">&#9662;</span>
+          </div>
+          <div id="d-notes-body" class="d-notes-body">
+            <div class="d-notes-compose">
+              <textarea id="d-notes-input" class="cf-input d-notes-input" placeholder="Write a note&hellip;"></textarea>
+              <div class="d-notes-actions">
+                <button type="button" class="btn-ghost btn-xs" id="d-notes-stamp" title="Insert date/time + your initials">&#9654; Insert Timestamp</button>
+                <div class="d-notes-spacer"></div>
+                <button type="button" class="btn-primary btn-xs" id="d-notes-save">Save Note</button>
+              </div>
+            </div>
+            <div id="d-notes-list" class="d-notes-list"></div>
+          </div>
+        </section>
+
+        <section class="d-section">
           <div class="d-section-title">
             Call History <span class="d-section-count" id="d-calls-count">0</span>
           </div>
@@ -832,15 +855,17 @@
 
         <section class="d-section">
           <div class="d-section-title">Activity Timeline</div>
-          <div class="activity-compose">
-            <select id="d-activity-type" class="select select-sm">
-              <option value="note">Note</option>
-              <option value="call">Call</option>
-              <option value="email">Email</option>
-              <option value="meeting">Meeting</option>
-            </select>
-            <input type="text" id="d-activity-summary" class="cf-input" placeholder="What happened?" />
-            <button type="button" class="btn-ghost btn-xs" id="d-activity-save">Log</button>
+          <div class="activity-compose activity-compose-tall">
+            <div class="activity-compose-row">
+              <select id="d-activity-type" class="select select-sm">
+                <option value="note">Note</option>
+                <option value="call">Call</option>
+                <option value="email">Email</option>
+                <option value="meeting">Meeting</option>
+              </select>
+              <button type="button" class="btn-ghost btn-xs" id="d-activity-save">Log</button>
+            </div>
+            <textarea id="d-activity-summary" class="cf-input d-activity-summary" placeholder="What happened? (drag the bottom-right corner to resize)"></textarea>
           </div>
           <div id="d-activities" class="d-activities"></div>
         </section>
@@ -944,6 +969,6 @@
       </div>
     </div>
 
-    <script src="/app.js?v=20260415e"></script>
+    <script src="/app.js?v=20260415f"></script>
   </body>
 </html>

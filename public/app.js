@@ -629,6 +629,9 @@ function renderDetail(data) {
   // Activities
   renderActivities(activities);
 
+  // Notes
+  renderNotes(data.notes || []);
+
   // Actions
   $('#d-override').textContent = c.crm_override ? 'Crm Override: ON' : 'Research Anyway';
   $('#d-override').hidden = !c.crm_known;
@@ -636,6 +639,80 @@ function renderDetail(data) {
 
   // Reset contact form
   $('#d-contact-form').hidden = true;
+}
+
+function renderNotes(notes) {
+  const host = $('#d-notes-list');
+  const count = $('#d-notes-count');
+  if (!host || !count) return;
+  count.textContent = String(notes.length);
+  if (!notes.length) {
+    host.innerHTML = '<div class="d-notes-empty">No notes yet.</div>';
+    return;
+  }
+  host.innerHTML = notes.map((n) => {
+    const ts = n.created_at ? new Date(n.created_at).toLocaleString() : '';
+    return `
+      <div class="d-note-item">
+        <div class="d-note-body">${escapeHtml(n.note || '')}</div>
+        ${ts ? `<div class="d-note-meta">${escapeHtml(ts)}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function formatStampPrefix() {
+  const d = new Date();
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const yr = String(d.getFullYear()).slice(-2);
+  let h = d.getHours();
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  const initials = state.user ? userInitials(state.user.name || state.user.email || '?') : '??';
+  return `${m}/${day}/${yr} ${h}:${min} ${ampm} ${initials}: `;
+}
+
+function insertTimestampIntoNote() {
+  const ta = $('#d-notes-input');
+  if (!ta) return;
+  const prefix = formatStampPrefix();
+  const pos = ta.selectionStart ?? ta.value.length;
+  const before = ta.value.slice(0, pos);
+  const after = ta.value.slice(ta.selectionEnd ?? pos);
+  // Add a newline before if the cursor isn't at start of line / textarea is non-empty
+  const needsNewline = before.length > 0 && !before.endsWith('\n');
+  const insert = (needsNewline ? '\n' : '') + prefix;
+  ta.value = before + insert + after;
+  const newPos = before.length + insert.length;
+  ta.setSelectionRange(newPos, newPos);
+  ta.focus();
+}
+
+async function saveCompanyNote() {
+  if (!state.activeId) return;
+  const ta = $('#d-notes-input');
+  if (!ta) return;
+  const note = ta.value.trim();
+  if (!note) { toast('Write a note first', 'error'); return; }
+  try {
+    const res = await fetch(`/api/companies/${state.activeId}/notes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ note }),
+    });
+    if (res.ok) {
+      ta.value = '';
+      toast('Note saved', 'ok');
+      openDetail(state.activeId);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast(data.error || 'Failed to save note', 'error');
+    }
+  } catch {
+    toast('Failed to save note', 'error');
+  }
 }
 
 // ---------- upload ----------
@@ -877,6 +954,17 @@ function bindDetailActions() {
     addRow.hidden = body.hidden;
     $('#d-contacts-toggle .d-section-arrow').textContent = body.hidden ? '\u25B8' : '\u25BE';
   });
+
+  // Notes toggle + stamp + save
+  $('#d-notes-toggle')?.addEventListener('click', () => {
+    const body = $('#d-notes-body');
+    if (!body) return;
+    body.hidden = !body.hidden;
+    const arrow = $('#d-notes-toggle .d-section-arrow');
+    if (arrow) arrow.textContent = body.hidden ? '\u25B8' : '\u25BE';
+  });
+  $('#d-notes-stamp')?.addEventListener('click', insertTimestampIntoNote);
+  $('#d-notes-save')?.addEventListener('click', saveCompanyNote);
 
   // Override / tearsheet
   $('#d-override').addEventListener('click', async () => {
@@ -1274,6 +1362,24 @@ function selectQueueRow(id) {
   tierEl.className = 'qp-tier ' + (row.tier || '');
   $('#qp-phone').textContent = row.phone || 'Missing — add in research';
   $('#qp-owner').textContent = row.owner || '—';
+
+  // Scheduled task / calendar event (pinned to top of queue for today)
+  const eventSec = $('#qp-event-section');
+  if (eventSec) {
+    if (row.event) {
+      eventSec.hidden = false;
+      const when = new Date(row.event.starts_at);
+      const whenStr = when.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const title = row.event.title || 'Scheduled task';
+      const desc = row.event.description || '';
+      $('#qp-event').innerHTML = `
+        <div style="font-weight:600; color: var(--gold); margin-bottom:2px;">${escapeHtml(whenStr)} — ${escapeHtml(title)}</div>
+        ${desc ? `<div style="color: rgba(13,27,42,0.75); white-space: pre-wrap;">${escapeHtml(desc)}</div>` : ''}
+      `;
+    } else {
+      eventSec.hidden = true;
+    }
+  }
 
   const angleSec = $('#qp-angle-section');
   if (row.outreach_angle) {
@@ -2066,6 +2172,7 @@ function init() {
         }
       } else if (ev.type === 'calendar_event_created') {
         if ($('#tab-calendar').classList.contains('active')) loadCalendar();
+        if ($('#tab-queue').classList.contains('active')) loadQueue();
       } else if (ev.type === 'queue_changed') {
         if ($('#tab-queue').classList.contains('active')) loadQueue();
       } else if (ev.type === 'debrief_complete') {
@@ -2202,7 +2309,7 @@ function renderContactRow(c) {
 function openCompanyModal() {
   const modal = $('#company-modal');
   if (!modal) return;
-  ['cm-name','cm-city','cm-state','cm-phone','cm-website','cm-owner','cm-email','cm-address','cm-linkedin'].forEach((id) => {
+  ['cm-name','cm-city','cm-state','cm-phone','cm-website','cm-owner','cm-email','cm-address','cm-linkedin','cm-notes'].forEach((id) => {
     const el = $(`#${id}`);
     if (el) el.value = '';
   });
@@ -2246,6 +2353,17 @@ async function saveCompanyModal() {
       return;
     }
     if (!res.ok) { toast(data.error || 'Failed to add company', 'error'); return; }
+    // If a note was entered, save it against the new company
+    const note = $('#cm-notes').value.trim();
+    if (note && data.company?.id) {
+      try {
+        await fetch(`/api/companies/${data.company.id}/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note }),
+        });
+      } catch {}
+    }
     toast('Company added', 'ok');
     closeCompanyModal();
     await loadCompanies();
