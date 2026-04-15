@@ -551,9 +551,27 @@ async function openDetail(id) {
 }
 
 function closeDetail() {
-  $('#detail-panel').hidden = true;
+  const panel = $('#detail-panel');
+  panel.hidden = true;
+  panel.classList.remove('fullscreen');
   document.body.classList.remove('detail-open');
+  document.body.classList.remove('detail-fullscreen');
+  const btn = $('#detail-expand');
+  if (btn) { btn.innerHTML = '\u2197'; btn.title = 'Expand to full screen'; }
   state.activeId = null;
+}
+
+function toggleDetailFullscreen() {
+  const panel = $('#detail-panel');
+  if (!panel) return;
+  const on = !panel.classList.contains('fullscreen');
+  panel.classList.toggle('fullscreen', on);
+  document.body.classList.toggle('detail-fullscreen', on);
+  const btn = $('#detail-expand');
+  if (btn) {
+    btn.innerHTML = on ? '\u2198' : '\u2197';
+    btn.title = on ? 'Exit full screen' : 'Expand to full screen';
+  }
 }
 
 function renderDetail(data) {
@@ -863,6 +881,7 @@ function bindToolbar() {
 // ---------- detail actions ----------
 function bindDetailActions() {
   $('#detail-close').addEventListener('click', closeDetail);
+  $('#detail-expand')?.addEventListener('click', toggleDetailFullscreen);
 
   // Pipeline stage change
   $('#d-pipeline-stage').addEventListener('change', async (e) => {
@@ -2125,7 +2144,11 @@ function init() {
     await loadMarkets();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('#detail-panel').hidden) closeDetail();
+    if (e.key === 'Escape' && !$('#detail-panel').hidden) {
+      // If fullscreen, exit fullscreen first; else close
+      if ($('#detail-panel').classList.contains('fullscreen')) toggleDetailFullscreen();
+      else closeDetail();
+    }
   });
 
   loadStatus();

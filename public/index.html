@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260415f" />
+    <link rel="stylesheet" href="/styles.css?v=20260415g" />
   </head>
   <body>
     <div id="mock-banner" class="mock-banner" hidden>
@@ -756,7 +756,10 @@
     <!-- Slide-in detail panel -->
     <aside id="detail-panel" class="detail-panel" hidden>
       <div class="detail-header">
-        <button type="button" class="detail-close" id="detail-close" aria-label="Close">&times;</button>
+        <div class="detail-actions-top">
+          <button type="button" class="detail-expand" id="detail-expand" aria-label="Expand to full screen" title="Expand to full screen">&#8599;</button>
+          <button type="button" class="detail-close" id="detail-close" aria-label="Close">&times;</button>
+        </div>
         <div class="detail-score" id="d-score">—</div>
         <div class="detail-headline">
           <div class="detail-name" id="d-name">—</div>
@@ -969,6 +972,6 @@
       </div>
     </div>
 
-    <script src="/app.js?v=20260415f"></script>
+    <script src="/app.js?v=20260415g"></script>
   </body>
 </html>
