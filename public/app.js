@@ -1150,6 +1150,30 @@ function resumeOldestDebrief() {
   openDebriefModal(oldest.id);
 }
 
+async function dismissOldestDebrief() {
+  const pending = state.pendingDebriefs || [];
+  if (!pending.length) return;
+  const oldest = pending[pending.length - 1];
+  const n = pending.length;
+  const msg = n === 1
+    ? 'Dismiss this pending debrief without filling it out? (Use for stale or no-answer calls.)'
+    : `Dismiss all ${n} pending debriefs without filling them out? (Use for stale or no-answer calls.)`;
+  if (!confirm(msg)) return;
+  try {
+    for (const d of pending) {
+      await fetch(`/api/calls/${d.id}/dismiss`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason: 'manually dismissed' }),
+      });
+    }
+    toast(n === 1 ? 'Debrief dismissed' : `${n} debriefs dismissed`, 'ok');
+    await refreshPendingDebriefs();
+  } catch {
+    toast('Failed to dismiss debrief', 'error');
+  }
+}
+
 // ---------- Call Queue ----------
 async function loadQueue() {
   const list = $('#queue-list');
@@ -1936,6 +1960,7 @@ function bindPhase2() {
   $('#debrief-submit')?.addEventListener('click', submitDebrief);
   $('#debrief-draft-btn')?.addEventListener('click', saveDebriefAndClose);
   $('#debrief-banner-resume')?.addEventListener('click', resumeOldestDebrief);
+  $('#debrief-banner-dismiss')?.addEventListener('click', dismissOldestDebrief);
 
   $('#cal-prev')?.addEventListener('click', () => {
     ensureCalendarCursor();

@@ -1535,7 +1535,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   background: var(--card-bg);
   border-left: 1px solid var(--gold);
   box-shadow: var(--shadow-panel);
-  z-index: 100;
+  z-index: 600; /* above pending-debrief banner (z:500) so close btn is reachable */
   display: flex;
   flex-direction: column;
   color: var(--text);

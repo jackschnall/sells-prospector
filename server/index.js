@@ -571,17 +571,28 @@ app.get('/api/calls/:id', requireUser, async (req, res) => {
   res.json({ call: callPublic(call) });
 });
 
+const STOCK_DEBRIEF_QUESTIONS = [
+  'Who did you speak with and what was their reaction?',
+  'What did they say about the current state of the business?',
+  'Are there any signals about succession, growth, or acquisition interest?',
+  'What is the next step and when should we follow up?',
+];
+
 app.get('/api/calls/:id/debrief-questions', requireUser, async (req, res) => {
   const call = await getCallLog(req.params.id);
   if (!call) return res.status(404).json({ error: 'call_log not found' });
   if (call.user_id && call.user_id !== req.currentUser.id && req.currentUser.role !== 'admin') {
     return res.status(403).json({ error: 'Not your call' });
   }
-  const questions = safeJson(call.debrief_questions) || [];
+  let questions = safeJson(call.debrief_questions) || [];
   const draft = safeJson(call.debrief_draft) || null;
-  const ready = Array.isArray(questions) && questions.length >= 3;
+  // Fallback: if no questions generated (e.g. stale test call, analyzer offline),
+  // serve stock questions so the user is never stuck on an un-openable debrief.
+  if (!Array.isArray(questions) || questions.length < 3) {
+    questions = STOCK_DEBRIEF_QUESTIONS.slice();
+  }
   res.json({
-    ready,
+    ready: true,
     questions,
     draft,
     status: call.debrief_status || 'pending',
@@ -591,6 +602,26 @@ app.get('/api/calls/:id/debrief-questions', requireUser, async (req, res) => {
     scheduled_callback_date: call.scheduled_callback_date || null,
     min_answer_len: MIN_ANSWER_LEN,
   });
+});
+
+// Dismiss a pending/draft debrief without filling it out.
+// Intended for cleaning stale test calls; also usable for no-answer/voicemail cases.
+app.post('/api/calls/:id/dismiss', requireUser, async (req, res) => {
+  const call = await getCallLog(req.params.id);
+  if (!call) return res.status(404).json({ error: 'call_log not found' });
+  if (call.user_id && call.user_id !== req.currentUser.id && req.currentUser.role !== 'admin') {
+    return res.status(403).json({ error: 'Not your call' });
+  }
+  if (call.debrief_status === 'complete') {
+    return res.json({ ok: true, already: true });
+  }
+  const reason = (req.body?.reason || 'dismissed').toString().slice(0, 200);
+  await updateCallLog(call.id, {
+    debrief_status: 'complete',
+    debrief_qa: { dismissed: true, reason, dismissed_by: req.currentUser.id, dismissed_at: new Date().toISOString() },
+  });
+  emit({ type: 'debrief_complete', call_log_id: call.id, company_id: call.company_id, dismissed: true });
+  res.json({ ok: true });
 });
 
 app.post('/api/calls/:id/debrief-draft', requireUser, async (req, res) => {
