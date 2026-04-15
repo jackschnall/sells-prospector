@@ -87,6 +87,13 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser(process.env.COOKIE_SECRET || 'sells-prospector-dev-secret'));
+// Never cache the HTML shell so new script-tag versions are always fetched.
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path.endsWith('.html')) {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // ---------- Optional user context ----------
