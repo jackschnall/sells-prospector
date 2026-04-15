@@ -2748,6 +2748,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .qp-processing-text { color: var(--text-muted); font-size: 0.88rem; }
 
 /* ---------- Debrief modal ---------- */
+.debrief-modal[hidden] { display: none !important; }
 .debrief-modal {
   position: fixed;
   inset: 0;
@@ -2943,6 +2944,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   justify-content: center;
   padding: 20px;
 }
+.cal-modal[hidden] { display: none !important; }
 .cal-modal-card {
   max-width: 480px;
   width: 100%;
@@ -3129,6 +3131,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   display: flex; align-items: center; justify-content: center;
   padding: 24px;
 }
+.login-overlay[hidden] { display: none !important; }
 .login-card {
   width: 100%; max-width: 440px;
   background: var(--cream, #F5F0E8);
@@ -3231,6 +3234,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   transition: background 0.15s, border-color 0.15s;
   margin-left: auto;
 }
+.profile-btn[hidden] { display: none !important; }
 .profile-btn:hover {
   background: rgba(201, 168, 76, 0.22);
   border-color: rgba(201, 168, 76, 0.6);
@@ -3260,6 +3264,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   display: flex; align-items: flex-start; justify-content: center;
   padding: 60px 20px 20px;
 }
+.profile-modal[hidden] { display: none !important; }
 .profile-backdrop {
   position: absolute; inset: 0;
   background: rgba(13, 27, 42, 0.55);
