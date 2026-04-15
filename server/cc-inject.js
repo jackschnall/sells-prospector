@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * cc-inject.js — CLI bridge between Claude Code and the Sells Prospector SQLite DB.
+ * cc-inject.js — CLI bridge between Claude Code and the Sells Prospector Postgres DB.
  *
  * Commands:
  *   list-pending              Print pending companies as JSON array
@@ -10,6 +10,7 @@
  *   set-status <id> <status>  Set company status (researching|error|done)
  *   add                       Read JSON array from stdin, insert new companies, print IDs
  *   list-all                  Print all companies (slim) as JSON array
+ *   sync                      No-op for Postgres (data is already in the remote DB)
  */
 
 const {
@@ -21,6 +22,7 @@ const {
   setCompanyStatus,
   rollupStats,
   listCompanies,
+  initSchema,
 } = require('./db');
 
 const PORT = process.env.PORT || 3000;
@@ -50,11 +52,14 @@ async function readStdin() {
 }
 
 async function main() {
+  // Ensure schema exists (tables created if not present)
+  await initSchema();
+
   const [cmd, ...args] = process.argv.slice(2);
 
   switch (cmd) {
     case 'list-pending': {
-      const rows = companiesToResearch();
+      const rows = await companiesToResearch();
       const slim = rows.map(({ raw_research, signals_json, flags_json, sources_json, ...rest }) => rest);
       console.log(JSON.stringify(slim, null, 2));
       break;
@@ -63,7 +68,7 @@ async function main() {
     case 'get': {
       const id = args[0];
       if (!id) { console.error('Usage: cc-inject get <id>'); process.exit(1); }
-      const row = getCompany(id);
+      const row = await getCompany(id);
       if (!row) { console.error(`Company ${id} not found`); process.exit(1); }
       console.log(JSON.stringify(row, null, 2));
       break;
@@ -73,7 +78,7 @@ async function main() {
       const id = args[0];
       if (!id) { console.error('Usage: echo \'{"score":7.5,...}\' | cc-inject inject <id>'); process.exit(1); }
 
-      const company = getCompany(id);
+      const company = await getCompany(id);
       if (!company) { console.error(`Company ${id} not found`); process.exit(1); }
 
       const json = await readStdin();
@@ -99,7 +104,7 @@ async function main() {
         data.raw_research = JSON.stringify(data.raw_research);
       }
 
-      // Defaults — updateCompanyResearch expects all named params
+      // Defaults — updateCompanyResearch expects all fields
       data.status = data.status || 'done';
       data.owner = data.owner || null;
       data.phone = data.phone || null;
@@ -115,10 +120,10 @@ async function main() {
       data.sources_json = data.sources_json || null;
       data.raw_research = data.raw_research || null;
 
-      updateCompanyResearch(id, data);
+      await updateCompanyResearch(id, data);
 
       // Emit SSE so frontend updates live
-      const stats = rollupStats();
+      const stats = await rollupStats();
       await emitSSE({
         type: 'company_done',
         id: company.id,
@@ -144,7 +149,7 @@ async function main() {
     }
 
     case 'stats': {
-      console.log(JSON.stringify(rollupStats(), null, 2));
+      console.log(JSON.stringify(await rollupStats(), null, 2));
       break;
     }
 
@@ -153,10 +158,10 @@ async function main() {
       const status = args[1];
       if (!id || !status) { console.error('Usage: cc-inject set-status <id> <status>'); process.exit(1); }
 
-      const company = getCompany(id);
+      const company = await getCompany(id);
       if (!company) { console.error(`Company ${id} not found`); process.exit(1); }
 
-      setCompanyStatus(id, status);
+      await setCompanyStatus(id, status);
 
       await emitSSE({
         type: 'stage',
@@ -189,7 +194,7 @@ async function main() {
         const name_key = normalizeName(c.name);
         if (!name_key) { results.push({ error: 'empty name_key', name: c.name }); continue; }
         try {
-          insertCompany({
+          await insertCompany({
             id,
             name: c.name,
             name_key,
@@ -200,56 +205,34 @@ async function main() {
             owner: c.owner || null,
             email: c.email || null,
             address: c.address || null,
-            crm_known: 0,
+            crm_known: false,
           });
           results.push({ ok: true, id, name: c.name, name_key });
         } catch (err) {
           // ON CONFLICT means it already exists — look it up
-          const existing = listCompanies({ search: c.name });
+          const existing = await listCompanies({ search: c.name });
           const match = existing.find(r => r.name_key === name_key);
           results.push({ ok: true, id: match ? match.id : 'existing', name: c.name, note: 'already exists' });
         }
       }
 
-      await emitSSE({ type: 'queue', total: rollupStats().total });
+      const stats = await rollupStats();
+      await emitSSE({ type: 'queue', total: stats.total });
       console.log(JSON.stringify(results, null, 2));
       break;
     }
 
     case 'list-all': {
-      const rows = listCompanies({ sort: 'score_desc' });
+      const rows = await listCompanies({ sort: 'score_desc' });
       const slim = rows.map(({ raw_research, signals_json, flags_json, sources_json, ...rest }) => rest);
       console.log(JSON.stringify(slim, null, 2));
       break;
     }
 
     case 'sync': {
-      const { execSync } = require('child_process');
-      const root = require('path').resolve(__dirname, '..');
-      const run = (cmd) => execSync(cmd, { cwd: root, stdio: 'pipe' }).toString().trim();
-
-      // Ask the running server to flush WAL into the main DB file
-      try {
-        const cpRes = await fetch(`http://localhost:${PORT}/api/_checkpoint`, { method: 'POST' });
-        if (!cpRes.ok) throw new Error(`checkpoint returned ${cpRes.status}`);
-      } catch (err) {
-        // Server not running — open DB directly to checkpoint
-        const dbPath = require('path').join(root, 'data', 'prospector.db');
-        const directDb = require('better-sqlite3')(dbPath);
-        directDb.pragma('wal_checkpoint(TRUNCATE)');
-        directDb.close();
-      }
-
-      // Stage, commit, push
-      run('git add data/prospector.db');
-      const status = run('git status --porcelain data/prospector.db');
-      if (!status) {
-        console.log(JSON.stringify({ ok: true, action: 'no-op', message: 'DB unchanged, nothing to push' }));
-        break;
-      }
-      run('git commit -m "Update research data\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"');
-      run('git push');
-      console.log(JSON.stringify({ ok: true, action: 'pushed', message: 'DB pushed to GitHub — Railway will redeploy' }));
+      // With Postgres, data is already in the remote database.
+      // No WAL checkpoint or git push needed.
+      console.log(JSON.stringify({ ok: true, action: 'no-op', message: 'Using Postgres — data is already in the remote DB' }));
       break;
     }
 

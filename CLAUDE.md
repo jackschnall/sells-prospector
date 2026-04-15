@@ -3,27 +3,33 @@
 ## What This Is
 
 A plumbing company M&A target research tool for Sells (middle-market investment bank).
-The web app (Express + SQLite + vanilla frontend) is deployed at:
+The web app (Express + PostgreSQL + vanilla frontend) is deployed at:
 **https://sells-prospector-production-f51b.up.railway.app/**
 
 Claude Code acts as the research agent — no Anthropic API key needed. You use
-WebSearch to research each company and `cc-inject.js` to write results into SQLite.
+WebSearch to research each company and `cc-inject.js` to write results into the database.
+
+## Database
+
+PostgreSQL via `pg` Pool. Set `DATABASE_URL` env var (e.g. `postgresql://user:pass@host:5432/dbname`).
+Schema is in `server/schema.sql` and auto-applied on startup via `initSchema()`.
+All DB calls are async — every server file uses `await` with the pool.
 
 ## CLI Commands
 
 ```bash
-node server/cc-inject.js list-pending          # Companies needing research
-node server/cc-inject.js list-all              # All companies (slim JSON)
-node server/cc-inject.js get <id>              # Full company row
-node server/cc-inject.js stats                 # Rollup stats
-node server/cc-inject.js set-status <id> <s>   # Set status (researching|error|done)
-node server/cc-inject.js add                   # Read JSON array from stdin, insert new companies
-node server/cc-inject.js sync                  # Checkpoint WAL, git commit+push DB to Railway
+DATABASE_URL=... node server/cc-inject.js list-pending          # Companies needing research
+DATABASE_URL=... node server/cc-inject.js list-all              # All companies (slim JSON)
+DATABASE_URL=... node server/cc-inject.js get <id>              # Full company row
+DATABASE_URL=... node server/cc-inject.js stats                 # Rollup stats
+DATABASE_URL=... node server/cc-inject.js set-status <id> <s>   # Set status (researching|error|done)
+DATABASE_URL=... node server/cc-inject.js add                   # Read JSON array from stdin, insert new companies
+DATABASE_URL=... node server/cc-inject.js sync                  # No-op (Postgres data is already remote)
 ```
 
 ### Inject pattern (MUST be single-line to avoid permission prompts):
 ```bash
-node -e "const data = JSON.stringify({ status: 'done', score: 7.5, tier: 'strong-buy', owner: 'Name', phone: '(555) 123-4567', email: null, address: 'City, ST', linkedin: null, signals_json: JSON.stringify({revenue_proxy:7,operational_quality:8,succession_signal:7,growth_trajectory:7,deal_complexity:7,geographic_fit:8,market_quality:8}), flags_json: JSON.stringify({hard_stops:[],yellow_flags:[]}), summary: '...', outreach_angle: '...', sources_json: JSON.stringify(['url1','url2']), raw_research: JSON.stringify({company:'Name',location:'City, ST'}) }); process.stdout.write(data);" | node server/cc-inject.js inject <id>
+DATABASE_URL=... node -e "const data = JSON.stringify({ status: 'done', score: 7.5, tier: 'strong-buy', owner: 'Name', phone: '(555) 123-4567', email: null, address: 'City, ST', linkedin: null, signals_json: JSON.stringify({revenue_proxy:7,operational_quality:8,succession_signal:7,growth_trajectory:7,deal_complexity:7,geographic_fit:8,market_quality:8}), flags_json: JSON.stringify({hard_stops:[],yellow_flags:[]}), summary: '...', outreach_angle: '...', sources_json: JSON.stringify(['url1','url2']), raw_research: JSON.stringify({company:'Name',location:'City, ST'}) }); process.stdout.write(data);" | node server/cc-inject.js inject <id>
 ```
 
 **CRITICAL**: The entire `node -e "..." | node server/cc-inject.js inject <id>` command MUST be on a single line with no newlines. Multi-line commands trigger "Command contains newlines" approval prompts, breaking the zero-touch workflow. The user expects discovery → research → inject → sync to run completely autonomously without any approval clicks.
@@ -64,7 +70,7 @@ When asked to research companies:
    - `"<Company> lawsuit litigation"`
 3. Score using the rubric above, compute weighted average
 4. Inject via `cc-inject.js inject <id>`
-5. After all done, run `node server/cc-inject.js sync` to push to Railway
+5. No sync needed — Postgres writes are immediately available
 
 ## Discovery Workflow
 
@@ -80,18 +86,26 @@ When asked to discover NEW companies:
 ## Important Notes
 
 - PPP loan data is from 2020-2021 (5-6 years old) — weight it less, prefer current indicators
-- The app already has xlsx dependency for export; upload only supports CSV currently
+- The app supports CSV and XLSX upload/export
 - Railway deployment auto-deploys from GitHub pushes
-- SQLite runs in WAL mode; `sync` command handles checkpoint + git push
+- `DATABASE_URL` must be set (Railway provides this automatically)
+- `better-sqlite3` is kept temporarily for the one-time migration script (`server/migrate-sqlite-to-pg.js`)
 
 ## File Map
 
 - `server/cc-inject.js` — CLI bridge (this is what Claude Code uses)
-- `server/db.js` — SQLite schema and queries
-- `server/index.js` — Express routes
+- `server/db.js` — PostgreSQL schema, pool, and async query functions
+- `server/schema.sql` — Full Postgres DDL (CREATE TABLE IF NOT EXISTS)
+- `server/index.js` — Express routes (all async)
 - `server/prompts.js` — System prompts and scoring rubric
 - `server/csv.js` — CSV parse/export
-- `server/xlsx-export.js` — Excel export
+- `server/xlsx-export.js` — Excel export (styled, two-sheet workbook)
+- `server/market-intel.js` — Metro seed data and market intelligence
+- `server/markets.js` — Market analysis (AI-powered)
+- `server/salesforce.js` — CRM known-name matching
+- `server/agent.js` — AI research agent (batch research + discovery)
+- `server/filter-and-add.js` — Batch filter and add companies
+- `server/migrate-sqlite-to-pg.js` — One-time SQLite → Postgres migration
 - `public/` — Frontend (vanilla HTML/CSS/JS)
-- `data/prospector.db` — SQLite database
+- `data/prospector.db` — Legacy SQLite database (kept for migration reference)
 - `data/p3-universe-names.json` — P3 exclusion list (1,443 names)

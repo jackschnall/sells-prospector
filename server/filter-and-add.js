@@ -10,6 +10,7 @@ var db = require('./db');
 var normalizeName = db.normalizeName;
 var insertCompany = db.insertCompany;
 var listCompanies = db.listCompanies;
+var initSchema = db.initSchema;
 
 function fuzzyMatch(nameA, nameB) {
   var keyA = normalizeName(nameA);
@@ -37,44 +38,53 @@ function fuzzyMatch(nameA, nameB) {
   return null;
 }
 
-var inputFile = process.argv[2];
-if (!inputFile) { console.error('Usage: node server/filter-and-add.js <json-file>'); process.exit(1); }
+async function main() {
+  var inputFile = process.argv[2];
+  if (!inputFile) { console.error('Usage: node server/filter-and-add.js <json-file>'); process.exit(1); }
 
-var candidates = JSON.parse(fs.readFileSync(inputFile, 'utf8'));
-var p3Names = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'p3-universe-names.json'), 'utf8'));
-var dbCompanies = listCompanies({ sort: 'score_desc' });
+  await initSchema();
 
-var p3Excluded = [];
-var dbExcluded = [];
-var added = [];
+  var candidates = JSON.parse(fs.readFileSync(inputFile, 'utf8'));
+  var p3Names = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'p3-universe-names.json'), 'utf8'));
+  var dbCompanies = await listCompanies({ sort: 'score_desc' });
 
-for (var idx = 0; idx < candidates.length; idx++) {
-  var c = candidates[idx];
-  if (!c.name) continue;
+  var p3Excluded = [];
+  var dbExcluded = [];
+  var added = [];
 
-  var p3Match = null;
-  for (var pi = 0; pi < p3Names.length; pi++) {
-    var m = fuzzyMatch(c.name, p3Names[pi]);
-    if (m) { p3Match = { p3Name: p3Names[pi], matchType: m }; break; }
+  for (var idx = 0; idx < candidates.length; idx++) {
+    var c = candidates[idx];
+    if (!c.name) continue;
+
+    var p3Match = null;
+    for (var pi = 0; pi < p3Names.length; pi++) {
+      var m = fuzzyMatch(c.name, p3Names[pi]);
+      if (m) { p3Match = { p3Name: p3Names[pi], matchType: m }; break; }
+    }
+    if (p3Match) { p3Excluded.push({ name: c.name, p3Name: p3Match.p3Name, matchType: p3Match.matchType }); continue; }
+
+    var dbMatch = null;
+    for (var di = 0; di < dbCompanies.length; di++) {
+      var m2 = fuzzyMatch(c.name, dbCompanies[di].name);
+      if (m2) { dbMatch = { dbName: dbCompanies[di].name, matchType: m2 }; break; }
+    }
+    if (dbMatch) { dbExcluded.push({ name: c.name, dbName: dbMatch.dbName, matchType: dbMatch.matchType }); continue; }
+
+    var id = nanoid();
+    var name_key = normalizeName(c.name);
+    if (!name_key) continue;
+    try {
+      await insertCompany({ id: id, name: c.name, name_key: name_key, city: c.city || null, state: c.state || null, phone: c.phone || null, website: c.website || null, owner: c.owner || null, email: c.email || null, address: c.address || null, crm_known: false });
+      added.push({ id: id, name: c.name, city: c.city, state: c.state });
+    } catch (err) {
+      dbExcluded.push({ name: c.name, note: 'insert conflict' });
+    }
   }
-  if (p3Match) { p3Excluded.push({ name: c.name, p3Name: p3Match.p3Name, matchType: p3Match.matchType }); continue; }
 
-  var dbMatch = null;
-  for (var di = 0; di < dbCompanies.length; di++) {
-    var m2 = fuzzyMatch(c.name, dbCompanies[di].name);
-    if (m2) { dbMatch = { dbName: dbCompanies[di].name, matchType: m2 }; break; }
-  }
-  if (dbMatch) { dbExcluded.push({ name: c.name, dbName: dbMatch.dbName, matchType: dbMatch.matchType }); continue; }
-
-  var id = nanoid();
-  var name_key = normalizeName(c.name);
-  if (!name_key) continue;
-  try {
-    insertCompany({ id: id, name: c.name, name_key: name_key, city: c.city || null, state: c.state || null, phone: c.phone || null, website: c.website || null, owner: c.owner || null, email: c.email || null, address: c.address || null, crm_known: 0 });
-    added.push({ id: id, name: c.name, city: c.city, state: c.state });
-  } catch (err) {
-    dbExcluded.push({ name: c.name, note: 'insert conflict' });
-  }
+  console.log(JSON.stringify({ total_candidates: candidates.length, p3_excluded: p3Excluded.length, db_excluded: dbExcluded.length, added: added.length, p3_excluded_details: p3Excluded, db_excluded_details: dbExcluded }, null, 2));
 }
 
-console.log(JSON.stringify({ total_candidates: candidates.length, p3_excluded: p3Excluded.length, db_excluded: dbExcluded.length, added: added.length, p3_excluded_details: p3Excluded, db_excluded_details: dbExcluded }, null, 2));
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

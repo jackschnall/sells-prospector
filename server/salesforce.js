@@ -4,16 +4,16 @@
 
 const { getConfig, setConfig, markCrmKnown } = require('./db');
 
-function getPastedKnownNames() {
-  return getConfig('crm_known_names', []) || [];
+async function getPastedKnownNames() {
+  return (await getConfig('crm_known_names', [])) || [];
 }
 
-function setPastedKnownNames(names) {
+async function setPastedKnownNames(names) {
   const clean = (Array.isArray(names) ? names : String(names || '').split(/\r?\n/))
     .map((s) => String(s).trim())
     .filter(Boolean);
-  setConfig('crm_known_names', clean);
-  const marked = markCrmKnown(clean);
+  await setConfig('crm_known_names', clean);
+  const marked = await markCrmKnown(clean);
   return { count: clean.length, marked };
 }
 

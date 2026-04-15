@@ -63,7 +63,7 @@ function parseCsvBuffer(buffer) {
       owner: get('owner') || null,
       email: get('email') || null,
       address: get('address') || null,
-      crm_known: 0,
+      crm_known: false,
     });
   }
 
@@ -100,6 +100,8 @@ function companiesToCsv(companies) {
 }
 
 function safeJson(s) {
+  if (!s) return {};
+  if (typeof s === 'object') return s; // JSONB already parsed by pg
   try {
     return JSON.parse(s);
   } catch {
@@ -159,7 +161,7 @@ function parseXlsxBuffer(buffer) {
         owner: get('owner') || null,
         email: get('email') || null,
         address: get('address') || null,
-        crm_known: 0,
+        crm_known: false,
       });
     }
 

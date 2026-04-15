@@ -7,7 +7,7 @@
 //
 // Saturation: Fresh (<25%), Active (25-75%), Saturated (>75%)
 
-const { db } = require('./db');
+const { execute, query, queryOne } = require('./db');
 
 // ---------- Seed data for ~40 top metros ----------
 // Sources: Census Bureau, Zillow, NAR/Realtor.com, Census Building Permits Survey, BLS QCEW (approximate 2025 values)
@@ -115,55 +115,18 @@ function marketKey(city, state) {
 
 // ---------- Seed ----------
 
-function seedMarkets() {
+async function seedMarkets() {
   const ADDRESSABLE_PER_CAPITA = 1 / 250000;
-
-  const upsert = db.prepare(`
-    INSERT INTO markets (
-      key, city, state, msa_name, population, population_growth,
-      median_home_value, home_sales_volume, housing_permits, housing_age_score,
-      plumbing_density, ma_activity_score,
-      addressable, loaded, market_score, saturation_status,
-      tier, score, confidence, sources_json,
-      analyzed_at, updated_at
-    ) VALUES (
-      @key, @city, @state, @msa_name, @population, @population_growth,
-      @median_home_value, @home_sales_volume, @housing_permits, @housing_age_score,
-      @plumbing_density, @ma_activity_score,
-      @addressable, @loaded, @market_score, @saturation_status,
-      @tier, @score, @confidence, @sources_json,
-      datetime('now'), datetime('now')
-    )
-    ON CONFLICT(key) DO UPDATE SET
-      msa_name = excluded.msa_name,
-      population = excluded.population,
-      population_growth = excluded.population_growth,
-      median_home_value = excluded.median_home_value,
-      home_sales_volume = excluded.home_sales_volume,
-      housing_permits = excluded.housing_permits,
-      housing_age_score = excluded.housing_age_score,
-      plumbing_density = excluded.plumbing_density,
-      ma_activity_score = excluded.ma_activity_score,
-      addressable = excluded.addressable,
-      loaded = excluded.loaded,
-      market_score = excluded.market_score,
-      saturation_status = excluded.saturation_status,
-      tier = excluded.tier,
-      score = excluded.score,
-      confidence = excluded.confidence,
-      updated_at = datetime('now')
-  `);
-
-  const countStmt = db.prepare(`
-    SELECT COUNT(*) AS n FROM companies
-    WHERE LOWER(TRIM(state)) = LOWER(TRIM(?))
-  `);
 
   const results = [];
   for (const m of METRO_SEED) {
     const key = marketKey(m.city, m.state);
     const addressable = Math.max(1, Math.round(m.population * ADDRESSABLE_PER_CAPITA));
-    const loaded = countStmt.get(m.state)?.n || 0;
+    const countRow = await queryOne(
+      'SELECT COUNT(*) AS n FROM companies WHERE LOWER(TRIM(state)) = LOWER(TRIM($1))',
+      [m.state]
+    );
+    const loaded = countRow ? Number(countRow.n) : 0;
     const ms = scoreMarket(m);
     const sat = saturationStatus(loaded, addressable);
 
@@ -194,7 +157,50 @@ function seedMarkets() {
       confidence: 'high',
       sources_json: '[]',
     };
-    upsert.run(row);
+
+    await execute(
+      `INSERT INTO markets (
+        key, city, state, msa_name, population, population_growth,
+        median_home_value, home_sales_volume, housing_permits, housing_age_score,
+        plumbing_density, ma_activity_score,
+        addressable, loaded, market_score, saturation_status,
+        tier, score, confidence, sources_json,
+        analyzed_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10,
+        $11, $12,
+        $13, $14, $15, $16,
+        $17, $18, $19, $20,
+        NOW(), NOW()
+      )
+      ON CONFLICT(key) DO UPDATE SET
+        msa_name = EXCLUDED.msa_name,
+        population = EXCLUDED.population,
+        population_growth = EXCLUDED.population_growth,
+        median_home_value = EXCLUDED.median_home_value,
+        home_sales_volume = EXCLUDED.home_sales_volume,
+        housing_permits = EXCLUDED.housing_permits,
+        housing_age_score = EXCLUDED.housing_age_score,
+        plumbing_density = EXCLUDED.plumbing_density,
+        ma_activity_score = EXCLUDED.ma_activity_score,
+        addressable = EXCLUDED.addressable,
+        loaded = EXCLUDED.loaded,
+        market_score = EXCLUDED.market_score,
+        saturation_status = EXCLUDED.saturation_status,
+        tier = EXCLUDED.tier,
+        score = EXCLUDED.score,
+        confidence = EXCLUDED.confidence,
+        updated_at = NOW()`,
+      [
+        row.key, row.city, row.state, row.msa_name, row.population, row.population_growth,
+        row.median_home_value, row.home_sales_volume, row.housing_permits, row.housing_age_score,
+        row.plumbing_density, row.ma_activity_score,
+        row.addressable, row.loaded, row.market_score, row.saturation_status,
+        row.tier, row.score, row.confidence, row.sources_json,
+      ]
+    );
+
     results.push(row);
   }
   return results;
@@ -202,18 +208,16 @@ function seedMarkets() {
 
 // ---------- Query ----------
 
-function getRankings() {
+async function getRankings() {
   // Refresh loaded counts before returning
   const ADDRESSABLE_PER_CAPITA = 1 / 250000;
-  const markets = db.prepare('SELECT * FROM markets ORDER BY market_score DESC, population DESC').all();
+  const markets = await query('SELECT * FROM markets ORDER BY market_score DESC, population DESC');
 
   // Count companies per city+state combo for accurate per-market attribution.
-  // A company is attributed to a market if it shares the same state AND its city
-  // matches (case-insensitive) the market city or any word in the MSA name.
-  const companies = db.prepare(`
+  const companies = await query(`
     SELECT LOWER(TRIM(city)) AS city, UPPER(TRIM(state)) AS state FROM companies
     WHERE city IS NOT NULL AND state IS NOT NULL AND city != '' AND state != ''
-  `).all();
+  `);
 
   return markets.map((m) => {
     const mCity = m.city.toLowerCase();
@@ -223,7 +227,6 @@ function getRankings() {
     const loaded = companies.filter((c) => {
       if (c.state !== mState) return false;
       if (c.city === mCity) return true;
-      // Check if company city appears in MSA name
       return msaWords.includes(c.city);
     }).length;
 
@@ -239,11 +242,12 @@ function getRankings() {
   });
 }
 
-function getMarketForState(state) {
+async function getMarketForState(state) {
   if (!state) return null;
-  return db.prepare(
-    'SELECT * FROM markets WHERE UPPER(TRIM(state)) = UPPER(TRIM(?)) ORDER BY market_score DESC LIMIT 1'
-  ).get(state);
+  return queryOne(
+    'SELECT * FROM markets WHERE UPPER(TRIM(state)) = UPPER(TRIM($1)) ORDER BY market_score DESC LIMIT 1',
+    [state]
+  );
 }
 
 module.exports = {

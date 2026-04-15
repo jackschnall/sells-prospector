@@ -80,7 +80,7 @@ async function runStage(stage, company, fn) {
 // per-company research loop begins. Emits orchestrator-level 'stage' events.
 async function runDiscoveryStage(thesis) {
   const geography = (thesis && thesis.geography) || '';
-  const blocklist = sf.getPastedKnownNames();
+  const blocklist = await sf.getPastedKnownNames();
 
   emit({ type: 'stage', stage: 'discovery', status: 'running' });
 
@@ -95,7 +95,7 @@ async function runDiscoveryStage(thesis) {
       const name_key = normalizeName(cand.name);
       if (!name_key) continue;
       try {
-        insertCompany({
+        await insertCompany({
           id: nanoid(),
           name: cand.name,
           name_key,
@@ -106,7 +106,7 @@ async function runDiscoveryStage(thesis) {
           owner: null,
           email: null,
           address: null,
-          crm_known: 0,
+          crm_known: false,
         });
         inserted++;
       } catch (err) {
@@ -171,7 +171,7 @@ async function processOne(company, thesis) {
   const contacts = extractContacts(research);
 
   // Persist
-  updateCompanyResearch(company.id, {
+  await updateCompanyResearch(company.id, {
     status: 'done',
     score: scored.final_score,
     tier: scored.tier,
@@ -199,7 +199,7 @@ async function runAll() {
   state.cancelRequested = false;
   state.startedAt = Date.now();
 
-  const thesis = getConfig('thesis', {}) || {};
+  const thesis = (await getConfig('thesis', {})) || {};
 
   emit({ type: 'start', mock: process.env.MOCK_MODE === '1' });
 
@@ -217,7 +217,7 @@ async function runAll() {
     return;
   }
 
-  const queue = companiesToResearch();
+  const queue = await companiesToResearch();
   state.total = queue.length;
   state.currentIndex = 0;
 
@@ -279,7 +279,7 @@ async function runAll() {
       company: { id: company.id, name: company.name, city: company.city, state: company.state },
     });
 
-    setCompanyStatus(company.id, 'processing');
+    await setCompanyStatus(company.id, 'processing');
 
     try {
       const result = await processOne(company, thesis);
@@ -293,7 +293,7 @@ async function runAll() {
       });
     } catch (err) {
       console.error(`[agent] Error processing ${company.name}:`, err.message);
-      setCompanyStatus(company.id, 'error', String(err.stack || err.message || err));
+      await setCompanyStatus(company.id, 'error', String(err.stack || err.message || err));
       emit({ type: 'company_error', id: company.id, name: company.name, error: String(err.message || err) });
     }
 

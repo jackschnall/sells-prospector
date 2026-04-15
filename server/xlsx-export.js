@@ -35,6 +35,7 @@ const STAGE_LABELS = {
 
 function safeJson(s) {
   if (!s) return null;
+  if (typeof s === 'object') return s; // JSONB already parsed by pg
   try {
     return JSON.parse(s);
   } catch {

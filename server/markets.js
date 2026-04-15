@@ -125,8 +125,8 @@ async function analyzeMarket(city, state, { force = false } = {}) {
   if (!city || !state) return null;
   const key = marketKey(city, state);
 
-  const existing = getMarket(key);
-  const loaded = countCompaniesInMarket(city, state);
+  const existing = await getMarket(key);
+  const loaded = await countCompaniesInMarket(city, state);
 
   // Reuse cached population if we have it, unless force=true. Population is
   // stable; only the loaded count refreshes each run.
@@ -147,7 +147,7 @@ async function analyzeMarket(city, state, { force = false } = {}) {
       confidence: existing.confidence,
       sources_json: existing.sources_json || '[]',
     };
-    upsertMarket(row);
+    await upsertMarket(row);
     return row;
   }
 
@@ -196,11 +196,11 @@ async function analyzeMarket(city, state, { force = false } = {}) {
     confidence,
     sources_json: JSON.stringify(sources),
   };
-  upsertMarket(row);
+  await upsertMarket(row);
   return row;
 }
 
-function listAll() {
+async function listAll() {
   return listMarkets();
 }
 

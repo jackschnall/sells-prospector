@@ -1,233 +1,42 @@
+const { Pool } = require('pg');
 const path = require('path');
 const fs = require('fs');
-const Database = require('better-sqlite3');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+// ─── Connection ──────────────────────────────────────────────────────────────
 
-const DB_PATH = path.join(DATA_DIR, 'prospector.db');
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway')
+    ? { rejectUnauthorized: false }
+    : undefined,
+});
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS companies (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    name_key TEXT NOT NULL UNIQUE,
-    city TEXT,
-    state TEXT,
-    phone TEXT,
-    website TEXT,
-    owner TEXT,
-    email TEXT,
-    address TEXT,
-    linkedin TEXT,
-    crm_known INTEGER DEFAULT 0,
-    crm_override INTEGER DEFAULT 0,
-    salesforce_id TEXT,
-    status TEXT DEFAULT 'pending',
-    score REAL,
-    tier TEXT,
-    signals_json TEXT,
-    flags_json TEXT,
-    summary TEXT,
-    outreach_angle TEXT,
-    sources_json TEXT,
-    raw_research TEXT,
-    marked_for_outreach INTEGER DEFAULT 0,
-    last_researched_at TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-  );
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-  CREATE INDEX IF NOT EXISTS idx_companies_tier ON companies(tier);
-  CREATE INDEX IF NOT EXISTS idx_companies_status ON companies(status);
-  CREATE INDEX IF NOT EXISTS idx_companies_score ON companies(score);
-
-  CREATE TABLE IF NOT EXISTS notes (
-    id TEXT PRIMARY KEY,
-    company_id TEXT NOT NULL,
-    note TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS config (
-    key TEXT PRIMARY KEY,
-    value TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    invite_token TEXT UNIQUE,
-    created_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS contacts (
-    id TEXT PRIMARY KEY,
-    company_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    title TEXT,
-    phone TEXT,
-    email TEXT,
-    linkedin TEXT,
-    is_primary INTEGER DEFAULT 0,
-    source TEXT DEFAULT 'manual',
-    notes TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts(company_id);
-
-  CREATE TABLE IF NOT EXISTS activities (
-    id TEXT PRIMARY KEY,
-    company_id TEXT NOT NULL,
-    contact_id TEXT,
-    user_id TEXT,
-    type TEXT NOT NULL,
-    summary TEXT NOT NULL,
-    details TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
-    FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_activities_company ON activities(company_id);
-  CREATE INDEX IF NOT EXISTS idx_activities_created ON activities(created_at);
-
-  CREATE TABLE IF NOT EXISTS markets (
-    key TEXT PRIMARY KEY,
-    city TEXT NOT NULL,
-    state TEXT NOT NULL,
-    population INTEGER,
-    msa_name TEXT,
-    addressable INTEGER,
-    loaded INTEGER,
-    tier TEXT,
-    score REAL,
-    confidence TEXT,
-    sources_json TEXT,
-    analyzed_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_markets_tier ON markets(tier);
-  CREATE INDEX IF NOT EXISTS idx_markets_score ON markets(score);
-`);
-
-// Migration: ensure outreach_angle column exists on pre-existing databases.
-{
-  const cols = db.prepare('PRAGMA table_info(companies)').all().map((c) => c.name);
-  if (!cols.includes('outreach_angle')) {
-    db.exec('ALTER TABLE companies ADD COLUMN outreach_angle TEXT');
-  }
+async function execute(text, params = []) {
+  const res = await pool.query(text, params);
+  return res;
 }
 
-// Migration: add market intelligence columns to markets table.
-{
-  const cols = db.prepare('PRAGMA table_info(markets)').all().map((c) => c.name);
-  const newCols = [
-    ['population_growth', 'REAL'],
-    ['median_home_value', 'INTEGER'],
-    ['housing_permits', 'INTEGER'],
-    ['housing_age_score', 'REAL'],
-    ['plumbing_density', 'REAL'],
-    ['ma_activity_score', 'REAL'],
-    ['market_score', 'REAL'],
-    ['saturation_status', 'TEXT'],
-  ];
-  for (const [name, type] of newCols) {
-    if (!cols.includes(name)) {
-      db.exec(`ALTER TABLE markets ADD COLUMN ${name} ${type}`);
-    }
-  }
+async function queryOne(text, params = []) {
+  const res = await pool.query(text, params);
+  return res.rows[0] || null;
 }
 
-// Migration: add home_sales_volume to markets table.
-{
-  const cols = db.prepare('PRAGMA table_info(markets)').all().map((c) => c.name);
-  if (!cols.includes('home_sales_volume')) {
-    db.exec('ALTER TABLE markets ADD COLUMN home_sales_volume INTEGER');
-  }
+async function query(text, params = []) {
+  const res = await pool.query(text, params);
+  return res.rows;
 }
 
-// Migration: add outreach_status column.
-{
-  const cols = db.prepare('PRAGMA table_info(companies)').all().map((c) => c.name);
-  if (!cols.includes('outreach_status')) {
-    db.exec("ALTER TABLE companies ADD COLUMN outreach_status TEXT DEFAULT 'no_contact'");
-    db.exec("UPDATE companies SET outreach_status = 'initial_contact' WHERE marked_for_outreach = 1");
-  }
+// ─── Schema bootstrap ────────────────────────────────────────────────────────
+
+async function initSchema() {
+  const schemaPath = path.join(__dirname, 'schema.sql');
+  const sql = fs.readFileSync(schemaPath, 'utf8');
+  await pool.query(sql);
 }
 
-// Migration: add pipeline columns to companies.
-{
-  const cols = db.prepare('PRAGMA table_info(companies)').all().map((c) => c.name);
-  const pipelineCols = [
-    ['pipeline_stage', "TEXT DEFAULT 'no_contact'"],
-    ['closed_lost_reason', 'TEXT'],
-    ['pipeline_stage_changed_at', 'TEXT'],
-    ['assigned_to', 'TEXT'],
-  ];
-  let needsMigration = false;
-  for (const [name, type] of pipelineCols) {
-    if (!cols.includes(name)) {
-      db.exec(`ALTER TABLE companies ADD COLUMN ${name} ${type}`);
-      if (name === 'pipeline_stage') needsMigration = true;
-    }
-  }
-  // Migrate outreach_status → pipeline_stage for existing data
-  if (needsMigration) {
-    db.exec(`
-      UPDATE companies SET pipeline_stage = CASE
-        WHEN outreach_status = 'initial_contact' THEN 'initial_contact'
-        WHEN outreach_status = 'relationship' THEN 'nurture'
-        ELSE 'no_contact'
-      END
-    `);
-  }
-}
-
-// Migration: seed contacts from existing researched companies.
-{
-  const hasContacts = db.prepare('SELECT COUNT(*) AS n FROM contacts').get().n;
-  if (hasContacts === 0) {
-    const rows = db.prepare("SELECT id, owner, phone, email, linkedin FROM companies WHERE status = 'done' AND owner IS NOT NULL AND owner != ''").all();
-    const { nanoid } = require('nanoid');
-    const insert = db.prepare(`
-      INSERT INTO contacts (id, company_id, name, phone, email, linkedin, is_primary, source)
-      VALUES (?, ?, ?, ?, ?, ?, 1, 'research')
-    `);
-    for (const r of rows) {
-      insert.run(nanoid(), r.id, r.owner, r.phone || null, r.email || null, r.linkedin || null);
-    }
-    if (rows.length) console.log(`Seeded ${rows.length} contacts from researched companies.`);
-  }
-}
-
-// Migration: migrate existing notes → activities.
-{
-  const hasActivities = db.prepare('SELECT COUNT(*) AS n FROM activities').get().n;
-  const hasNotes = db.prepare('SELECT COUNT(*) AS n FROM notes').get().n;
-  if (hasActivities === 0 && hasNotes > 0) {
-    const { nanoid } = require('nanoid');
-    const notes = db.prepare('SELECT * FROM notes ORDER BY created_at ASC').all();
-    const insert = db.prepare(`
-      INSERT INTO activities (id, company_id, type, summary, created_at)
-      VALUES (?, ?, 'note', ?, ?)
-    `);
-    for (const n of notes) {
-      insert.run(nanoid(), n.company_id, n.note, n.created_at);
-    }
-    if (notes.length) console.log(`Migrated ${notes.length} notes to activities.`);
-  }
-}
+// ─── Utilities ───────────────────────────────────────────────────────────────
 
 function normalizeName(name) {
   return String(name || '')
@@ -236,8 +45,10 @@ function normalizeName(name) {
     .trim();
 }
 
-function getConfig(key, fallback = null) {
-  const row = db.prepare('SELECT value FROM config WHERE key = ?').get(key);
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+async function getConfig(key, fallback = null) {
+  const row = await queryOne('SELECT value FROM config WHERE key = $1', [key]);
   if (!row) return fallback;
   try {
     return JSON.parse(row.value);
@@ -246,70 +57,80 @@ function getConfig(key, fallback = null) {
   }
 }
 
-function setConfig(key, value) {
+async function setConfig(key, value) {
   const v = typeof value === 'string' ? value : JSON.stringify(value);
-  db.prepare(
-    'INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
-  ).run(key, v);
+  await execute(
+    `INSERT INTO config (key, value) VALUES ($1, $2)
+     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,
+    [key, v]
+  );
 }
 
-function insertCompany(row) {
-  const stmt = db.prepare(`
-    INSERT INTO companies (
-      id, name, name_key, city, state, phone, website, owner, email, address,
-      crm_known, status, created_at, updated_at
-    ) VALUES (
-      @id, @name, @name_key, @city, @state, @phone, @website, @owner, @email, @address,
-      @crm_known, 'pending', datetime('now'), datetime('now')
-    )
-    ON CONFLICT(name_key) DO UPDATE SET
-      city = COALESCE(excluded.city, companies.city),
-      state = COALESCE(excluded.state, companies.state),
-      phone = COALESCE(excluded.phone, companies.phone),
-      website = COALESCE(excluded.website, companies.website),
-      owner = COALESCE(excluded.owner, companies.owner),
-      email = COALESCE(excluded.email, companies.email),
-      address = COALESCE(excluded.address, companies.address),
-      crm_known = excluded.crm_known,
-      updated_at = datetime('now')
-  `);
-  stmt.run(row);
+// ─── Companies ───────────────────────────────────────────────────────────────
+
+async function insertCompany(row) {
+  await execute(
+    `INSERT INTO companies (
+       id, name, name_key, city, state, phone, website, owner, email, address,
+       crm_known, status, created_at, updated_at
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+       $11, 'pending', NOW(), NOW()
+     )
+     ON CONFLICT(name_key) DO UPDATE SET
+       city = COALESCE(EXCLUDED.city, companies.city),
+       state = COALESCE(EXCLUDED.state, companies.state),
+       phone = COALESCE(EXCLUDED.phone, companies.phone),
+       website = COALESCE(EXCLUDED.website, companies.website),
+       owner = COALESCE(EXCLUDED.owner, companies.owner),
+       email = COALESCE(EXCLUDED.email, companies.email),
+       address = COALESCE(EXCLUDED.address, companies.address),
+       crm_known = EXCLUDED.crm_known,
+       updated_at = NOW()`,
+    [
+      row.id, row.name, row.name_key, row.city || null, row.state || null,
+      row.phone || null, row.website || null, row.owner || null,
+      row.email || null, row.address || null, row.crm_known || false,
+    ]
+  );
 }
 
-function markCrmKnown(knownNames) {
+async function markCrmKnown(knownNames) {
   const normalized = knownNames.map(normalizeName).filter(Boolean);
-  db.prepare('UPDATE companies SET crm_known = 0').run();
+  await execute('UPDATE companies SET crm_known = FALSE');
   if (normalized.length === 0) return 0;
-  const placeholders = normalized.map(() => '?').join(',');
-  const result = db
-    .prepare(`UPDATE companies SET crm_known = 1 WHERE name_key IN (${placeholders})`)
-    .run(...normalized);
-  return result.changes;
+  const placeholders = normalized.map((_, i) => `$${i + 1}`).join(',');
+  const res = await execute(
+    `UPDATE companies SET crm_known = TRUE WHERE name_key IN (${placeholders})`,
+    normalized
+  );
+  return res.rowCount;
 }
 
-function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilter, outreachStatus, pipelineStage } = {}) {
+async function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilter, outreachStatus, pipelineStage } = {}) {
   const where = [];
   const params = [];
+  let idx = 1;
   if (tier) {
-    where.push('tier = ?');
+    where.push(`tier = $${idx++}`);
     params.push(tier);
   }
-  if (crmKnown === 'true') where.push('crm_known = 1');
-  if (crmKnown === 'false') where.push('crm_known = 0');
+  if (crmKnown === 'true') where.push('crm_known = TRUE');
+  if (crmKnown === 'false') where.push('crm_known = FALSE');
   if (search) {
-    where.push('(LOWER(name) LIKE ? OR LOWER(city) LIKE ? OR LOWER(state) LIKE ?)');
-    const s = `%${String(search).toLowerCase()}%`;
-    params.push(s, s, s);
+    where.push(`(LOWER(name) LIKE $${idx} OR LOWER(city) LIKE $${idx} OR LOWER(state) LIKE $${idx})`);
+    params.push(`%${String(search).toLowerCase()}%`);
+    idx++;
   }
   if (stateFilter) {
-    where.push('UPPER(state) = ?');
+    where.push(`UPPER(state) = $${idx++}`);
     params.push(String(stateFilter).toUpperCase());
   }
   if (pipelineStage) {
-    where.push('pipeline_stage = ?');
+    where.push(`pipeline_stage = $${idx++}`);
     params.push(pipelineStage);
   } else if (outreachStatus) {
-    where.push('outreach_status = ?');
+    where.push(`outreach_status = $${idx++}`);
     params.push(outreachStatus);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -319,8 +140,8 @@ function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilte
     name_asc: 'name ASC',
     name_desc: 'name DESC',
     tier: "CASE tier WHEN 'strong-buy' THEN 1 WHEN 'watchlist' THEN 2 WHEN 'pass' THEN 3 ELSE 4 END, score DESC",
-    revenue_desc: "COALESCE(CAST(json_extract(signals_json, '$.revenue_proxy.score') AS REAL), CAST(json_extract(signals_json, '$.revenue_proxy') AS REAL)) DESC NULLS LAST, score DESC",
-    succession_desc: "COALESCE(CAST(json_extract(signals_json, '$.succession_signal.score') AS REAL), CAST(json_extract(signals_json, '$.succession_signal') AS REAL)) DESC NULLS LAST, score DESC",
+    revenue_desc: "COALESCE((signals_json->'revenue_proxy'->>'score')::NUMERIC, (signals_json->>'revenue_proxy')::NUMERIC) DESC NULLS LAST, score DESC",
+    succession_desc: "COALESCE((signals_json->'succession_signal'->>'score')::NUMERIC, (signals_json->>'succession_signal')::NUMERIC) DESC NULLS LAST, score DESC",
     state_asc: 'state ASC NULLS LAST, city ASC, name ASC',
     city_asc: 'city ASC NULLS LAST, state ASC, name ASC',
     recent: 'last_researched_at DESC NULLS LAST, updated_at DESC',
@@ -329,155 +150,174 @@ function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilte
   };
   const orderBy = orderMap[sort] || orderMap.score_desc;
 
-  return db
-    .prepare(`SELECT * FROM companies ${whereSql} ORDER BY ${orderBy}`)
-    .all(...params);
+  return query(`SELECT * FROM companies ${whereSql} ORDER BY ${orderBy}`, params);
 }
 
-function getCompany(id) {
-  return db.prepare('SELECT * FROM companies WHERE id = ?').get(id);
+async function getCompany(id) {
+  return queryOne('SELECT * FROM companies WHERE id = $1', [id]);
 }
 
-function updateCompanyResearch(id, data) {
-  db.prepare(
+async function updateCompanyResearch(id, data) {
+  await execute(
     `UPDATE companies SET
-       status = @status,
-       score = @score,
-       tier = @tier,
-       signals_json = @signals_json,
-       flags_json = @flags_json,
-       summary = @summary,
-       outreach_angle = @outreach_angle,
-       sources_json = @sources_json,
-       raw_research = @raw_research,
-       owner = COALESCE(@owner, owner),
-       phone = COALESCE(@phone, phone),
-       email = COALESCE(@email, email),
-       address = COALESCE(@address, address),
-       linkedin = COALESCE(@linkedin, linkedin),
-       last_researched_at = datetime('now'),
-       updated_at = datetime('now')
-     WHERE id = @id`
-  ).run({ id, ...data });
+       status = $1,
+       score = $2,
+       tier = $3,
+       signals_json = $4,
+       flags_json = $5,
+       summary = $6,
+       outreach_angle = $7,
+       sources_json = $8,
+       raw_research = $9,
+       owner = COALESCE($10, owner),
+       phone = COALESCE($11, phone),
+       email = COALESCE($12, email),
+       address = COALESCE($13, address),
+       linkedin = COALESCE($14, linkedin),
+       last_researched_at = NOW(),
+       updated_at = NOW()
+     WHERE id = $15`,
+    [
+      data.status, data.score, data.tier,
+      data.signals_json || null, data.flags_json || null,
+      data.summary || null, data.outreach_angle || null,
+      data.sources_json || null, data.raw_research || null,
+      data.owner || null, data.phone || null, data.email || null,
+      data.address || null, data.linkedin || null, id,
+    ]
+  );
 }
 
-function setCompanyStatus(id, status, rawError = null) {
-  db.prepare(
-    'UPDATE companies SET status = ?, raw_research = COALESCE(?, raw_research), updated_at = datetime(\'now\') WHERE id = ?'
-  ).run(status, rawError, id);
+async function setCompanyStatus(id, status, rawError = null) {
+  await execute(
+    `UPDATE companies SET status = $1, raw_research = COALESCE($2, raw_research), updated_at = NOW() WHERE id = $3`,
+    [status, rawError, id]
+  );
 }
 
-function setCompanyOverride(id, override) {
-  db.prepare('UPDATE companies SET crm_override = ? WHERE id = ?').run(override ? 1 : 0, id);
+async function setCompanyOverride(id, override) {
+  await execute('UPDATE companies SET crm_override = $1 WHERE id = $2', [!!override, id]);
 }
 
-function markOutreach(id, marked) {
-  db.prepare('UPDATE companies SET marked_for_outreach = ? WHERE id = ?').run(marked ? 1 : 0, id);
+async function markOutreach(id, marked) {
+  await execute('UPDATE companies SET marked_for_outreach = $1 WHERE id = $2', [!!marked, id]);
 }
 
-function setOutreachStatus(id, outreachStatus) {
-  db.prepare("UPDATE companies SET outreach_status = ?, updated_at = datetime('now') WHERE id = ?")
-    .run(outreachStatus, id);
+async function setOutreachStatus(id, outreachStatus) {
+  await execute(
+    "UPDATE companies SET outreach_status = $1, updated_at = NOW() WHERE id = $2",
+    [outreachStatus, id]
+  );
 }
 
-function addNote(companyId, text) {
+// ─── Notes (legacy) ──────────────────────────────────────────────────────────
+
+async function addNote(companyId, text) {
   const { nanoid } = require('nanoid');
   const id = nanoid();
-  db.prepare('INSERT INTO notes (id, company_id, note) VALUES (?, ?, ?)').run(id, companyId, text);
+  await execute(
+    'INSERT INTO notes (id, company_id, note) VALUES ($1, $2, $3)',
+    [id, companyId, text]
+  );
   return { id, company_id: companyId, note: text };
 }
 
-function getNotes(companyId) {
-  return db
-    .prepare('SELECT * FROM notes WHERE company_id = ? ORDER BY created_at DESC')
-    .all(companyId);
+async function getNotes(companyId) {
+  return query(
+    'SELECT * FROM notes WHERE company_id = $1 ORDER BY created_at DESC',
+    [companyId]
+  );
 }
 
-function rollupStats() {
-  const total = db.prepare('SELECT COUNT(*) AS n FROM companies').get().n;
-  const researched = db
-    .prepare("SELECT COUNT(*) AS n FROM companies WHERE status = 'done'").get().n;
-  const strongBuy = db
-    .prepare("SELECT COUNT(*) AS n FROM companies WHERE tier = 'strong-buy'").get().n;
-  const watchlist = db
-    .prepare("SELECT COUNT(*) AS n FROM companies WHERE tier = 'watchlist'").get().n;
-  const pass = db.prepare("SELECT COUNT(*) AS n FROM companies WHERE tier = 'pass'").get().n;
-  const inCrm = db
-    .prepare('SELECT COUNT(*) AS n FROM companies WHERE crm_known = 1').get().n;
-  const pending = db
-    .prepare("SELECT COUNT(*) AS n FROM companies WHERE status = 'pending'").get().n;
-  const outreachNoContact = db
-    .prepare("SELECT COUNT(*) AS n FROM companies WHERE outreach_status = 'no_contact' AND status = 'done'").get().n;
-  const outreachContacted = db
-    .prepare("SELECT COUNT(*) AS n FROM companies WHERE outreach_status = 'initial_contact'").get().n;
-  const outreachRelationship = db
-    .prepare("SELECT COUNT(*) AS n FROM companies WHERE outreach_status = 'relationship'").get().n;
-  return { total, researched, strongBuy, watchlist, pass, inCrm, pending, outreachNoContact, outreachContacted, outreachRelationship };
+// ─── Stats ───────────────────────────────────────────────────────────────────
+
+async function rollupStats() {
+  const total = (await queryOne('SELECT COUNT(*) AS n FROM companies')).n;
+  const researched = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE status = 'done'")).n;
+  const strongBuy = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE tier = 'strong-buy'")).n;
+  const watchlist = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE tier = 'watchlist'")).n;
+  const pass = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE tier = 'pass'")).n;
+  const inCrm = (await queryOne('SELECT COUNT(*) AS n FROM companies WHERE crm_known = TRUE')).n;
+  const pending = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE status = 'pending'")).n;
+  const outreachNoContact = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE outreach_status = 'no_contact' AND status = 'done'")).n;
+  const outreachContacted = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE outreach_status = 'initial_contact'")).n;
+  const outreachRelationship = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE outreach_status = 'relationship'")).n;
+  return {
+    total: Number(total), researched: Number(researched),
+    strongBuy: Number(strongBuy), watchlist: Number(watchlist), pass: Number(pass),
+    inCrm: Number(inCrm), pending: Number(pending),
+    outreachNoContact: Number(outreachNoContact),
+    outreachContacted: Number(outreachContacted),
+    outreachRelationship: Number(outreachRelationship),
+  };
 }
 
-function companiesToResearch() {
-  return db
-    .prepare(
-      `SELECT * FROM companies
-       WHERE status IN ('pending', 'error')
-         AND (crm_known = 0 OR crm_override = 1)
-       ORDER BY created_at ASC`
-    )
-    .all();
+async function companiesToResearch() {
+  return query(
+    `SELECT * FROM companies
+     WHERE status IN ('pending', 'error')
+       AND (crm_known = FALSE OR crm_override = TRUE)
+     ORDER BY created_at ASC`
+  );
 }
 
-function upsertMarket(row) {
-  db.prepare(
+// ─── Markets ─────────────────────────────────────────────────────────────────
+
+async function upsertMarket(row) {
+  await execute(
     `INSERT INTO markets (
        key, city, state, population, msa_name, addressable, loaded,
        tier, score, confidence, sources_json, analyzed_at, updated_at
      ) VALUES (
-       @key, @city, @state, @population, @msa_name, @addressable, @loaded,
-       @tier, @score, @confidence, @sources_json, datetime('now'), datetime('now')
+       $1, $2, $3, $4, $5, $6, $7,
+       $8, $9, $10, $11, NOW(), NOW()
      )
      ON CONFLICT(key) DO UPDATE SET
-       city = excluded.city,
-       state = excluded.state,
-       population = excluded.population,
-       msa_name = excluded.msa_name,
-       addressable = excluded.addressable,
-       loaded = excluded.loaded,
-       tier = excluded.tier,
-       score = excluded.score,
-       confidence = excluded.confidence,
-       sources_json = excluded.sources_json,
-       updated_at = datetime('now')`
-  ).run(row);
+       city = EXCLUDED.city,
+       state = EXCLUDED.state,
+       population = EXCLUDED.population,
+       msa_name = EXCLUDED.msa_name,
+       addressable = EXCLUDED.addressable,
+       loaded = EXCLUDED.loaded,
+       tier = EXCLUDED.tier,
+       score = EXCLUDED.score,
+       confidence = EXCLUDED.confidence,
+       sources_json = EXCLUDED.sources_json,
+       updated_at = NOW()`,
+    [
+      row.key, row.city, row.state, row.population || null,
+      row.msa_name || null, row.addressable || null, row.loaded || null,
+      row.tier || null, row.score || null, row.confidence || null,
+      row.sources_json || null,
+    ]
+  );
 }
 
-function getMarket(key) {
-  return db.prepare('SELECT * FROM markets WHERE key = ?').get(key);
+async function getMarket(key) {
+  return queryOne('SELECT * FROM markets WHERE key = $1', [key]);
 }
 
-function listMarkets() {
-  return db
-    .prepare(
-      `SELECT * FROM markets
-       ORDER BY
-         CASE tier WHEN 'hot' THEN 1 WHEN 'warm' THEN 2 WHEN 'cold' THEN 3 ELSE 4 END,
-         score DESC,
-         population DESC`
-    )
-    .all();
+async function listMarkets() {
+  return query(
+    `SELECT * FROM markets
+     ORDER BY
+       CASE tier WHEN 'hot' THEN 1 WHEN 'warm' THEN 2 WHEN 'cold' THEN 3 ELSE 4 END,
+       score DESC,
+       population DESC`
+  );
 }
 
-function countCompaniesInMarket(city, state) {
-  const row = db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM companies
-       WHERE LOWER(TRIM(city)) = LOWER(TRIM(?))
-         AND UPPER(TRIM(state)) = UPPER(TRIM(?))`
-    )
-    .get(city || '', state || '');
-  return row ? row.n : 0;
+async function countCompaniesInMarket(city, state) {
+  const row = await queryOne(
+    `SELECT COUNT(*) AS n FROM companies
+     WHERE LOWER(TRIM(city)) = LOWER(TRIM($1))
+       AND UPPER(TRIM(state)) = UPPER(TRIM($2))`,
+    [city || '', state || '']
+  );
+  return row ? Number(row.n) : 0;
 }
 
-// ---------- Pipeline ----------
+// ─── Pipeline ────────────────────────────────────────────────────────────────
 
 const PIPELINE_STAGES = [
   'no_contact',
@@ -493,27 +333,29 @@ const PIPELINE_STAGES = [
 
 const CLOSED_LOST_REASONS = ['no_interest', 'bad_timing', 'ineligible'];
 
-function updatePipelineStage(companyId, stage, closedLostReason = null, userId = null) {
+async function updatePipelineStage(companyId, stage, closedLostReason = null, userId = null) {
   const { nanoid } = require('nanoid');
-  const company = getCompany(companyId);
+  const company = await getCompany(companyId);
   if (!company) return null;
   const oldStage = company.pipeline_stage || 'no_contact';
-  db.prepare(`
-    UPDATE companies SET
-      pipeline_stage = ?,
-      closed_lost_reason = ?,
-      pipeline_stage_changed_at = datetime('now'),
-      updated_at = datetime('now')
-    WHERE id = ?
-  `).run(stage, stage === 'closed_lost' ? closedLostReason : null, companyId);
+  await execute(
+    `UPDATE companies SET
+       pipeline_stage = $1,
+       closed_lost_reason = $2,
+       pipeline_stage_changed_at = NOW(),
+       updated_at = NOW()
+     WHERE id = $3`,
+    [stage, stage === 'closed_lost' ? closedLostReason : null, companyId]
+  );
   // Auto-log stage change activity
   const summary = stage === 'closed_lost'
     ? `Stage: ${formatStage(oldStage)} → ${formatStage(stage)} (${formatReason(closedLostReason)})`
     : `Stage: ${formatStage(oldStage)} → ${formatStage(stage)}`;
-  db.prepare(`
-    INSERT INTO activities (id, company_id, user_id, type, summary)
-    VALUES (?, ?, ?, 'stage_change', ?)
-  `).run(nanoid(), companyId, userId, summary);
+  await execute(
+    `INSERT INTO activities (id, company_id, user_id, type, summary)
+     VALUES ($1, $2, $3, 'stage_change', $4)`,
+    [nanoid(), companyId, userId, summary]
+  );
   return { ok: true };
 }
 
@@ -537,14 +379,14 @@ function formatReason(r) {
   return map[r] || r || '';
 }
 
-function getPipelineBoard() {
-  const rows = db.prepare(`
-    SELECT id, name, score, tier, owner, pipeline_stage, closed_lost_reason,
-           pipeline_stage_changed_at, city, state, assigned_to
-    FROM companies
-    WHERE status = 'done' OR pipeline_stage != 'no_contact'
-    ORDER BY score DESC NULLS LAST, name ASC
-  `).all();
+async function getPipelineBoard() {
+  const rows = await query(
+    `SELECT id, name, score, tier, owner, pipeline_stage, closed_lost_reason,
+            pipeline_stage_changed_at, city, state, assigned_to
+     FROM companies
+     WHERE status = 'done' OR pipeline_stage != 'no_contact'
+     ORDER BY score DESC NULLS LAST, name ASC`
+  );
   const board = {};
   for (const stage of PIPELINE_STAGES) board[stage] = [];
   for (const r of rows) {
@@ -555,121 +397,125 @@ function getPipelineBoard() {
   return board;
 }
 
-// ---------- Contacts ----------
+// ─── Contacts ────────────────────────────────────────────────────────────────
 
-function listContacts(companyId) {
-  return db.prepare('SELECT * FROM contacts WHERE company_id = ? ORDER BY is_primary DESC, created_at ASC').all(companyId);
+async function listContacts(companyId) {
+  return query(
+    'SELECT * FROM contacts WHERE company_id = $1 ORDER BY is_primary DESC, created_at ASC',
+    [companyId]
+  );
 }
 
-function getContact(id) {
-  return db.prepare('SELECT * FROM contacts WHERE id = ?').get(id);
+async function getContact(id) {
+  return queryOne('SELECT * FROM contacts WHERE id = $1', [id]);
 }
 
-function insertContact(data) {
+async function insertContact(data) {
   const { nanoid } = require('nanoid');
   const id = data.id || nanoid();
-  db.prepare(`
-    INSERT INTO contacts (id, company_id, name, title, phone, email, linkedin, is_primary, source, notes)
-    VALUES (@id, @company_id, @name, @title, @phone, @email, @linkedin, @is_primary, @source, @notes)
-  `).run({
-    id,
-    company_id: data.company_id,
-    name: data.name,
-    title: data.title || null,
-    phone: data.phone || null,
-    email: data.email || null,
-    linkedin: data.linkedin || null,
-    is_primary: data.is_primary ? 1 : 0,
-    source: data.source || 'manual',
-    notes: data.notes || null,
-  });
+  await execute(
+    `INSERT INTO contacts (id, company_id, name, title, phone, email, linkedin, is_primary, source, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [
+      id, data.company_id, data.name,
+      data.title || null, data.phone || null, data.email || null,
+      data.linkedin || null, data.is_primary ? true : false,
+      data.source || 'manual', data.notes || null,
+    ]
+  );
   return { id, ...data };
 }
 
-function updateContact(id, data) {
+async function updateContact(id, data) {
   const fields = [];
-  const params = { id };
+  const params = [];
+  let idx = 1;
   for (const key of ['name', 'title', 'phone', 'email', 'linkedin', 'is_primary', 'notes']) {
     if (data[key] !== undefined) {
-      fields.push(`${key} = @${key}`);
-      params[key] = key === 'is_primary' ? (data[key] ? 1 : 0) : data[key];
+      fields.push(`${key} = $${idx++}`);
+      params.push(key === 'is_primary' ? !!data[key] : data[key]);
     }
   }
   if (fields.length === 0) return;
-  fields.push("updated_at = datetime('now')");
-  db.prepare(`UPDATE contacts SET ${fields.join(', ')} WHERE id = @id`).run(params);
+  fields.push(`updated_at = NOW()`);
+  params.push(id);
+  await execute(`UPDATE contacts SET ${fields.join(', ')} WHERE id = $${idx}`, params);
 }
 
-function deleteContact(id) {
-  db.prepare('DELETE FROM contacts WHERE id = ?').run(id);
+async function deleteContact(id) {
+  await execute('DELETE FROM contacts WHERE id = $1', [id]);
 }
 
-// ---------- Activities ----------
+// ─── Activities ──────────────────────────────────────────────────────────────
 
-function listActivities(companyId, { limit = 50, offset = 0 } = {}) {
-  return db.prepare(`
-    SELECT a.*, u.name AS user_name, c.name AS contact_name
-    FROM activities a
-    LEFT JOIN users u ON a.user_id = u.id
-    LEFT JOIN contacts c ON a.contact_id = c.id
-    WHERE a.company_id = ?
-    ORDER BY a.created_at DESC
-    LIMIT ? OFFSET ?
-  `).all(companyId, limit, offset);
+async function listActivities(companyId, { limit = 50, offset = 0 } = {}) {
+  return query(
+    `SELECT a.*, u.name AS user_name, c.name AS contact_name
+     FROM activities a
+     LEFT JOIN users u ON a.user_id = u.id
+     LEFT JOIN contacts c ON a.contact_id = c.id
+     WHERE a.company_id = $1
+     ORDER BY a.created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [companyId, limit, offset]
+  );
 }
 
-function insertActivity(data) {
+async function insertActivity(data) {
   const { nanoid } = require('nanoid');
   const id = data.id || nanoid();
-  db.prepare(`
-    INSERT INTO activities (id, company_id, contact_id, user_id, type, summary, details)
-    VALUES (@id, @company_id, @contact_id, @user_id, @type, @summary, @details)
-  `).run({
-    id,
-    company_id: data.company_id,
-    contact_id: data.contact_id || null,
-    user_id: data.user_id || null,
-    type: data.type,
-    summary: data.summary,
-    details: data.details || null,
-  });
+  await execute(
+    `INSERT INTO activities (id, company_id, contact_id, user_id, type, summary, details)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [
+      id, data.company_id, data.contact_id || null,
+      data.user_id || null, data.type, data.summary, data.details || null,
+    ]
+  );
   return { id, ...data };
 }
 
-// ---------- Users ----------
+// ─── Users ───────────────────────────────────────────────────────────────────
 
-function getUserByToken(token) {
-  return db.prepare('SELECT * FROM users WHERE invite_token = ?').get(token);
+async function getUserByToken(token) {
+  return queryOne('SELECT * FROM users WHERE invite_token = $1', [token]);
 }
 
-function getUserById(id) {
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+async function getUserById(id) {
+  return queryOne('SELECT * FROM users WHERE id = $1', [id]);
 }
 
-function getUserByEmail(email) {
-  return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+async function getUserByEmail(email) {
+  return queryOne('SELECT * FROM users WHERE email = $1', [email]);
 }
 
-function createUser(data) {
+async function createUser(data) {
   const { nanoid } = require('nanoid');
   const id = data.id || nanoid();
-  db.prepare(`
-    INSERT INTO users (id, name, email, invite_token)
-    VALUES (?, ?, ?, ?)
-  `).run(id, data.name, data.email, data.invite_token || null);
+  await execute(
+    `INSERT INTO users (id, name, email, invite_token)
+     VALUES ($1, $2, $3, $4)`,
+    [id, data.name, data.email, data.invite_token || null]
+  );
   return { id, name: data.name, email: data.email };
 }
 
-function listUsers() {
-  return db.prepare('SELECT id, name, email, created_at FROM users ORDER BY created_at ASC').all();
+async function listUsers() {
+  return query('SELECT id, name, email, created_at FROM users ORDER BY created_at ASC');
 }
 
-function clearInviteToken(userId) {
-  db.prepare('UPDATE users SET invite_token = NULL WHERE id = ?').run(userId);
+async function clearInviteToken(userId) {
+  await execute('UPDATE users SET invite_token = NULL WHERE id = $1', [userId]);
 }
+
+// ─── Exports ─────────────────────────────────────────────────────────────────
 
 module.exports = {
-  db,
+  pool,
+  initSchema,
+  execute,
+  queryOne,
+  query,
   normalizeName,
   getConfig,
   setConfig,
