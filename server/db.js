@@ -732,6 +732,65 @@ async function setUserConfig(userId, key, value) {
   return setConfig(`user:${userId}:${key}`, value);
 }
 
+// ─── User outreach stats (Phase 2) ───────────────────────────────────────────
+
+/**
+ * Aggregate outreach stats for a user within a time range.
+ * @param {string} userId
+ * @param {'today'|'week'|'all'} range
+ */
+async function getUserStats(userId, range = 'today') {
+  let rangeClause = '';
+  if (range === 'today') {
+    rangeClause = `AND called_at >= date_trunc('day', NOW())`;
+  } else if (range === 'week') {
+    rangeClause = `AND called_at >= date_trunc('week', NOW())`;
+  }
+
+  const callRows = await query(
+    `SELECT
+       COUNT(*) FILTER (WHERE direction = 'outbound')::int AS outbound_calls,
+       COUNT(*) FILTER (WHERE direction = 'inbound')::int  AS inbound_calls,
+       COALESCE(SUM(COALESCE(duration_sec, 0)), 0)::int    AS total_talk_sec,
+       COUNT(*) FILTER (WHERE sentiment = 'Receptive')::int AS receptive_count,
+       COUNT(*) FILTER (WHERE scheduling_detected = TRUE)::int AS meetings_booked
+     FROM call_logs
+     WHERE user_id = $1 ${rangeClause}`,
+    [userId]
+  );
+
+  let actRangeClause = '';
+  if (range === 'today') {
+    actRangeClause = `AND created_at >= date_trunc('day', NOW())`;
+  } else if (range === 'week') {
+    actRangeClause = `AND created_at >= date_trunc('week', NOW())`;
+  }
+
+  const actRows = await query(
+    `SELECT
+       COUNT(*) FILTER (WHERE type = 'email')::int   AS emails_sent,
+       COUNT(*) FILTER (WHERE type IN ('sms','text'))::int AS texts_sent,
+       COUNT(*) FILTER (WHERE type = 'meeting')::int AS meetings_logged
+     FROM activities
+     WHERE user_id = $1 ${actRangeClause}`,
+    [userId]
+  );
+
+  const c = callRows[0] || {};
+  const a = actRows[0] || {};
+  return {
+    range,
+    outbound_calls: c.outbound_calls || 0,
+    inbound_calls: c.inbound_calls || 0,
+    total_talk_sec: c.total_talk_sec || 0,
+    receptive_count: c.receptive_count || 0,
+    meetings_booked: c.meetings_booked || 0,
+    emails_sent: a.emails_sent || 0,
+    texts_sent: a.texts_sent || 0,
+    meetings_logged: a.meetings_logged || 0,
+  };
+}
+
 // ─── Exports ─────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -803,4 +862,6 @@ module.exports = {
   // User config
   getUserConfig,
   setUserConfig,
+  // User stats (Phase 2)
+  getUserStats,
 };

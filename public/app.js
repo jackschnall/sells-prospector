@@ -915,6 +915,198 @@ async function loadCurrentUser() {
     state.user = data.user || null;
   } catch {}
   applyTabVisibility();
+  applyAuthUI();
+}
+
+function applyAuthUI() {
+  const overlay = $('#login-overlay');
+  const profileBtn = $('#profile-btn');
+  if (!overlay || !profileBtn) return;
+  if (state.user) {
+    overlay.hidden = true;
+    document.body.classList.remove('logged-out');
+    profileBtn.hidden = false;
+    const initials = userInitials(state.user.name || state.user.email || '?');
+    $('#profile-avatar').textContent = initials;
+    $('#profile-name').textContent = state.user.name || state.user.email || 'User';
+    $('#profile-role').textContent = state.user.role || 'analyst';
+  } else {
+    overlay.hidden = false;
+    document.body.classList.add('logged-out');
+    profileBtn.hidden = true;
+  }
+}
+
+function userInitials(s) {
+  const parts = String(s).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return (parts[0][0] || '?').toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// ---------- Login form ----------
+function bindLogin() {
+  const form = $('#login-form');
+  if (!form) return;
+  const tabs = $$('.login-tab');
+  tabs.forEach((t) => {
+    t.addEventListener('click', () => {
+      tabs.forEach((x) => x.classList.toggle('active', x === t));
+      const mode = t.dataset.loginMode;
+      const nameField = $('#login-name-field');
+      if (mode === 'signup') {
+        nameField.hidden = false;
+        $('#login-submit').textContent = 'Create account';
+        $('#login-title').textContent = 'Create your account';
+        $('#login-sub').textContent = 'New analysts: enter your name and email to get started.';
+      } else {
+        nameField.hidden = true;
+        $('#login-submit').textContent = 'Sign in';
+        $('#login-title').textContent = 'Sign in to continue';
+        $('#login-sub').textContent = 'Enter your work email to access the prospector.';
+      }
+      $('#login-error').hidden = true;
+    });
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const mode = $('.login-tab.active')?.dataset.loginMode || 'signin';
+    const email = $('#login-email').value.trim();
+    const name = $('#login-name').value.trim();
+    const err = $('#login-error');
+    err.hidden = true;
+    if (!email) {
+      err.textContent = 'Email is required.';
+      err.hidden = false;
+      return;
+    }
+    const submit = $('#login-submit');
+    submit.disabled = true;
+    const originalLabel = submit.textContent;
+    submit.textContent = mode === 'signup' ? 'Creating…' : 'Signing in…';
+    try {
+      let res;
+      if (mode === 'signup') {
+        if (!name) {
+          err.textContent = 'Name is required to create an account.';
+          err.hidden = false;
+          return;
+        }
+        res = await fetch('/api/auth/accept', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ token: 'self-signup', name, email }),
+        });
+      } else {
+        res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+      }
+      const data = await res.json();
+      if (!res.ok) {
+        err.textContent = data.error || 'Sign in failed. Try again.';
+        err.hidden = false;
+        return;
+      }
+      state.user = data.user || null;
+      applyTabVisibility();
+      applyAuthUI();
+      $('#login-email').value = '';
+      $('#login-name').value = '';
+      toast(`Welcome, ${state.user?.name || 'friend'} ✓`, 'ok');
+      refreshPendingDebriefs();
+      loadTwilioStatus();
+    } catch (e2) {
+      err.textContent = 'Network error. Check your connection.';
+      err.hidden = false;
+    } finally {
+      submit.disabled = false;
+      submit.textContent = originalLabel;
+    }
+  });
+}
+
+// ---------- Profile modal ----------
+function bindProfile() {
+  $('#profile-btn')?.addEventListener('click', openProfileModal);
+  $$('[data-close-profile]').forEach((el) => el.addEventListener('click', closeProfileModal));
+  $$('.profile-stats-tab').forEach((t) => {
+    t.addEventListener('click', () => {
+      $$('.profile-stats-tab').forEach((x) => x.classList.toggle('active', x === t));
+      loadProfileStats(t.dataset.statsRange || 'today');
+    });
+  });
+  $('#profile-signout')?.addEventListener('click', handleSignOut);
+}
+
+function openProfileModal() {
+  if (!state.user) return;
+  const modal = $('#profile-modal');
+  if (!modal) return;
+  $('#profile-modal-avatar').textContent = userInitials(state.user.name || state.user.email || '?');
+  $('#profile-modal-name').textContent = state.user.name || '—';
+  $('#profile-modal-email').textContent = state.user.email || '—';
+  $('#profile-modal-role').textContent = state.user.role || 'analyst';
+
+  const verticals = state.user.assigned_verticals || [];
+  const territories = state.user.assigned_territories || [];
+  const vEl = $('#profile-verticals');
+  const tEl = $('#profile-territories');
+  vEl.innerHTML = verticals.length === 0
+    ? '<span class="profile-row-value" style="color:#999">None assigned</span>'
+    : verticals.map((v) => `<span class="profile-tag">${escapeHtml(v)}</span>`).join('');
+  tEl.innerHTML = territories.length === 0
+    ? '<span class="profile-row-value" style="color:#999">None assigned</span>'
+    : territories.map((t) => `<span class="profile-tag">${escapeHtml(String(t).toUpperCase())}</span>`).join('');
+
+  $$('.profile-stats-tab').forEach((x, i) => x.classList.toggle('active', i === 0));
+  modal.hidden = false;
+  loadProfileStats('today');
+}
+
+function closeProfileModal() {
+  const modal = $('#profile-modal');
+  if (modal) modal.hidden = true;
+}
+
+async function loadProfileStats(range) {
+  const grid = $('#profile-stats-grid');
+  if (!grid) return;
+  try {
+    const res = await fetch(`/api/me/stats?range=${encodeURIComponent(range)}`);
+    if (!res.ok) return;
+    const { stats } = await res.json();
+    $('#stat-outbound').textContent = stats.outbound_calls ?? 0;
+    $('#stat-inbound').textContent = stats.inbound_calls ?? 0;
+    $('#stat-talk').textContent = formatTalkTime(stats.total_talk_sec || 0);
+    $('#stat-texts').textContent = stats.texts_sent ?? 0;
+    $('#stat-emails').textContent = stats.emails_sent ?? 0;
+    $('#stat-meetings').textContent = stats.meetings_booked ?? 0;
+  } catch {}
+}
+
+function formatTalkTime(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const rem = s % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${rem}s`;
+  return `${rem}s`;
+}
+
+async function handleSignOut() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } catch {}
+  state.user = null;
+  closeProfileModal();
+  applyTabVisibility();
+  applyAuthUI();
+  toast('Signed out', 'info');
 }
 
 async function loadTwilioStatus() {
@@ -1735,6 +1927,8 @@ async function saveCooldown() {
 
 // ---------- Phase 2 wiring ----------
 function bindPhase2() {
+  bindLogin();
+  bindProfile();
   $('#queue-refresh')?.addEventListener('click', loadQueue);
   $('#qp-call-btn')?.addEventListener('click', startQueueCall);
   $('#qp-end-btn')?.addEventListener('click', endQueueCall);

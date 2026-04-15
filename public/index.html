@@ -40,6 +40,13 @@
         <div class="rollup"><div class="rollup-label">Likely to Sell</div><div class="rollup-value" id="stat-strong">0</div></div>
         <div class="rollup"><div class="rollup-label">In CRM</div><div class="rollup-value" id="stat-crm">0</div></div>
       </div>
+      <button type="button" id="profile-btn" class="profile-btn" hidden>
+        <span class="profile-avatar" id="profile-avatar">?</span>
+        <span class="profile-label">
+          <span class="profile-name" id="profile-name">Signed in</span>
+          <span class="profile-role" id="profile-role"></span>
+        </span>
+      </button>
     </header>
 
     <main class="layout">
@@ -770,6 +777,96 @@
     </aside>
 
     <div id="toast" class="toast" hidden></div>
+
+    <!-- Login overlay (Phase 2) -->
+    <div id="login-overlay" class="login-overlay" hidden>
+      <div class="login-card" role="dialog" aria-modal="true" aria-labelledby="login-title">
+        <div class="login-brand">
+          <div class="brand-mark lg" aria-hidden="true">S</div>
+          <div class="login-brand-text">
+            <div class="login-brand-name">Sells</div>
+            <div class="login-brand-sub">M&amp;A Prospector</div>
+          </div>
+        </div>
+        <h1 id="login-title" class="login-title">Sign in to continue</h1>
+        <p class="login-sub" id="login-sub">Enter your work email to access the prospector.</p>
+
+        <div class="login-tabs" role="tablist">
+          <button type="button" class="login-tab active" data-login-mode="signin" role="tab">Sign in</button>
+          <button type="button" class="login-tab" data-login-mode="signup" role="tab">Create account</button>
+        </div>
+
+        <form id="login-form" class="login-form" autocomplete="off">
+          <div class="login-field" id="login-name-field" hidden>
+            <label for="login-name">Full name</label>
+            <input id="login-name" type="text" placeholder="Jane Doe" autocomplete="name" />
+          </div>
+          <div class="login-field">
+            <label for="login-email">Email</label>
+            <input id="login-email" type="email" placeholder="you@sells.com" autocomplete="email" required />
+          </div>
+          <div class="login-error" id="login-error" hidden></div>
+          <button type="submit" class="btn-primary login-submit" id="login-submit">Sign in</button>
+        </form>
+
+        <div class="login-foot">
+          <span class="login-foot-dim">Microsoft SSO coming soon.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile modal (Phase 2) -->
+    <div id="profile-modal" class="profile-modal" hidden>
+      <div class="profile-backdrop" data-close-profile></div>
+      <div class="profile-card" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+        <div class="profile-header">
+          <div class="profile-header-left">
+            <span class="profile-avatar lg" id="profile-modal-avatar">?</span>
+            <div>
+              <div class="profile-header-name" id="profile-modal-name">—</div>
+              <div class="profile-header-meta">
+                <span id="profile-modal-email">—</span>
+                <span class="profile-role-pill" id="profile-modal-role">analyst</span>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="btn-ghost btn-xs" data-close-profile aria-label="Close">&times;</button>
+        </div>
+
+        <div class="profile-section">
+          <div class="profile-section-title">Assignments</div>
+          <div class="profile-row">
+            <div class="profile-row-label">Industries</div>
+            <div class="profile-row-value" id="profile-verticals">—</div>
+          </div>
+          <div class="profile-row">
+            <div class="profile-row-label">Territories</div>
+            <div class="profile-row-value" id="profile-territories">—</div>
+          </div>
+        </div>
+
+        <div class="profile-section">
+          <div class="profile-section-title">Outreach stats</div>
+          <div class="profile-stats-tabs" role="tablist">
+            <button type="button" class="profile-stats-tab active" data-stats-range="today" role="tab">Today</button>
+            <button type="button" class="profile-stats-tab" data-stats-range="week" role="tab">This week</button>
+            <button type="button" class="profile-stats-tab" data-stats-range="all" role="tab">All time</button>
+          </div>
+          <div id="profile-stats-grid" class="profile-stats-grid">
+            <div class="stat-card"><div class="stat-label">Outbound calls</div><div class="stat-value" id="stat-outbound">0</div></div>
+            <div class="stat-card"><div class="stat-label">Inbound calls</div><div class="stat-value" id="stat-inbound">0</div></div>
+            <div class="stat-card"><div class="stat-label">Talk time</div><div class="stat-value" id="stat-talk">0m</div></div>
+            <div class="stat-card"><div class="stat-label">Texts sent</div><div class="stat-value" id="stat-texts">0</div></div>
+            <div class="stat-card"><div class="stat-label">Emails sent</div><div class="stat-value" id="stat-emails">0</div></div>
+            <div class="stat-card"><div class="stat-label">Meetings booked</div><div class="stat-value" id="stat-meetings">0</div></div>
+          </div>
+        </div>
+
+        <div class="profile-actions">
+          <button type="button" class="btn-ghost" id="profile-signout">Sign out</button>
+        </div>
+      </div>
+    </div>
 
     <script src="/app.js"></script>
   </body>

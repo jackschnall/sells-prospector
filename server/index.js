@@ -67,6 +67,8 @@ const {
   // User config (Phase 2)
   getUserConfig,
   setUserConfig,
+  // User stats (Phase 2)
+  getUserStats,
 } = require('./db');
 const { promoteToAdminIfFirstUser, requireUser, requireAdmin, isAdmin } = require('./auth');
 const { registerRoutes: registerTwilioRoutes, isMockMode: isTwilioMockMode } = require('./twilio');
@@ -471,6 +473,17 @@ app.put('/api/me/queue-settings', requireUser, async (req, res) => {
   }
   await setUserConfig(req.currentUser.id, 'queue_cooldown_days', days);
   res.json({ ok: true, cooldown_days: days });
+});
+
+app.get('/api/me/stats', requireUser, async (req, res) => {
+  const range = ['today', 'week', 'all'].includes(req.query.range) ? req.query.range : 'today';
+  try {
+    const stats = await getUserStats(req.currentUser.id, range);
+    res.json({ ok: true, stats });
+  } catch (err) {
+    console.error('[me/stats]', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ---------- Admin (Phase 2) ----------
