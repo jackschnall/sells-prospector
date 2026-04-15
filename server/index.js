@@ -9,6 +9,8 @@ const {
   listCompanies,
   getCompany,
   insertCompany,
+  updateCompanyResearch,
+  normalizeName,
   setConfig,
   getConfig,
   setCompanyOverride,
@@ -211,6 +213,94 @@ app.post('/api/_cc-event', (req, res) => {
   if (!event || !event.type) return res.status(400).json({ error: 'Missing event type' });
   emit(event);
   res.json({ ok: true });
+});
+
+// ---------- API key auth (for external write endpoints) ----------
+function requireApiKey(req, res, next) {
+  const key = process.env.API_KEY;
+  if (!key) return next(); // No key configured = open (dev mode)
+  if (req.headers['x-api-key'] === key) return next();
+  res.status(401).json({ error: 'Invalid or missing API key' });
+}
+
+// ---------- External research injection ----------
+// Mirrors cc-inject.js inject — lets Claude.ai (or any HTTP client) push research.
+app.post('/api/companies/:id/research', requireApiKey, (req, res) => {
+  const company = getCompany(req.params.id);
+  if (!company) return res.status(404).json({ error: 'Company not found' });
+
+  const data = { ...req.body };
+
+  // Auto-stringify JSON fields if they're objects
+  for (const key of ['signals_json', 'flags_json', 'sources_json', 'raw_research']) {
+    if (data[key] && typeof data[key] !== 'string') {
+      data[key] = JSON.stringify(data[key]);
+    }
+  }
+
+  // Defaults — updateCompanyResearch expects all named params
+  data.status = data.status || 'done';
+  data.owner = data.owner || null;
+  data.phone = data.phone || null;
+  data.email = data.email || null;
+  data.address = data.address || null;
+  data.linkedin = data.linkedin || null;
+  data.score = data.score ?? null;
+  data.tier = data.tier || null;
+  data.signals_json = data.signals_json || null;
+  data.flags_json = data.flags_json || null;
+  data.summary = data.summary || null;
+  data.outreach_angle = data.outreach_angle || null;
+  data.sources_json = data.sources_json || null;
+  data.raw_research = data.raw_research || null;
+
+  updateCompanyResearch(req.params.id, data);
+
+  // Emit SSE so frontend updates live
+  const stats = rollupStats();
+  emit({ type: 'company_done', id: company.id, name: company.name, score: data.score, tier: data.tier });
+  emit({ type: 'progress', done: stats.researched, total: stats.total });
+
+  res.json({ ok: true, id: company.id, name: company.name, score: data.score, tier: data.tier });
+});
+
+// ---------- External company discovery ----------
+// Mirrors cc-inject.js add — lets Claude.ai add new companies over HTTP.
+app.post('/api/discover', requireApiKey, (req, res) => {
+  const { nanoid } = require('nanoid');
+  let candidates = req.body.candidates || req.body;
+  if (!Array.isArray(candidates)) candidates = [candidates];
+
+  const results = [];
+  for (const c of candidates) {
+    if (!c.name) { results.push({ error: 'missing name' }); continue; }
+    const id = nanoid();
+    const name_key = normalizeName(c.name);
+    if (!name_key) { results.push({ error: 'empty name_key', name: c.name }); continue; }
+    try {
+      insertCompany({
+        id,
+        name: c.name,
+        name_key,
+        city: c.city || null,
+        state: c.state || null,
+        phone: c.phone || null,
+        website: c.website || null,
+        owner: c.owner || null,
+        email: c.email || null,
+        address: c.address || null,
+        crm_known: 0,
+      });
+      results.push({ ok: true, id, name: c.name, name_key });
+    } catch (err) {
+      const existing = listCompanies({ search: c.name });
+      const match = existing.find(r => r.name_key === name_key);
+      results.push({ ok: true, id: match ? match.id : 'existing', name: c.name, note: 'already exists' });
+    }
+  }
+
+  emit({ type: 'queue', total: rollupStats().total });
+  res.json({ ok: true, results, stats: rollupStats() });
 });
 
 // ---------- Export ----------
