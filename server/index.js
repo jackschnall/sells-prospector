@@ -45,8 +45,33 @@ const {
   getUserByEmail,
   createUser,
   listUsers,
+  listUsersFull,
+  updateUser,
   clearInviteToken,
+  // Call logs (Phase 2)
+  insertCallLog,
+  updateCallLog,
+  getCallLog,
+  getCallLogBySid,
+  listCallLogsByCompany,
+  listPendingDebriefs,
+  // Calendar (Phase 2)
+  insertCalendarEvent,
+  updateCalendarEvent,
+  deleteCalendarEvent,
+  getCalendarEvent,
+  listCalendarEventsForMonth,
+  // Queue skips (Phase 2)
+  insertQueueSkip,
+  listQueueSkipsForToday,
+  // User config (Phase 2)
+  getUserConfig,
+  setUserConfig,
 } = require('./db');
+const { promoteToAdminIfFirstUser, requireUser, requireAdmin, isAdmin } = require('./auth');
+const { registerRoutes: registerTwilioRoutes, isMockMode: isTwilioMockMode } = require('./twilio');
+const { saveDraft: saveDebriefDraft, submitDebrief, MIN_ANSWER_LEN } = require('./debrief');
+const { buildQueue } = require('./call-queue');
 const { parseCsvBuffer, parseXlsxBuffer, companiesToCsv } = require('./csv');
 const { startRun, stopRun, getRunState, addListener, removeListener, emit } = require('./agent');
 const sf = require('./salesforce');
@@ -354,11 +379,22 @@ app.post('/api/discover', requireApiKey, async (req, res) => {
   res.json({ ok: true, results, stats });
 });
 
-// ---------- Auth (invite link) ----------
+// ---------- Auth (invite link; Phase 3 will swap to Microsoft SSO) ----------
+function userPublic(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role || 'analyst',
+    assigned_verticals: safeJson(user.assigned_verticals) || [],
+    assigned_territories: safeJson(user.assigned_territories) || [],
+  };
+}
+
 app.get('/api/auth/me', (req, res) => {
   if (!req.currentUser) return res.json({ user: null });
-  const { id, name, email } = req.currentUser;
-  res.json({ user: { id, name, email } });
+  res.json({ user: userPublic(req.currentUser) });
 });
 
 app.post('/api/auth/accept', async (req, res) => {
@@ -369,19 +405,22 @@ app.post('/api/auth/accept', async (req, res) => {
     const existing = await getUserByEmail(email);
     if (existing) return res.status(409).json({ error: 'Email already registered' });
     const user = await createUser({ name, email, invite_token: null });
+    await promoteToAdminIfFirstUser(user.id);
     res.cookie('userId', user.id, { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
-    return res.json({ ok: true, user: { id: user.id, name, email } });
+    return res.json({ ok: true, user: userPublic(await getUserById(user.id)) });
   }
   const existing = await getUserByEmail(email);
   if (existing) {
     res.cookie('userId', existing.id, { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
     await clearInviteToken(existing.id);
-    return res.json({ ok: true, user: { id: existing.id, name: existing.name, email: existing.email } });
+    await promoteToAdminIfFirstUser(existing.id);
+    return res.json({ ok: true, user: userPublic(await getUserById(existing.id)) });
   }
   const user = await createUser({ name, email });
   await clearInviteToken(invite.id);
+  await promoteToAdminIfFirstUser(user.id);
   res.cookie('userId', user.id, { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
-  res.json({ ok: true, user: { id: user.id, name, email } });
+  res.json({ ok: true, user: userPublic(await getUserById(user.id)) });
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -389,8 +428,9 @@ app.post('/api/auth/login', async (req, res) => {
   if (!email) return res.status(400).json({ error: 'Missing email' });
   const user = await getUserByEmail(email);
   if (!user) return res.status(404).json({ error: 'User not found' });
+  await promoteToAdminIfFirstUser(user.id);
   res.cookie('userId', user.id, { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
-  res.json({ ok: true, user: { id: user.id, name: user.name, email: user.email } });
+  res.json({ ok: true, user: userPublic(await getUserById(user.id)) });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -412,6 +452,240 @@ app.post('/api/auth/invite', async (req, res) => {
 
 app.get('/api/auth/users', async (req, res) => {
   res.json({ users: await listUsers() });
+});
+
+// ---------- /api/me (current user — Phase 2) ----------
+app.get('/api/me/assignments', requireUser, async (req, res) => {
+  const u = req.currentUser;
+  const cooldown = await getUserConfig(u.id, 'queue_cooldown_days', 7);
+  res.json({
+    user: userPublic(u),
+    queue_cooldown_days: Number(cooldown) || 7,
+  });
+});
+
+app.put('/api/me/queue-settings', requireUser, async (req, res) => {
+  const days = Number(req.body?.cooldown_days);
+  if (!Number.isFinite(days) || days < 1 || days > 30) {
+    return res.status(400).json({ error: 'cooldown_days must be a number between 1 and 30' });
+  }
+  await setUserConfig(req.currentUser.id, 'queue_cooldown_days', days);
+  res.json({ ok: true, cooldown_days: days });
+});
+
+// ---------- Admin (Phase 2) ----------
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  const users = await listUsersFull();
+  res.json({
+    users: users.map((u) => ({
+      ...userPublic(u),
+      invite_pending: !!u.invite_token,
+      created_at: u.created_at,
+    })),
+  });
+});
+
+app.put('/api/admin/users/:id/assignments', requireAdmin, async (req, res) => {
+  const { verticals, territories } = req.body || {};
+  if (!Array.isArray(verticals) || !Array.isArray(territories)) {
+    return res.status(400).json({ error: 'verticals and territories must be arrays' });
+  }
+  const user = await getUserById(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  await updateUser(user.id, {
+    assigned_verticals: verticals,
+    assigned_territories: territories.map((t) => String(t).toUpperCase()),
+  });
+  res.json({ ok: true });
+});
+
+app.put('/api/admin/users/:id/role', requireAdmin, async (req, res) => {
+  const { role } = req.body || {};
+  if (!['admin', 'analyst'].includes(role)) {
+    return res.status(400).json({ error: "role must be 'admin' or 'analyst'" });
+  }
+  const user = await getUserById(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  // Prevent demoting the last admin
+  if (user.role === 'admin' && role === 'analyst') {
+    const { rows } = await pool.query("SELECT COUNT(*)::int AS n FROM users WHERE role='admin'");
+    if ((rows[0]?.n ?? 0) <= 1) {
+      return res.status(409).json({ error: 'Cannot demote the last admin' });
+    }
+  }
+  await updateUser(user.id, { role });
+  res.json({ ok: true });
+});
+
+// ---------- Telephony (Twilio, mock-first) ----------
+registerTwilioRoutes(app);
+
+// ---------- Calls (history, debrief) ----------
+function callPublic(call) {
+  if (!call) return null;
+  return {
+    ...call,
+    ai_summary: safeJson(call.ai_summary),
+    debrief_questions: safeJson(call.debrief_questions) || [],
+    debrief_qa: safeJson(call.debrief_qa) || [],
+    debrief_draft: safeJson(call.debrief_draft) || null,
+  };
+}
+
+app.get('/api/companies/:id/calls', requireUser, async (req, res) => {
+  const rows = await listCallLogsByCompany(req.params.id);
+  res.json({ calls: rows.map(callPublic) });
+});
+
+app.get('/api/calls/pending-debrief', requireUser, async (req, res) => {
+  const rows = await listPendingDebriefs(req.currentUser.id);
+  res.json({ calls: rows.map(callPublic) });
+});
+
+app.get('/api/calls/:id', requireUser, async (req, res) => {
+  const call = await getCallLog(req.params.id);
+  if (!call) return res.status(404).json({ error: 'call_log not found' });
+  if (call.user_id && call.user_id !== req.currentUser.id && req.currentUser.role !== 'admin') {
+    return res.status(403).json({ error: 'Not your call' });
+  }
+  res.json({ call: callPublic(call) });
+});
+
+app.get('/api/calls/:id/debrief-questions', requireUser, async (req, res) => {
+  const call = await getCallLog(req.params.id);
+  if (!call) return res.status(404).json({ error: 'call_log not found' });
+  if (call.user_id && call.user_id !== req.currentUser.id && req.currentUser.role !== 'admin') {
+    return res.status(403).json({ error: 'Not your call' });
+  }
+  const questions = safeJson(call.debrief_questions) || [];
+  const draft = safeJson(call.debrief_draft) || null;
+  const ready = Array.isArray(questions) && questions.length >= 3;
+  res.json({
+    ready,
+    questions,
+    draft,
+    status: call.debrief_status || 'pending',
+    sentiment: call.sentiment || null,
+    ai_summary: safeJson(call.ai_summary) || null,
+    next_action: call.next_action || null,
+    scheduled_callback_date: call.scheduled_callback_date || null,
+    min_answer_len: MIN_ANSWER_LEN,
+  });
+});
+
+app.post('/api/calls/:id/debrief-draft', requireUser, async (req, res) => {
+  try {
+    const answers = req.body?.answers;
+    const result = await saveDebriefDraft(req.params.id, req.currentUser.id, answers);
+    res.json(result);
+  } catch (err) {
+    const status = err.status || 400;
+    res.status(status).json({ error: err.message, details: err.details });
+  }
+});
+
+app.post('/api/calls/:id/debrief', requireUser, async (req, res) => {
+  try {
+    const answers = req.body?.answers;
+    const result = await submitDebrief(req.params.id, req.currentUser.id, answers);
+    res.json(result);
+  } catch (err) {
+    const status = err.status || 400;
+    res.status(status).json({ error: err.message, details: err.details });
+  }
+});
+
+// ---------- Call Queue ----------
+app.get('/api/queue', requireUser, async (req, res) => {
+  try {
+    const pins = req.query.pins ? String(req.query.pins).split(',').filter(Boolean) : [];
+    const limit = Number(req.query.limit) || 50;
+    const result = await buildQueue(req.currentUser, { pins, limit });
+    res.json(result);
+  } catch (err) {
+    console.error('[queue] build failed:', err);
+    res.status(500).json({ error: 'Failed to build queue', details: err.message });
+  }
+});
+
+app.post('/api/queue/skip', requireUser, async (req, res) => {
+  const { company_id } = req.body || {};
+  if (!company_id) return res.status(400).json({ error: 'company_id required' });
+  await insertQueueSkip(req.currentUser.id, company_id);
+  emit({ type: 'queue_changed', user_id: req.currentUser.id });
+  res.json({ ok: true });
+});
+
+// ---------- Calendar ----------
+app.get('/api/calendar', requireUser, async (req, res) => {
+  const year = Number(req.query.year);
+  const month = Number(req.query.month);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: 'year and month query params required (month 1-12)' });
+  }
+  const territories = safeJson(req.currentUser.assigned_territories) || [];
+  const events = await listCalendarEventsForMonth({
+    year,
+    month,
+    userId: req.currentUser.id,
+    isAdmin: req.currentUser.role === 'admin',
+    territories,
+  });
+  res.json({ events });
+});
+
+app.post('/api/calendar', requireUser, async (req, res) => {
+  const { title, description, company_id, contact_id, starts_at, event_type } = req.body || {};
+  if (!title || !starts_at) return res.status(400).json({ error: 'title and starts_at required' });
+  const id = await insertCalendarEvent({
+    company_id: company_id || null,
+    contact_id: contact_id || null,
+    user_id: req.currentUser.id,
+    title,
+    description: description || null,
+    event_type: event_type || 'meeting',
+    starts_at,
+    source: 'manual',
+  });
+  emit({ type: 'calendar_event_created', event_id: id, company_id: company_id || null });
+  res.json({ ok: true, id });
+});
+
+app.put('/api/calendar/:id', requireUser, async (req, res) => {
+  const ev = await getCalendarEvent(req.params.id);
+  if (!ev) return res.status(404).json({ error: 'Event not found' });
+  if (ev.user_id && ev.user_id !== req.currentUser.id && req.currentUser.role !== 'admin') {
+    return res.status(403).json({ error: 'Not yours to edit' });
+  }
+  const { title, description, starts_at, company_id, contact_id } = req.body || {};
+  await updateCalendarEvent(req.params.id, {
+    title: title ?? ev.title,
+    description: description ?? ev.description,
+    starts_at: starts_at ?? ev.starts_at,
+    company_id: company_id ?? ev.company_id,
+    contact_id: contact_id ?? ev.contact_id,
+  });
+  res.json({ ok: true });
+});
+
+app.delete('/api/calendar/:id', requireUser, async (req, res) => {
+  const ev = await getCalendarEvent(req.params.id);
+  if (!ev) return res.status(404).json({ error: 'Event not found' });
+  if (ev.user_id && ev.user_id !== req.currentUser.id && req.currentUser.role !== 'admin') {
+    return res.status(403).json({ error: 'Not yours to delete' });
+  }
+  await deleteCalendarEvent(req.params.id);
+  res.json({ ok: true });
+});
+
+app.post('/api/calendar/:id/complete', requireUser, async (req, res) => {
+  const ev = await getCalendarEvent(req.params.id);
+  if (!ev) return res.status(404).json({ error: 'Event not found' });
+  if (ev.user_id && ev.user_id !== req.currentUser.id && req.currentUser.role !== 'admin') {
+    return res.status(403).json({ error: 'Not yours to update' });
+  }
+  await updateCalendarEvent(req.params.id, { completed: true });
+  res.json({ ok: true });
 });
 
 // ---------- Pipeline ----------

@@ -165,6 +165,28 @@ CREATE TABLE IF NOT EXISTS call_logs (
 
 CREATE INDEX IF NOT EXISTS idx_call_logs_company ON call_logs(company_id);
 
+-- Phase 2 CRM additions — call intelligence
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS call_sid                TEXT;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS recording_sid           TEXT;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS status                  TEXT DEFAULT 'initiated';
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS transcript              TEXT;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS ai_summary              JSONB;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS sentiment               TEXT;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS scheduling_detected     BOOLEAN DEFAULT FALSE;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS scheduled_callback_date DATE;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS next_action             TEXT;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS outreach_angle_refined  TEXT;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS debrief_status          TEXT DEFAULT 'pending';
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS debrief_qa              JSONB;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS debrief_questions       JSONB;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS debrief_draft           JSONB;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS mock                    BOOLEAN DEFAULT FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_call_logs_user           ON call_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_call_logs_called_at      ON call_logs(called_at DESC);
+CREATE INDEX IF NOT EXISTS idx_call_logs_debrief_status ON call_logs(debrief_status);
+CREATE INDEX IF NOT EXISTS idx_call_logs_scheduled_date ON call_logs(scheduled_callback_date) WHERE scheduled_callback_date IS NOT NULL;
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- Calendar Events (future: scheduling integration)
 -- ────────────────────────────────────────────────────────────────────────────
@@ -184,3 +206,19 @@ CREATE TABLE IF NOT EXISTS calendar_events (
 
 CREATE INDEX IF NOT EXISTS idx_calendar_events_company ON calendar_events(company_id);
 CREATE INDEX IF NOT EXISTS idx_calendar_events_starts  ON calendar_events(starts_at);
+
+-- Phase 2 CRM additions — auto-scheduling from transcripts
+ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS source           TEXT DEFAULT 'manual';
+ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS transcript_quote TEXT;
+ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS completed        BOOLEAN DEFAULT FALSE;
+ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS call_log_id      TEXT REFERENCES call_logs(id) ON DELETE SET NULL;
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Queue skips — prevents the same company appearing twice in one user's day
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS queue_skips (
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  skipped_on DATE NOT NULL DEFAULT CURRENT_DATE,
+  PRIMARY KEY (user_id, company_id, skipped_on)
+);

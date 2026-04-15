@@ -10,6 +10,25 @@ const state = {
   marketIntel: [],
   pipelineStages: [],
   pipelineBoard: {},
+  // Phase 2
+  user: null,
+  twilioStatus: null,
+  queue: [],
+  queuePins: [],
+  queueActiveId: null,
+  queueCallLogId: null,
+  queueCallTimer: null,
+  queueCallStart: 0,
+  queuePollTimer: null,
+  debriefCall: null,
+  debriefDraftTimer: null,
+  calendarCursor: null, // {year, month}
+  calendarEvents: [],
+  calendarEditing: null,
+  calendarCompanyMatches: [],
+  settingsUsers: [],
+  settingsEditingUser: null,
+  pendingDebriefs: [],
 };
 
 // ---------- helpers ----------
@@ -498,7 +517,23 @@ function bindTabs() {
         panel.classList.toggle('active', panel.id === `tab-${target}`);
       });
       if (target === 'pipeline') loadPipelineBoard();
+      if (target === 'queue') loadQueue();
+      if (target === 'calendar') loadCalendar();
+      if (target === 'settings') loadSettings();
     });
+  });
+}
+
+function applyTabVisibility() {
+  const user = state.user;
+  const tabs = $$('.tab', $('#main-tabs'));
+  tabs.forEach((tab) => {
+    const needsUser = tab.dataset.requiresUser === '1';
+    const needsAdmin = tab.dataset.requiresAdmin === '1';
+    let show = true;
+    if (needsUser && !user) show = false;
+    if (needsAdmin && (!user || user.role !== 'admin')) show = false;
+    tab.hidden = !show;
   });
 }
 
@@ -509,6 +544,7 @@ async function openDetail(id) {
   if (!res.ok) return toast('Company not found', 'error');
   const data = await res.json();
   renderDetail(data);
+  renderCallHistory(id);
   $('#detail-panel').hidden = false;
   document.body.classList.add('detail-open');
 }
@@ -866,6 +902,877 @@ function clearContactForm() {
   delete $('#cf-save').dataset.editId;
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// PHASE 2 — Auth, Call Queue, Debrief, Calendar, Settings, Call History
+// ═══════════════════════════════════════════════════════════════════════
+
+// ---------- auth / user bootstrap ----------
+async function loadCurrentUser() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) return;
+    const data = await res.json();
+    state.user = data.user || null;
+  } catch {}
+  applyTabVisibility();
+}
+
+async function loadTwilioStatus() {
+  try {
+    const res = await fetch('/api/twilio/status');
+    if (!res.ok) return;
+    state.twilioStatus = await res.json();
+    const badge = $('#queue-mock-badge');
+    if (badge) badge.hidden = !state.twilioStatus.mock;
+  } catch {}
+}
+
+// ---------- Pending debrief banner ----------
+async function refreshPendingDebriefs() {
+  if (!state.user) return;
+  try {
+    const res = await fetch('/api/calls/pending-debrief');
+    if (!res.ok) return;
+    const { calls } = await res.json();
+    state.pendingDebriefs = calls || [];
+    const banner = $('#debrief-banner');
+    if (!banner) return;
+    if (state.pendingDebriefs.length === 0) {
+      banner.hidden = true;
+    } else {
+      const n = state.pendingDebriefs.length;
+      $('#debrief-banner-text').textContent =
+        n === 1
+          ? 'You have 1 pending debrief — resume to continue.'
+          : `You have ${n} pending debriefs — resume the oldest.`;
+      banner.hidden = false;
+    }
+  } catch {}
+}
+
+function resumeOldestDebrief() {
+  const pending = state.pendingDebriefs || [];
+  if (!pending.length) return;
+  // Oldest = last in newest-first list.
+  const oldest = pending[pending.length - 1];
+  openDebriefModal(oldest.id);
+}
+
+// ---------- Call Queue ----------
+async function loadQueue() {
+  const list = $('#queue-list');
+  if (!list) return;
+  list.innerHTML = '<div class="queue-empty">Loading queue…</div>';
+  try {
+    const pins = state.queuePins.join(',');
+    const qs = pins ? `?pins=${encodeURIComponent(pins)}` : '';
+    const res = await fetch(`/api/queue${qs}`);
+    if (!res.ok) {
+      list.innerHTML = '<div class="queue-empty">Unable to load queue. Are you signed in?</div>';
+      return;
+    }
+    const data = await res.json();
+    state.queue = data.queue || [];
+    renderQueue(data);
+  } catch (err) {
+    list.innerHTML = `<div class="queue-empty">Error loading queue: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderQueue(data) {
+  const list = $('#queue-list');
+  if (!list) return;
+  const rows = state.queue;
+  if (!rows.length) {
+    if (data.empty_reason === 'no_assignments') {
+      list.innerHTML = `
+        <div class="queue-empty">
+          <div style="font-weight:600;margin-bottom:6px;">No territories assigned yet.</div>
+          <div>Ask your admin to assign verticals/territories in Settings.</div>
+        </div>`;
+    } else {
+      list.innerHTML = `<div class="queue-empty">You're all caught up. Come back tomorrow — or adjust cooldown in Settings.</div>`;
+    }
+    return;
+  }
+  list.innerHTML = rows
+    .map((r) => {
+      const selected = state.queueActiveId === r.id ? 'selected' : '';
+      const meta = [r.city && r.state ? `${r.city}, ${r.state}` : r.state, r.phone || 'no phone', r.owner || '—']
+        .filter(Boolean)
+        .join(' · ');
+      const score = r.score != null ? Number(r.score).toFixed(1) : '—';
+      return `
+        <div class="queue-row ${selected}" data-id="${escapeHtml(r.id)}">
+          <div class="queue-rank">${r.rank}</div>
+          <div class="queue-row-score">${score}</div>
+          <div class="queue-row-main">
+            <div class="queue-row-name">${escapeHtml(r.name)}</div>
+            <div class="queue-row-meta">${escapeHtml(meta)}</div>
+            <div class="queue-row-reason">${escapeHtml(r.reason || '')}</div>
+          </div>
+          <div class="queue-row-actions">
+            <button type="button" class="queue-skip-btn" data-skip="${escapeHtml(r.id)}">Skip today</button>
+          </div>
+        </div>`;
+    })
+    .join('');
+  // Bind clicks
+  $$('.queue-row', list).forEach((el) => {
+    el.addEventListener('click', (e) => {
+      if (e.target.matches('.queue-skip-btn')) return;
+      selectQueueRow(el.dataset.id);
+    });
+  });
+  $$('.queue-skip-btn', list).forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.skip;
+      await fetch('/api/queue/skip', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ company_id: id }),
+      });
+      toast('Skipped for today', 'info');
+      if (state.queueActiveId === id) state.queueActiveId = null;
+      await loadQueue();
+    });
+  });
+}
+
+function selectQueueRow(id) {
+  state.queueActiveId = id;
+  const row = state.queue.find((r) => r.id === id);
+  if (!row) return;
+  $$('.queue-row', $('#queue-list')).forEach((el) =>
+    el.classList.toggle('selected', el.dataset.id === id)
+  );
+  $('#queue-panel-empty').hidden = true;
+  $('#queue-panel-active').hidden = false;
+  $('#qp-score').textContent = row.score != null ? Number(row.score).toFixed(1) : '—';
+  $('#qp-name').textContent = row.name;
+  $('#qp-sub').textContent = [row.city, row.state].filter(Boolean).join(', ') || '—';
+  const tierEl = $('#qp-tier');
+  tierEl.textContent = tierLabel(row.tier) || '—';
+  tierEl.className = 'qp-tier ' + (row.tier || '');
+  $('#qp-phone').textContent = row.phone || 'Missing — add in research';
+  $('#qp-owner').textContent = row.owner || '—';
+
+  const angleSec = $('#qp-angle-section');
+  if (row.outreach_angle) {
+    angleSec.hidden = false;
+    $('#qp-angle').textContent = row.outreach_angle;
+  } else {
+    angleSec.hidden = true;
+  }
+
+  const lastSec = $('#qp-last-section');
+  if (row.last_call) {
+    lastSec.hidden = false;
+    const when = row.last_call.called_at
+      ? new Date(row.last_call.called_at).toLocaleDateString()
+      : '—';
+    $('#qp-last').innerHTML = `
+      ${escapeHtml(when)} — <span class="sentiment-badge sentiment-${(row.last_call.sentiment || 'Neutral').replace(/\s+/g, '-')}">${escapeHtml(row.last_call.sentiment || 'Neutral')}</span>
+    `;
+  } else {
+    lastSec.hidden = true;
+  }
+
+  // Reset call UI state
+  $('#qp-call-btn').hidden = false;
+  $('#qp-call-btn').disabled = !row.phone;
+  $('#qp-call-active').hidden = true;
+  $('#qp-processing').hidden = true;
+}
+
+async function startQueueCall() {
+  const row = state.queue.find((r) => r.id === state.queueActiveId);
+  if (!row) return;
+  $('#qp-call-btn').hidden = true;
+  $('#qp-call-active').hidden = false;
+  $('#qp-call-status').textContent = 'Ringing…';
+  try {
+    const res = await fetch('/api/twilio/call', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ company_id: row.id, to: row.phone || '' }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast(data.error || 'Failed to start call', 'error');
+      $('#qp-call-btn').hidden = false;
+      $('#qp-call-active').hidden = true;
+      return;
+    }
+    const data = await res.json();
+    state.queueCallLogId = data.call_log_id;
+    state.queueCallStart = Date.now();
+    clearInterval(state.queueCallTimer);
+    state.queueCallTimer = setInterval(() => {
+      const secs = Math.floor((Date.now() - state.queueCallStart) / 1000);
+      $('#qp-timer').textContent = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
+      if (secs > 2) $('#qp-call-status').textContent = 'Connected';
+    }, 500);
+  } catch (err) {
+    toast('Call failed: ' + err.message, 'error');
+    $('#qp-call-btn').hidden = false;
+    $('#qp-call-active').hidden = true;
+  }
+}
+
+async function endQueueCall() {
+  clearInterval(state.queueCallTimer);
+  const durationSec = Math.max(5, Math.floor((Date.now() - state.queueCallStart) / 1000));
+  $('#qp-call-active').hidden = true;
+  $('#qp-processing').hidden = false;
+
+  if (!state.queueCallLogId) {
+    $('#qp-processing').hidden = true;
+    $('#qp-call-btn').hidden = false;
+    return;
+  }
+
+  if (state.twilioStatus?.mock) {
+    try {
+      await fetch('/api/twilio/mock-complete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ call_log_id: state.queueCallLogId, duration_sec: durationSec }),
+      });
+    } catch (err) {
+      toast('Mock-complete failed: ' + err.message, 'error');
+    }
+  }
+  pollForDebrief(state.queueCallLogId);
+}
+
+function pollForDebrief(callLogId) {
+  clearInterval(state.queuePollTimer);
+  let attempts = 0;
+  state.queuePollTimer = setInterval(async () => {
+    attempts += 1;
+    try {
+      const res = await fetch(`/api/calls/${callLogId}/debrief-questions`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ready) {
+          clearInterval(state.queuePollTimer);
+          $('#qp-processing').hidden = true;
+          $('#qp-call-btn').hidden = false;
+          openDebriefModal(callLogId, data);
+          return;
+        }
+      }
+    } catch {}
+    if (attempts > 60) {
+      clearInterval(state.queuePollTimer);
+      $('#qp-processing').hidden = true;
+      $('#qp-call-btn').hidden = false;
+      toast('Analysis timed out. Debrief will appear in the banner.', 'error');
+      refreshPendingDebriefs();
+    }
+  }, 1500);
+}
+
+// ---------- Debrief modal ----------
+async function openDebriefModal(callLogId, preloaded = null) {
+  let data = preloaded;
+  if (!data) {
+    const res = await fetch(`/api/calls/${callLogId}/debrief-questions`);
+    if (!res.ok) { toast('Unable to load debrief', 'error'); return; }
+    data = await res.json();
+    if (!data.ready) {
+      toast('Analysis still running — try again in a moment', 'info');
+      return;
+    }
+  }
+  state.debriefCall = { id: callLogId, ...data };
+  renderDebriefModal();
+  $('#debrief-modal').hidden = false;
+}
+
+function renderDebriefModal() {
+  const d = state.debriefCall;
+  if (!d) return;
+
+  // Summary block
+  const summary = d.ai_summary || {};
+  const bullets = Array.isArray(summary.bullets) ? summary.bullets : [];
+  const sentiment = d.sentiment || 'Neutral';
+  $('#debrief-summary').innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <strong>AI Summary</strong>
+      <span class="sentiment-badge sentiment-${sentiment.replace(/\s+/g, '-')}">${escapeHtml(sentiment)}</span>
+    </div>
+    ${bullets.length ? `<ul class="debrief-summary-bullets">${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
+    ${d.next_action ? `<div style="margin-top:6px;"><strong>Next:</strong> ${escapeHtml(d.next_action)}</div>` : ''}
+    ${d.scheduled_callback_date ? `<div style="margin-top:4px;"><strong>Callback:</strong> ${escapeHtml(d.scheduled_callback_date)}</div>` : ''}
+  `;
+
+  // Pre-fill drafted answers if present
+  const draft = Array.isArray(d.draft) ? d.draft : [];
+  const questions = d.questions || [];
+  $('#debrief-questions').innerHTML = questions
+    .map((q, i) => {
+      const drafted = draft.find((da) => da && da.question === q)?.answer
+        || draft[i]?.answer
+        || '';
+      return `
+        <div class="debrief-q">
+          <div class="debrief-q-text">${i + 1}. ${escapeHtml(q)}</div>
+          <textarea class="debrief-q-textarea" data-idx="${i}" data-question="${escapeHtml(q)}" placeholder="Your answer (minimum ${d.min_answer_len} characters)">${escapeHtml(drafted)}</textarea>
+          <div class="debrief-q-counter" data-counter="${i}">${drafted.length} / ${d.min_answer_len} min</div>
+        </div>`;
+    })
+    .join('');
+
+  // Wire textareas
+  $$('.debrief-q-textarea').forEach((ta) => {
+    ta.addEventListener('input', () => {
+      const idx = ta.dataset.idx;
+      const counter = $(`.debrief-q-counter[data-counter="${idx}"]`);
+      const n = ta.value.length;
+      const minLen = d.min_answer_len || 10;
+      counter.textContent = `${n} / ${minLen} min`;
+      counter.classList.toggle('valid', n >= minLen);
+      validateDebriefForm();
+      scheduleDebriefDraftSave();
+    });
+  });
+
+  validateDebriefForm();
+}
+
+function validateDebriefForm() {
+  const d = state.debriefCall;
+  if (!d) return;
+  const minLen = d.min_answer_len || 10;
+  const tas = $$('.debrief-q-textarea');
+  const allValid = tas.length > 0 && tas.every((ta) => ta.value.trim().length >= minLen);
+  $('#debrief-submit').disabled = !allValid;
+}
+
+function collectDebriefAnswers() {
+  return $$('.debrief-q-textarea').map((ta) => ({
+    question: ta.dataset.question,
+    answer: ta.value,
+  }));
+}
+
+function scheduleDebriefDraftSave() {
+  clearTimeout(state.debriefDraftTimer);
+  state.debriefDraftTimer = setTimeout(saveDebriefDraftNow, 2000);
+}
+
+async function saveDebriefDraftNow() {
+  const d = state.debriefCall;
+  if (!d) return;
+  try {
+    await fetch(`/api/calls/${d.id}/debrief-draft`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ answers: collectDebriefAnswers() }),
+    });
+  } catch {}
+}
+
+async function submitDebrief() {
+  const d = state.debriefCall;
+  if (!d) return;
+  const answers = collectDebriefAnswers();
+  try {
+    const res = await fetch(`/api/calls/${d.id}/debrief`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ answers }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(err.error || 'Submit failed', 'error');
+      return;
+    }
+    toast('Debrief saved ✓', 'ok');
+    closeDebriefModal();
+    await refreshPendingDebriefs();
+    // Auto-advance to next row
+    if (state.queueActiveId) {
+      await loadQueue();
+      const nextIdx = state.queue.findIndex((r) => r.id !== state.queueActiveId);
+      if (nextIdx >= 0) selectQueueRow(state.queue[nextIdx].id);
+    }
+    if (state.activeId) openDetail(state.activeId);
+  } catch (err) {
+    toast('Submit failed: ' + err.message, 'error');
+  }
+}
+
+async function saveDebriefAndClose() {
+  await saveDebriefDraftNow();
+  toast('Draft saved', 'ok');
+  closeDebriefModal();
+  refreshPendingDebriefs();
+}
+
+function closeDebriefModal() {
+  $('#debrief-modal').hidden = true;
+  state.debriefCall = null;
+  clearTimeout(state.debriefDraftTimer);
+}
+
+// ---------- Call History on company detail ----------
+async function renderCallHistory(companyId) {
+  const box = $('#d-call-history');
+  const countEl = $('#d-calls-count');
+  if (!box) return;
+  try {
+    const res = await fetch(`/api/companies/${companyId}/calls`);
+    if (!res.ok) { box.innerHTML = '<div class="d-empty">Unable to load call history.</div>'; return; }
+    const { calls } = await res.json();
+    if (countEl) countEl.textContent = calls.length;
+    if (!calls.length) {
+      box.innerHTML = '<div class="d-empty">No calls recorded.</div>';
+      return;
+    }
+    box.innerHTML = calls
+      .map((c) => {
+        const when = c.called_at ? new Date(c.called_at).toLocaleString() : '—';
+        const dur = c.duration_sec
+          ? `${Math.floor(c.duration_sec / 60)}m ${c.duration_sec % 60}s`
+          : '—';
+        const sentiment = c.sentiment || 'Neutral';
+        const sentKey = sentiment.replace(/\s+/g, '-');
+        const bullets = (c.ai_summary?.bullets || []);
+        const qa = c.debrief_qa || [];
+        return `
+          <div class="d-call sentiment-${sentKey}">
+            <div class="d-call-head">
+              <div class="d-call-when">${escapeHtml(when)}</div>
+              <span class="sentiment-badge sentiment-${sentKey}">${escapeHtml(sentiment)}</span>
+              <div class="d-call-duration">${escapeHtml(dur)}</div>
+            </div>
+            ${c.next_action ? `<div class="d-call-next"><strong>Next:</strong> ${escapeHtml(c.next_action)}</div>` : ''}
+            ${bullets.length ? `<details class="d-call-details"><summary>AI Summary (${bullets.length})</summary><ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul></details>` : ''}
+            ${qa.length ? `<details class="d-call-details"><summary>Debrief Q&amp;A</summary><dl>${qa.map((a) => `<dt>${escapeHtml(a.question)}</dt><dd>${escapeHtml(a.answer)}</dd>`).join('')}</dl></details>` : ''}
+            ${c.debrief_status === 'pending' || c.debrief_status === 'draft' ? `<div style="margin-top:6px;"><button type="button" class="btn-ghost btn-xs" data-resume-debrief="${escapeHtml(c.id)}">Resume debrief</button></div>` : ''}
+          </div>`;
+      })
+      .join('');
+    $$('[data-resume-debrief]', box).forEach((btn) => {
+      btn.addEventListener('click', () => openDebriefModal(btn.dataset.resumeDebrief));
+    });
+  } catch (err) {
+    box.innerHTML = `<div class="d-empty">Error loading call history.</div>`;
+  }
+}
+
+// ---------- Calendar ----------
+function ensureCalendarCursor() {
+  if (state.calendarCursor) return;
+  const now = new Date();
+  state.calendarCursor = { year: now.getFullYear(), month: now.getMonth() + 1 };
+}
+
+async function loadCalendar() {
+  ensureCalendarCursor();
+  const { year, month } = state.calendarCursor;
+  $('#cal-title').textContent = new Date(year, month - 1, 1).toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+  try {
+    const res = await fetch(`/api/calendar?year=${year}&month=${String(month).padStart(2, '0')}`);
+    if (!res.ok) {
+      state.calendarEvents = [];
+    } else {
+      const data = await res.json();
+      state.calendarEvents = data.events || [];
+    }
+  } catch {
+    state.calendarEvents = [];
+  }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const { year, month } = state.calendarCursor;
+  const first = new Date(year, month - 1, 1);
+  const startWeekday = first.getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const cells = [];
+  // Leading blanks from previous month
+  const prevMonthDays = new Date(year, month - 1, 0).getDate();
+  for (let i = startWeekday - 1; i >= 0; i--) {
+    const day = prevMonthDays - i;
+    const d = new Date(year, month - 2, day);
+    cells.push({ date: d, otherMonth: true });
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push({ date: new Date(year, month - 1, day), otherMonth: false });
+  }
+  while (cells.length % 7 !== 0) {
+    const last = cells[cells.length - 1].date;
+    const d = new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1);
+    cells.push({ date: d, otherMonth: true });
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const grid = $('#cal-grid');
+  grid.innerHTML = cells
+    .map((cell) => {
+      const dkey = cell.date.toISOString().slice(0, 10);
+      const events = state.calendarEvents.filter((e) =>
+        (e.starts_at || '').slice(0, 10) === dkey
+      );
+      const isToday = cell.date.getTime() === today.getTime();
+      const classes = [
+        'cal-cell',
+        cell.otherMonth ? 'other-month' : '',
+        isToday ? 'today' : '',
+      ].filter(Boolean).join(' ');
+      const shown = events.slice(0, 3);
+      const extra = events.length - shown.length;
+      const chips = shown
+        .map((e) => {
+          const overdue =
+            !e.completed && new Date(e.starts_at) < new Date(today.getTime());
+          const cls =
+            (e.completed ? 'completed ' : '') +
+            (overdue ? 'overdue' : e.source === 'auto-transcript' ? 'auto' : '');
+          return `<div class="cal-event-chip ${cls}" data-event="${escapeHtml(e.id)}" title="${escapeHtml(e.title || '')}">${escapeHtml(e.title || '(untitled)')}</div>`;
+        })
+        .join('');
+      return `
+        <div class="${classes}" data-date="${dkey}">
+          <div class="cal-cell-date">${cell.date.getDate()}</div>
+          <div class="cal-cell-events">
+            ${chips}
+            ${extra > 0 ? `<div class="cal-event-more">+${extra} more</div>` : ''}
+          </div>
+        </div>`;
+    })
+    .join('');
+
+  // Bind cells
+  $$('.cal-cell', grid).forEach((cell) => {
+    cell.addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-event]');
+      if (chip) {
+        openCalendarEventModal(chip.dataset.event);
+      } else {
+        openCalendarEventModal(null, cell.dataset.date);
+      }
+    });
+  });
+}
+
+async function openCalendarEventModal(eventId, dateHint) {
+  state.calendarEditing = null;
+  $('#cal-ev-title').value = '';
+  $('#cal-ev-desc').value = '';
+  $('#cal-ev-date').value = dateHint || new Date().toISOString().slice(0, 10);
+  $('#cal-ev-time').value = '10:00';
+  $('#cal-ev-company').value = '';
+  $('#cal-ev-company-matches').innerHTML = '';
+  $('#cal-ev-quote-row').hidden = true;
+  $('#cal-ev-quote').textContent = '';
+  $('#cal-ev-delete').hidden = true;
+  $('#cal-ev-complete').hidden = true;
+  $('#cal-modal-title').textContent = 'New Event';
+
+  if (eventId) {
+    const ev = state.calendarEvents.find((e) => e.id === eventId);
+    if (ev) {
+      state.calendarEditing = ev;
+      $('#cal-modal-title').textContent = 'Event Details';
+      $('#cal-ev-title').value = ev.title || '';
+      $('#cal-ev-desc').value = ev.description || '';
+      const dt = new Date(ev.starts_at);
+      $('#cal-ev-date').value = dt.toISOString().slice(0, 10);
+      $('#cal-ev-time').value = dt.toTimeString().slice(0, 5);
+      if (ev.transcript_quote) {
+        $('#cal-ev-quote-row').hidden = false;
+        $('#cal-ev-quote').textContent = ev.transcript_quote;
+      }
+      $('#cal-ev-delete').hidden = false;
+      $('#cal-ev-complete').hidden = ev.completed;
+      if (ev.company_id) {
+        const match = state.companies.find((c) => c.id === ev.company_id);
+        if (match) $('#cal-ev-company').value = match.name;
+      }
+    }
+  }
+  $('#cal-modal').hidden = false;
+}
+
+function closeCalendarModal() {
+  $('#cal-modal').hidden = true;
+  state.calendarEditing = null;
+}
+
+async function saveCalendarEvent() {
+  const title = $('#cal-ev-title').value.trim();
+  if (!title) { toast('Title required', 'error'); return; }
+  const date = $('#cal-ev-date').value;
+  const time = $('#cal-ev-time').value || '10:00';
+  if (!date) { toast('Date required', 'error'); return; }
+  const starts_at = `${date}T${time}:00`;
+
+  // Match company by typed name (case-insensitive first match)
+  const typed = $('#cal-ev-company').value.trim().toLowerCase();
+  const company = typed
+    ? state.companies.find((c) => c.name.toLowerCase() === typed)
+      || state.calendarCompanyMatches[0]
+    : null;
+
+  const body = {
+    title,
+    description: $('#cal-ev-desc').value.trim() || null,
+    starts_at,
+    company_id: company?.id || null,
+  };
+
+  let res;
+  if (state.calendarEditing) {
+    res = await fetch(`/api/calendar/${state.calendarEditing.id}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } else {
+    res = await fetch('/api/calendar', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    toast(err.error || 'Save failed', 'error');
+    return;
+  }
+  toast('Saved', 'ok');
+  closeCalendarModal();
+  loadCalendar();
+}
+
+async function deleteCalendarEvent() {
+  if (!state.calendarEditing) return;
+  if (!confirm('Delete this event?')) return;
+  const res = await fetch(`/api/calendar/${state.calendarEditing.id}`, { method: 'DELETE' });
+  if (!res.ok) { toast('Delete failed', 'error'); return; }
+  toast('Deleted', 'ok');
+  closeCalendarModal();
+  loadCalendar();
+}
+
+async function completeCalendarEvent() {
+  if (!state.calendarEditing) return;
+  const res = await fetch(`/api/calendar/${state.calendarEditing.id}/complete`, { method: 'POST' });
+  if (!res.ok) { toast('Update failed', 'error'); return; }
+  toast('Marked complete', 'ok');
+  closeCalendarModal();
+  loadCalendar();
+}
+
+function updateCalendarCompanyMatches() {
+  const q = $('#cal-ev-company').value.trim().toLowerCase();
+  const box = $('#cal-ev-company-matches');
+  if (!q) { box.innerHTML = ''; state.calendarCompanyMatches = []; return; }
+  const matches = state.companies
+    .filter((c) => c.name.toLowerCase().includes(q))
+    .slice(0, 6);
+  state.calendarCompanyMatches = matches;
+  box.innerHTML = matches
+    .map((c) => `<div class="cal-ev-match" data-id="${escapeHtml(c.id)}">${escapeHtml(c.name)} — ${escapeHtml(c.city || '')}${c.state ? ', ' + escapeHtml(c.state) : ''}</div>`)
+    .join('');
+  $$('.cal-ev-match', box).forEach((el) => {
+    el.addEventListener('click', () => {
+      const match = state.companies.find((c) => c.id === el.dataset.id);
+      if (match) $('#cal-ev-company').value = match.name;
+      box.innerHTML = '';
+    });
+  });
+}
+
+// ---------- Settings ----------
+async function loadSettings() {
+  // Load my preferences
+  try {
+    const res = await fetch('/api/me/assignments');
+    if (res.ok) {
+      const data = await res.json();
+      $('#settings-cooldown').value = data.queue_cooldown_days || 7;
+    }
+  } catch {}
+
+  // Admin section
+  if (state.user?.role === 'admin') {
+    $('#settings-admin-section').hidden = false;
+    try {
+      const res = await fetch('/api/admin/users');
+      if (res.ok) {
+        const data = await res.json();
+        state.settingsUsers = data.users || [];
+        renderSettingsUsers();
+      }
+    } catch {}
+  } else {
+    $('#settings-admin-section').hidden = true;
+  }
+}
+
+function renderSettingsUsers() {
+  const box = $('#settings-users');
+  box.innerHTML = state.settingsUsers
+    .map((u) => {
+      const verts = (u.assigned_verticals || []).map((v) => `<span class="settings-user-tag">${escapeHtml(v)}</span>`).join('');
+      const terrs = (u.assigned_territories || []).map((v) => `<span class="settings-user-tag">${escapeHtml(v)}</span>`).join('');
+      return `
+        <div class="settings-user-row" data-user="${escapeHtml(u.id)}">
+          <div>
+            <div class="settings-user-name">${escapeHtml(u.name || '—')} <span class="settings-user-role ${u.role}">${escapeHtml(u.role)}</span></div>
+            <div class="settings-user-email">${escapeHtml(u.email || '')}</div>
+            <div class="settings-user-tags">
+              ${verts || '<span class="settings-user-tag">no verticals</span>'}
+              ${terrs || '<span class="settings-user-tag">no territories</span>'}
+            </div>
+          </div>
+          <button type="button" class="btn-ghost btn-xs" data-edit-user="${escapeHtml(u.id)}">Edit</button>
+        </div>`;
+    })
+    .join('');
+  $$('[data-edit-user]', box).forEach((btn) => {
+    btn.addEventListener('click', () => openSettingsUserModal(btn.dataset.editUser));
+  });
+}
+
+const SETTINGS_VERTICALS = [
+  'Plumbing', 'HVAC', 'Pest Control', 'Restoration',
+  'Painting', 'Electrical', 'Septic', 'Cleaning',
+];
+
+function openSettingsUserModal(userId) {
+  const u = state.settingsUsers.find((x) => x.id === userId);
+  if (!u) return;
+  state.settingsEditingUser = u;
+  $('#settings-user-title').textContent = `Edit: ${u.name || u.email}`;
+  $('#settings-user-role').value = u.role;
+  $('#settings-user-territories').value = (u.assigned_territories || []).join(', ');
+  const vBox = $('#settings-user-verticals');
+  vBox.innerHTML = SETTINGS_VERTICALS
+    .map((v) => {
+      const active = (u.assigned_verticals || []).includes(v) ? 'active' : '';
+      return `<span class="settings-chip ${active}" data-vert="${escapeHtml(v)}">${escapeHtml(v)}</span>`;
+    })
+    .join('');
+  $$('.settings-chip[data-vert]', vBox).forEach((chip) => {
+    chip.addEventListener('click', () => chip.classList.toggle('active'));
+  });
+  $('#settings-user-modal').hidden = false;
+}
+
+function closeSettingsUserModal() {
+  $('#settings-user-modal').hidden = true;
+  state.settingsEditingUser = null;
+}
+
+async function saveSettingsUser() {
+  const u = state.settingsEditingUser;
+  if (!u) return;
+  const role = $('#settings-user-role').value;
+  const verticals = $$('.settings-chip.active[data-vert]').map((c) => c.dataset.vert);
+  const territories = $('#settings-user-territories').value
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+  try {
+    if (role !== u.role) {
+      const res = await fetch(`/api/admin/users/${u.id}/role`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ role }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast(err.error || 'Role update failed', 'error');
+        return;
+      }
+    }
+    const res2 = await fetch(`/api/admin/users/${u.id}/assignments`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ verticals, territories }),
+    });
+    if (!res2.ok) {
+      const err = await res2.json().catch(() => ({}));
+      toast(err.error || 'Save failed', 'error');
+      return;
+    }
+    toast('Saved', 'ok');
+    closeSettingsUserModal();
+    loadSettings();
+  } catch (err) {
+    toast('Save failed: ' + err.message, 'error');
+  }
+}
+
+async function saveCooldown() {
+  const days = Number($('#settings-cooldown').value);
+  if (!Number.isFinite(days) || days < 1 || days > 30) {
+    toast('Cooldown must be 1–30 days', 'error');
+    return;
+  }
+  const res = await fetch('/api/me/queue-settings', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ cooldown_days: days }),
+  });
+  if (!res.ok) { toast('Save failed', 'error'); return; }
+  toast('Saved', 'ok');
+}
+
+// ---------- Phase 2 wiring ----------
+function bindPhase2() {
+  $('#queue-refresh')?.addEventListener('click', loadQueue);
+  $('#qp-call-btn')?.addEventListener('click', startQueueCall);
+  $('#qp-end-btn')?.addEventListener('click', endQueueCall);
+
+  $('#debrief-submit')?.addEventListener('click', submitDebrief);
+  $('#debrief-draft-btn')?.addEventListener('click', saveDebriefAndClose);
+  $('#debrief-banner-resume')?.addEventListener('click', resumeOldestDebrief);
+
+  $('#cal-prev')?.addEventListener('click', () => {
+    ensureCalendarCursor();
+    const c = state.calendarCursor;
+    c.month -= 1;
+    if (c.month < 1) { c.month = 12; c.year -= 1; }
+    loadCalendar();
+  });
+  $('#cal-next')?.addEventListener('click', () => {
+    ensureCalendarCursor();
+    const c = state.calendarCursor;
+    c.month += 1;
+    if (c.month > 12) { c.month = 1; c.year += 1; }
+    loadCalendar();
+  });
+  $('#cal-today')?.addEventListener('click', () => {
+    const now = new Date();
+    state.calendarCursor = { year: now.getFullYear(), month: now.getMonth() + 1 };
+    loadCalendar();
+  });
+  $('#cal-modal-close')?.addEventListener('click', closeCalendarModal);
+  $('#cal-ev-save')?.addEventListener('click', saveCalendarEvent);
+  $('#cal-ev-delete')?.addEventListener('click', deleteCalendarEvent);
+  $('#cal-ev-complete')?.addEventListener('click', completeCalendarEvent);
+  $('#cal-ev-company')?.addEventListener('input', updateCalendarCompanyMatches);
+
+  $('#settings-cooldown-save')?.addEventListener('click', saveCooldown);
+  $('#settings-user-close')?.addEventListener('click', closeSettingsUserModal);
+  $('#settings-user-save')?.addEventListener('click', saveSettingsUser);
+}
+
 // ---------- init ----------
 function init() {
   bindToolbar();
@@ -886,6 +1793,12 @@ function init() {
   loadMarkets();
   loadPipelineStages().then(() => loadPipelineBoard());
 
+  // Phase 2 bootstrap
+  bindPhase2();
+  loadCurrentUser()
+    .then(() => { if (state.user) return refreshPendingDebriefs(); })
+    .then(() => loadTwilioStatus());
+
   // SSE for real-time updates
   const sse = new EventSource('/api/run/stream');
   sse.onmessage = (e) => {
@@ -902,6 +1815,25 @@ function init() {
       } else if (ev.type === 'company_done') {
         loadCompanies();
         loadPipelineBoard();
+      }
+      // ─── Phase 2 SSE ───
+      else if (ev.type === 'call_started') {
+        if ($('#tab-queue').classList.contains('active')) loadQueue();
+      } else if (ev.type === 'call_ready_for_debrief') {
+        refreshPendingDebriefs();
+        // Auto-open if owned by current user and no modal already open
+        if (state.user && (!ev.user_id || ev.user_id === state.user.id) && $('#debrief-modal').hidden) {
+          if (state.queueCallLogId === ev.call_log_id) {
+            openDebriefModal(ev.call_log_id);
+          }
+        }
+      } else if (ev.type === 'calendar_event_created') {
+        if ($('#tab-calendar').classList.contains('active')) loadCalendar();
+      } else if (ev.type === 'queue_changed') {
+        if ($('#tab-queue').classList.contains('active')) loadQueue();
+      } else if (ev.type === 'debrief_complete') {
+        refreshPendingDebriefs();
+        if (state.activeId === ev.company_id) openDetail(state.activeId);
       }
     } catch {}
   };

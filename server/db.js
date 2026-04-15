@@ -511,6 +511,227 @@ async function clearInviteToken(userId) {
   await execute('UPDATE users SET invite_token = NULL WHERE id = $1', [userId]);
 }
 
+async function updateUser(id, data) {
+  const fields = [];
+  const params = [];
+  let idx = 1;
+  for (const key of ['name', 'role', 'assigned_verticals', 'assigned_territories']) {
+    if (data[key] !== undefined) {
+      fields.push(`${key} = $${idx++}`);
+      if (key === 'assigned_verticals' || key === 'assigned_territories') {
+        params.push(JSON.stringify(data[key] || []));
+      } else {
+        params.push(data[key]);
+      }
+    }
+  }
+  if (fields.length === 0) return;
+  params.push(id);
+  await execute(`UPDATE users SET ${fields.join(', ')} WHERE id = $${idx}`, params);
+}
+
+async function listUsersFull() {
+  return query(
+    `SELECT id, name, email, role, assigned_verticals, assigned_territories,
+            invite_token, created_at
+     FROM users ORDER BY created_at ASC`
+  );
+}
+
+// ─── Call Logs (Phase 2) ─────────────────────────────────────────────────────
+
+async function insertCallLog(data) {
+  const { nanoid } = require('nanoid');
+  const id = data.id || nanoid();
+  await execute(
+    `INSERT INTO call_logs (
+       id, company_id, contact_id, user_id, direction, status,
+       call_sid, mock, called_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+    [
+      id, data.company_id, data.contact_id || null, data.user_id || null,
+      data.direction || 'outbound', data.status || 'initiated',
+      data.call_sid || null, !!data.mock,
+    ]
+  );
+  return id;
+}
+
+async function updateCallLog(id, data) {
+  const fields = [];
+  const params = [];
+  let idx = 1;
+  const assignable = [
+    'call_sid', 'recording_sid', 'recording_url', 'status',
+    'duration_sec', 'disposition', 'notes',
+    'transcript', 'ai_summary', 'sentiment',
+    'scheduling_detected', 'scheduled_callback_date',
+    'next_action', 'outreach_angle_refined',
+    'debrief_status', 'debrief_qa', 'debrief_questions', 'debrief_draft',
+  ];
+  for (const key of assignable) {
+    if (data[key] !== undefined) {
+      fields.push(`${key} = $${idx++}`);
+      if (['ai_summary', 'debrief_qa', 'debrief_questions', 'debrief_draft'].includes(key)) {
+        params.push(data[key] === null ? null : JSON.stringify(data[key]));
+      } else {
+        params.push(data[key]);
+      }
+    }
+  }
+  if (fields.length === 0) return;
+  params.push(id);
+  await execute(`UPDATE call_logs SET ${fields.join(', ')} WHERE id = $${idx}`, params);
+}
+
+async function getCallLog(id) {
+  return queryOne('SELECT * FROM call_logs WHERE id = $1', [id]);
+}
+
+async function getCallLogBySid(callSid) {
+  return queryOne('SELECT * FROM call_logs WHERE call_sid = $1', [callSid]);
+}
+
+async function listCallLogsByCompany(companyId, { limit = 100 } = {}) {
+  return query(
+    `SELECT cl.*, u.name AS user_name, c.name AS contact_name
+     FROM call_logs cl
+     LEFT JOIN users u ON cl.user_id = u.id
+     LEFT JOIN contacts c ON cl.contact_id = c.id
+     WHERE cl.company_id = $1
+     ORDER BY cl.called_at DESC
+     LIMIT $2`,
+    [companyId, limit]
+  );
+}
+
+async function listPendingDebriefs(userId) {
+  return query(
+    `SELECT cl.id, cl.company_id, cl.called_at, cl.duration_sec,
+            cl.debrief_status, c.name AS company_name, c.owner AS owner_name
+     FROM call_logs cl
+     LEFT JOIN companies c ON cl.company_id = c.id
+     WHERE cl.user_id = $1
+       AND cl.debrief_status IN ('pending', 'draft')
+     ORDER BY cl.called_at ASC`,
+    [userId]
+  );
+}
+
+// ─── Calendar (Phase 2) ──────────────────────────────────────────────────────
+
+async function insertCalendarEvent(data) {
+  const { nanoid } = require('nanoid');
+  const id = data.id || nanoid();
+  await execute(
+    `INSERT INTO calendar_events (
+       id, company_id, contact_id, user_id, title, description,
+       event_type, starts_at, ends_at, location,
+       source, transcript_quote, completed, call_log_id
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+    [
+      id, data.company_id || null, data.contact_id || null, data.user_id || null,
+      data.title, data.description || null,
+      data.event_type || 'callback', data.starts_at, data.ends_at || null,
+      data.location || null,
+      data.source || 'manual', data.transcript_quote || null,
+      !!data.completed, data.call_log_id || null,
+    ]
+  );
+  return id;
+}
+
+async function updateCalendarEvent(id, data) {
+  const fields = [];
+  const params = [];
+  let idx = 1;
+  for (const key of ['title', 'description', 'starts_at', 'ends_at', 'company_id', 'contact_id', 'completed']) {
+    if (data[key] !== undefined) {
+      fields.push(`${key} = $${idx++}`);
+      params.push(key === 'completed' ? !!data[key] : data[key]);
+    }
+  }
+  if (fields.length === 0) return;
+  params.push(id);
+  await execute(`UPDATE calendar_events SET ${fields.join(', ')} WHERE id = $${idx}`, params);
+}
+
+async function deleteCalendarEvent(id) {
+  await execute('DELETE FROM calendar_events WHERE id = $1', [id]);
+}
+
+async function getCalendarEvent(id) {
+  return queryOne(
+    `SELECT ce.*, c.name AS company_name, c.owner AS company_owner
+     FROM calendar_events ce
+     LEFT JOIN companies c ON ce.company_id = c.id
+     WHERE ce.id = $1`,
+    [id]
+  );
+}
+
+async function listCalendarEventsForMonth({ year, month, userId, isAdmin, territories }) {
+  // Build date range: first day of month → first day of next month
+  const start = `${year}-${String(month).padStart(2, '0')}-01`;
+  const endMonth = month === 12 ? 1 : month + 1;
+  const endYear = month === 12 ? year + 1 : year;
+  const end = `${endYear}-${String(endMonth).padStart(2, '0')}-01`;
+
+  const params = [start, end];
+  let where = `ce.starts_at >= $1 AND ce.starts_at < $2`;
+  let idx = 3;
+  if (!isAdmin) {
+    // Analyst: sees own events + events for companies in their territory
+    const terrs = Array.isArray(territories) ? territories : [];
+    const terrUpper = terrs.map((t) => String(t).toUpperCase());
+    where += ` AND (ce.user_id = $${idx++}`;
+    params.push(userId);
+    if (terrUpper.length) {
+      where += ` OR UPPER(c.state) = ANY($${idx++}::text[])`;
+      params.push(terrUpper);
+    }
+    where += `)`;
+  }
+  return query(
+    `SELECT ce.*, c.name AS company_name, c.owner AS company_owner, c.state AS company_state
+     FROM calendar_events ce
+     LEFT JOIN companies c ON ce.company_id = c.id
+     WHERE ${where}
+     ORDER BY ce.starts_at ASC`,
+    params
+  );
+}
+
+// ─── Queue Skips (Phase 2) ───────────────────────────────────────────────────
+
+async function insertQueueSkip(userId, companyId) {
+  await execute(
+    `INSERT INTO queue_skips (user_id, company_id, skipped_on)
+     VALUES ($1, $2, CURRENT_DATE)
+     ON CONFLICT DO NOTHING`,
+    [userId, companyId]
+  );
+}
+
+async function listQueueSkipsForToday(userId) {
+  const rows = await query(
+    `SELECT company_id FROM queue_skips
+     WHERE user_id = $1 AND skipped_on = CURRENT_DATE`,
+    [userId]
+  );
+  return rows.map((r) => r.company_id);
+}
+
+// ─── User-scoped config (namespaced into existing config table) ──────────────
+
+async function getUserConfig(userId, key, fallback = null) {
+  return getConfig(`user:${userId}:${key}`, fallback);
+}
+
+async function setUserConfig(userId, key, value) {
+  return setConfig(`user:${userId}:${key}`, value);
+}
+
 // ─── Exports ─────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -560,5 +781,26 @@ module.exports = {
   getUserByEmail,
   createUser,
   listUsers,
+  listUsersFull,
+  updateUser,
   clearInviteToken,
+  // Call logs (Phase 2)
+  insertCallLog,
+  updateCallLog,
+  getCallLog,
+  getCallLogBySid,
+  listCallLogsByCompany,
+  listPendingDebriefs,
+  // Calendar (Phase 2)
+  insertCalendarEvent,
+  updateCalendarEvent,
+  deleteCalendarEvent,
+  getCalendarEvent,
+  listCalendarEventsForMonth,
+  // Queue skips (Phase 2)
+  insertQueueSkip,
+  listQueueSkipsForToday,
+  // User config
+  getUserConfig,
+  setUserConfig,
 };

@@ -19,6 +19,13 @@
       <span class="diamond">&#9670;</span>
     </div>
 
+    <!-- Pending debrief banner (Phase 2) -->
+    <div id="debrief-banner" class="debrief-banner" hidden>
+      <span class="debrief-banner-icon">&#9888;</span>
+      <span id="debrief-banner-text">You have pending debriefs.</span>
+      <button type="button" class="btn-primary btn-xs" id="debrief-banner-resume">Resume</button>
+    </div>
+
     <header class="app-header">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">S</div>
@@ -63,6 +70,9 @@
           <button type="button" class="tab" data-tab="markets" role="tab">Markets</button>
           <button type="button" class="tab" data-tab="agent" role="tab">Agent</button>
           <button type="button" class="tab" data-tab="export" role="tab">Export</button>
+          <button type="button" class="tab" data-tab="queue" role="tab" data-requires-user="1" hidden>Call Queue</button>
+          <button type="button" class="tab" data-tab="calendar" role="tab" data-requires-user="1" hidden>Calendar</button>
+          <button type="button" class="tab" data-tab="settings" role="tab" data-requires-user="1" data-requires-admin="1" hidden>Settings</button>
         </nav>
 
         <!-- DASHBOARD TAB -->
@@ -479,8 +489,181 @@
             </div>
           </section>
         </div>
+
+        <!-- CALL QUEUE TAB (Phase 2) -->
+        <div id="tab-queue" class="tab-panel">
+          <div class="queue-header">
+            <div>
+              <div class="queue-title">Daily Call Queue</div>
+              <div class="queue-sub" id="queue-sub">Ranked by callback urgency, tier, and outreach hygiene.</div>
+            </div>
+            <div class="queue-header-right">
+              <span id="queue-mock-badge" class="queue-mock-badge" hidden>MOCK MODE</span>
+              <button type="button" class="btn-ghost btn-xs" id="queue-refresh">Refresh</button>
+            </div>
+          </div>
+          <div class="queue-layout">
+            <div class="queue-list" id="queue-list">
+              <div class="queue-empty">Loading queue&hellip;</div>
+            </div>
+            <aside class="queue-panel" id="queue-panel">
+              <div class="queue-panel-empty" id="queue-panel-empty">Select a company to start the call.</div>
+              <div class="queue-panel-active" id="queue-panel-active" hidden>
+                <div class="qp-score-row">
+                  <div class="qp-score" id="qp-score">—</div>
+                  <div class="qp-name-block">
+                    <div class="qp-name" id="qp-name">—</div>
+                    <div class="qp-sub" id="qp-sub">—</div>
+                  </div>
+                  <div class="qp-tier" id="qp-tier">—</div>
+                </div>
+                <div class="qp-row">
+                  <div class="qp-label">Phone</div>
+                  <div class="qp-value" id="qp-phone">—</div>
+                </div>
+                <div class="qp-row">
+                  <div class="qp-label">Owner</div>
+                  <div class="qp-value" id="qp-owner">—</div>
+                </div>
+                <div class="qp-section" id="qp-angle-section" hidden>
+                  <div class="qp-section-title">Outreach Angle</div>
+                  <div class="qp-section-body" id="qp-angle">—</div>
+                </div>
+                <div class="qp-section" id="qp-last-section" hidden>
+                  <div class="qp-section-title">Last Call</div>
+                  <div class="qp-section-body" id="qp-last">—</div>
+                </div>
+                <div class="qp-dialpad" id="qp-dialpad">
+                  <button type="button" class="qp-call-btn" id="qp-call-btn">
+                    <span class="qp-call-icon">&#9743;</span>
+                    <span>Call</span>
+                  </button>
+                  <div class="qp-call-active" id="qp-call-active" hidden>
+                    <div class="qp-timer" id="qp-timer">00:00</div>
+                    <div class="qp-call-status" id="qp-call-status">Ringing&hellip;</div>
+                    <button type="button" class="qp-end-btn" id="qp-end-btn">End Call</button>
+                  </div>
+                  <div class="qp-processing" id="qp-processing" hidden>
+                    <div class="qp-spinner"></div>
+                    <div class="qp-processing-text">Processing call&hellip; analyzing transcript.</div>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        <!-- CALENDAR TAB (Phase 2) -->
+        <div id="tab-calendar" class="tab-panel">
+          <div class="cal-header">
+            <div class="cal-nav">
+              <button type="button" class="btn-ghost btn-xs" id="cal-prev">&lt;</button>
+              <div class="cal-title" id="cal-title">—</div>
+              <button type="button" class="btn-ghost btn-xs" id="cal-next">&gt;</button>
+              <button type="button" class="btn-ghost btn-xs" id="cal-today">Today</button>
+            </div>
+            <div class="cal-legend">
+              <span class="cal-legend-item"><span class="cal-dot cal-dot-manual"></span>Manual</span>
+              <span class="cal-legend-item"><span class="cal-dot cal-dot-auto"></span>Auto from transcript</span>
+              <span class="cal-legend-item"><span class="cal-dot cal-dot-overdue"></span>Overdue</span>
+            </div>
+          </div>
+          <div class="cal-grid-head">
+            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+          </div>
+          <div class="cal-grid" id="cal-grid"></div>
+        </div>
+
+        <!-- SETTINGS TAB (Phase 2, admin) -->
+        <div id="tab-settings" class="tab-panel">
+          <div class="settings-header">
+            <div class="settings-title">User &amp; Team Settings</div>
+            <div class="settings-sub">Assign analysts to verticals &amp; territories. The first account is auto-promoted to admin.</div>
+          </div>
+          <section class="settings-section">
+            <div class="settings-section-title"><span class="diamond">&#9670;</span> My Preferences</div>
+            <div class="settings-pref-row">
+              <label for="settings-cooldown">Minimum days between calls to same company</label>
+              <input type="number" id="settings-cooldown" class="cf-input" min="1" max="30" value="7" style="width:80px" />
+              <button type="button" class="btn-ghost btn-xs" id="settings-cooldown-save">Save</button>
+            </div>
+          </section>
+          <section class="settings-section" id="settings-admin-section" hidden>
+            <div class="settings-section-title"><span class="diamond">&#9670;</span> Team Members</div>
+            <div id="settings-users" class="settings-users"></div>
+          </section>
+        </div>
       </section>
     </main>
+
+    <!-- Debrief modal (Phase 2) -->
+    <div id="debrief-modal" class="debrief-modal" hidden>
+      <div class="debrief-card">
+        <div class="debrief-header">
+          <div class="debrief-title">Post-Call Debrief</div>
+          <div class="debrief-sub" id="debrief-sub">Answer each question below before continuing. Each answer must be at least 10 characters.</div>
+        </div>
+        <div class="debrief-body">
+          <div id="debrief-summary" class="debrief-summary"></div>
+          <div id="debrief-questions" class="debrief-questions"></div>
+        </div>
+        <div class="debrief-footer">
+          <button type="button" class="btn-ghost" id="debrief-draft-btn">Save draft &amp; finish later</button>
+          <button type="button" class="btn-primary" id="debrief-submit" disabled>Submit Debrief</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendar event modal (Phase 2) -->
+    <div id="cal-modal" class="cal-modal" hidden>
+      <div class="cal-modal-card">
+        <div class="cal-modal-header">
+          <div class="cal-modal-title" id="cal-modal-title">New Event</div>
+          <button type="button" class="detail-close" id="cal-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="cal-modal-body">
+          <input type="text" id="cal-ev-title" class="cf-input" placeholder="Event title *" />
+          <textarea id="cal-ev-desc" class="cf-input" placeholder="Notes"></textarea>
+          <input type="date" id="cal-ev-date" class="cf-input" />
+          <input type="time" id="cal-ev-time" class="cf-input" value="10:00" />
+          <input type="text" id="cal-ev-company" class="cf-input" placeholder="Company (optional, search)" />
+          <div id="cal-ev-company-matches" class="cal-ev-matches"></div>
+          <div id="cal-ev-quote-row" class="cal-ev-quote-row" hidden>
+            <div class="cal-ev-quote-label">Transcript quote</div>
+            <div class="cal-ev-quote-body" id="cal-ev-quote"></div>
+          </div>
+          <div class="cal-ev-actions">
+            <button type="button" class="btn-ghost" id="cal-ev-delete" hidden>Delete</button>
+            <button type="button" class="btn-ghost" id="cal-ev-complete" hidden>Mark Complete</button>
+            <button type="button" class="btn-primary" id="cal-ev-save">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings user edit modal (Phase 2) -->
+    <div id="settings-user-modal" class="cal-modal" hidden>
+      <div class="cal-modal-card">
+        <div class="cal-modal-header">
+          <div class="cal-modal-title" id="settings-user-title">Edit user</div>
+          <button type="button" class="detail-close" id="settings-user-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="cal-modal-body">
+          <div class="settings-user-label">Role</div>
+          <select id="settings-user-role" class="select">
+            <option value="analyst">Analyst</option>
+            <option value="admin">Admin</option>
+          </select>
+          <div class="settings-user-label">Verticals</div>
+          <div id="settings-user-verticals" class="settings-chip-row"></div>
+          <div class="settings-user-label">Territories (US states)</div>
+          <input type="text" id="settings-user-territories" class="cf-input" placeholder="Comma-separated, e.g. FL, GA, SC" />
+          <div class="cal-ev-actions">
+            <button type="button" class="btn-primary" id="settings-user-save">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Slide-in detail panel -->
     <aside id="detail-panel" class="detail-panel" hidden>
@@ -553,6 +736,15 @@
         <section class="d-section">
           <div class="d-section-title">Sources</div>
           <div id="d-sources" class="sources"></div>
+        </section>
+
+        <section class="d-section">
+          <div class="d-section-title">
+            Call History <span class="d-section-count" id="d-calls-count">0</span>
+          </div>
+          <div id="d-call-history" class="d-call-history">
+            <div class="d-empty">No calls recorded.</div>
+          </div>
         </section>
 
         <section class="d-section">
