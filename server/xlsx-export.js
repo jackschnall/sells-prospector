@@ -21,6 +21,18 @@ const TIER_FONTS = {
   pass: 'FF8A2A2A',
 };
 
+const STAGE_LABELS = {
+  no_contact: 'No Contact',
+  initial_contact: 'Initial Contact',
+  nurture: 'Nurture',
+  lead_memo: 'Lead Memo / Books & Records',
+  pitch: 'Pitch',
+  engagement_letter: 'Engagement Letter Signed',
+  lois_collected: "LOI's Collected",
+  deal_closed: 'Deal Closed',
+  closed_lost: 'Closed/Lost',
+};
+
 function safeJson(s) {
   if (!s) return null;
   try {
@@ -65,6 +77,7 @@ const RANKINGS_COLUMNS = [
   { key: 'website', header: 'Website', width: 32 },
   { key: 'address', header: 'Address', width: 28 },
   { key: 'linkedin', header: 'LinkedIn', width: 28 },
+  { key: 'pipeline_stage', header: 'Pipeline Stage', width: 20 },
   { key: 'in_crm', header: 'Already in CRM', width: 14 },
   { key: 'marked', header: 'Marked for Outreach', width: 18 },
   { key: 'outreach_angle', header: 'Outreach Angle', width: 40 },
@@ -91,6 +104,7 @@ function buildRankingsRows(companies) {
       website: c.website || '',
       address: c.address || '',
       linkedin: c.linkedin || '',
+      pipeline_stage: STAGE_LABELS[c.pipeline_stage] || c.pipeline_stage || 'No Contact',
       in_crm: c.crm_known ? 'Yes' : 'No',
       marked: c.marked_for_outreach ? 'Yes' : 'No',
       outreach_angle: c.outreach_angle || '',

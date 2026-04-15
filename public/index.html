@@ -58,6 +58,7 @@
       <section class="main">
         <nav class="tabs" id="main-tabs" role="tablist">
           <button type="button" class="tab active" data-tab="dashboard" role="tab">Dashboard</button>
+          <button type="button" class="tab" data-tab="pipeline" role="tab">Pipeline</button>
           <button type="button" class="tab" data-tab="companies" role="tab">Companies</button>
           <button type="button" class="tab" data-tab="markets" role="tab">Markets</button>
           <button type="button" class="tab" data-tab="agent" role="tab">Agent</button>
@@ -100,11 +101,25 @@
           </div>
 
           <section class="dash-section">
+            <div class="dash-section-title"><span class="diamond">&#9670;</span> Pipeline Summary</div>
+            <div id="dash-pipeline" class="dash-pipeline-bar"></div>
+          </section>
+
+          <section class="dash-section">
             <div class="dash-section-title"><span class="diamond">&#9670;</span> Top Sell Candidates</div>
             <div id="dash-top" class="dash-top-list">
               <div class="dash-empty">Run research to surface top candidates.</div>
             </div>
           </section>
+        </div>
+
+        <!-- PIPELINE TAB -->
+        <div id="tab-pipeline" class="tab-panel">
+          <div class="pipeline-board-header">
+            <div class="pipeline-board-title">Deal Pipeline</div>
+            <div class="pipeline-board-sub">Drag companies between stages or click to change. <span id="pipeline-total-count"></span></div>
+          </div>
+          <div class="kanban" id="kanban-board"></div>
         </div>
 
         <!-- COMPANIES TAB -->
@@ -115,11 +130,8 @@
             <select id="state-filter" class="select" title="Filter by state">
               <option value="">All States</option>
             </select>
-            <select id="outreach-filter" class="select" title="Filter by outreach status">
-              <option value="">All Outreach</option>
-              <option value="no_contact">No Contact Made</option>
-              <option value="initial_contact">Initial Contact Made</option>
-              <option value="relationship">Relationship Established</option>
+            <select id="pipeline-filter" class="select" title="Filter by pipeline stage">
+              <option value="">All Stages</option>
             </select>
             <select id="sort" class="select">
               <option value="score_desc">Score (high &rarr; low)</option>
@@ -130,7 +142,7 @@
               <option value="city_asc">City (A&ndash;Z)</option>
               <option value="name_asc">Name (A&ndash;Z)</option>
               <option value="recent">Recently Researched</option>
-              <option value="outreach">Outreach Status</option>
+              <option value="pipeline">Pipeline Stage</option>
             </select>
             <div class="view-toggle">
               <button type="button" id="view-grid" class="active" title="Grid">&#9638;</button>
@@ -504,8 +516,38 @@
         </section>
 
         <section class="d-section">
-          <div class="d-section-title">Contact</div>
-          <div id="d-contact" class="contact-grid"></div>
+          <div class="d-section-title">Pipeline Stage</div>
+          <div class="d-pipeline-row">
+            <select id="d-pipeline-stage" class="select select-sm d-pipeline-select"></select>
+            <select id="d-closed-reason" class="select select-sm d-closed-reason" hidden>
+              <option value="">Select reason&hellip;</option>
+              <option value="no_interest">No Interest</option>
+              <option value="bad_timing">Bad Timing</option>
+              <option value="ineligible">Ineligible</option>
+            </select>
+          </div>
+        </section>
+
+        <section class="d-section">
+          <div class="d-section-title d-section-title-toggle" id="d-contacts-toggle">
+            Contacts <span class="d-section-count" id="d-contacts-count">0</span>
+            <span class="d-section-arrow">&#9662;</span>
+          </div>
+          <div id="d-contacts" class="d-contacts"></div>
+          <div class="contact-add-row" id="d-contact-add-row">
+            <button type="button" class="btn-ghost btn-xs" id="d-contact-add-btn">+ Add Contact</button>
+          </div>
+          <div id="d-contact-form" class="d-contact-form" hidden>
+            <input type="text" id="cf-name" placeholder="Name *" class="cf-input" />
+            <input type="text" id="cf-title" placeholder="Title" class="cf-input" />
+            <input type="text" id="cf-phone" placeholder="Phone" class="cf-input" />
+            <input type="email" id="cf-email" placeholder="Email" class="cf-input" />
+            <input type="text" id="cf-linkedin" placeholder="LinkedIn URL" class="cf-input" />
+            <div class="cf-actions">
+              <button type="button" class="btn-ghost btn-xs" id="cf-cancel">Cancel</button>
+              <button type="button" class="btn-primary btn-xs" id="cf-save">Save Contact</button>
+            </div>
+          </div>
         </section>
 
         <section class="d-section">
@@ -514,25 +556,23 @@
         </section>
 
         <section class="d-section">
-          <div class="d-section-title">Notes</div>
-          <div id="d-notes" class="notes"></div>
-          <div class="note-compose">
-            <textarea id="d-note-input" rows="2" placeholder="Add a note&hellip;"></textarea>
-            <button type="button" class="btn-ghost" id="d-note-save">Save Note</button>
+          <div class="d-section-title">Activity Timeline</div>
+          <div class="activity-compose">
+            <select id="d-activity-type" class="select select-sm">
+              <option value="note">Note</option>
+              <option value="call">Call</option>
+              <option value="email">Email</option>
+              <option value="meeting">Meeting</option>
+            </select>
+            <input type="text" id="d-activity-summary" class="cf-input" placeholder="What happened?" />
+            <button type="button" class="btn-ghost btn-xs" id="d-activity-save">Log</button>
           </div>
+          <div id="d-activities" class="d-activities"></div>
         </section>
 
         <div class="detail-actions">
-          <label class="d-outreach-wrap">Outreach:
-            <select id="d-outreach-status" class="select select-sm">
-              <option value="no_contact">No Contact Made</option>
-              <option value="initial_contact">Initial Contact Made</option>
-              <option value="relationship">Relationship Established</option>
-            </select>
-          </label>
           <button type="button" class="btn-ghost" id="d-override">Research Anyway</button>
           <a class="btn-ghost" id="d-tearsheet" target="_blank" rel="noopener">Open Tearsheet</a>
-          <button type="button" class="btn-primary" id="d-sf-push">Push to Salesforce</button>
         </div>
       </div>
     </aside>

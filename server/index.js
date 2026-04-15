@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -20,6 +21,28 @@ const {
   getNotes,
   rollupStats,
   markCrmKnown,
+  // Pipeline
+  PIPELINE_STAGES,
+  CLOSED_LOST_REASONS,
+  updatePipelineStage,
+  formatStage,
+  getPipelineBoard,
+  // Contacts
+  listContacts,
+  getContact,
+  insertContact,
+  updateContact,
+  deleteContact,
+  // Activities
+  listActivities,
+  insertActivity,
+  // Users
+  getUserByToken,
+  getUserById,
+  getUserByEmail,
+  createUser,
+  listUsers,
+  clearInviteToken,
 } = require('./db');
 const { parseCsvBuffer, parseXlsxBuffer, companiesToCsv } = require('./csv');
 const { startRun, stopRun, getRunState, addListener, removeListener, emit } = require('./agent');
@@ -33,7 +56,18 @@ const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 app.use(express.json({ limit: '5mb' }));
+app.use(cookieParser(process.env.COOKIE_SECRET || 'sells-prospector-dev-secret'));
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// ---------- Optional user context ----------
+// Reads signed cookie to attach user to request (non-blocking)
+app.use((req, res, next) => {
+  const userId = req.signedCookies?.userId;
+  if (userId) {
+    req.currentUser = getUserById(userId) || null;
+  }
+  next();
+});
 
 // ---------- Status ----------
 app.get('/api/status', (req, res) => {
@@ -87,8 +121,8 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 
 // ---------- Companies ----------
 app.get('/api/companies', (req, res) => {
-  const { tier, crm_known: crmKnown, search, sort, state: stateFilter, outreach: outreachStatus } = req.query;
-  const rows = listCompanies({ tier, crmKnown, search, sort, stateFilter, outreachStatus });
+  const { tier, crm_known: crmKnown, search, sort, state: stateFilter, outreach: outreachStatus, pipeline_stage: pipelineStage } = req.query;
+  const rows = listCompanies({ tier, crmKnown, search, sort, stateFilter, outreachStatus, pipelineStage });
   // Keep payload light: omit raw_research from list view
   const slim = rows.map(({ raw_research, ...rest }) => rest);
   res.json({ companies: slim, stats: rollupStats() });
@@ -103,6 +137,8 @@ app.get('/api/companies/:id', (req, res) => {
     flags: safeJson(row.flags_json),
     sources: safeJson(row.sources_json) || [],
     notes: getNotes(row.id),
+    contacts: listContacts(row.id),
+    activities: listActivities(row.id),
   });
 });
 
@@ -256,6 +292,22 @@ app.post('/api/companies/:id/research', requireApiKey, (req, res) => {
 
   updateCompanyResearch(req.params.id, data);
 
+  // Auto-create contact from research data if owner is provided and no contacts exist yet
+  if (data.owner) {
+    const existingContacts = listContacts(req.params.id);
+    if (existingContacts.length === 0) {
+      insertContact({
+        company_id: req.params.id,
+        name: data.owner,
+        phone: data.phone || null,
+        email: data.email || null,
+        linkedin: data.linkedin || null,
+        is_primary: 1,
+        source: 'research',
+      });
+    }
+  }
+
   // Emit SSE so frontend updates live
   const stats = rollupStats();
   emit({ type: 'company_done', id: company.id, name: company.name, score: data.score, tier: data.tier });
@@ -301,6 +353,146 @@ app.post('/api/discover', requireApiKey, (req, res) => {
 
   emit({ type: 'queue', total: rollupStats().total });
   res.json({ ok: true, results, stats: rollupStats() });
+});
+
+// ---------- Auth (invite link) ----------
+app.get('/api/auth/me', (req, res) => {
+  if (!req.currentUser) return res.json({ user: null });
+  const { id, name, email } = req.currentUser;
+  res.json({ user: { id, name, email } });
+});
+
+app.post('/api/auth/accept', (req, res) => {
+  const { token, name, email } = req.body || {};
+  if (!token || !name || !email) return res.status(400).json({ error: 'Missing token, name, or email' });
+  const invite = getUserByToken(token);
+  if (!invite) {
+    // Token is for a new user — create them
+    const existing = getUserByEmail(email);
+    if (existing) return res.status(409).json({ error: 'Email already registered' });
+    const user = createUser({ name, email, invite_token: null });
+    res.cookie('userId', user.id, { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
+    return res.json({ ok: true, user: { id: user.id, name, email } });
+  }
+  // Invite record exists — fill in name/email and clear token
+  const { nanoid } = require('nanoid');
+  const existing = getUserByEmail(email);
+  if (existing) {
+    res.cookie('userId', existing.id, { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
+    clearInviteToken(existing.id);
+    return res.json({ ok: true, user: { id: existing.id, name: existing.name, email: existing.email } });
+  }
+  const user = createUser({ name, email });
+  clearInviteToken(invite.id);
+  res.cookie('userId', user.id, { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
+  res.json({ ok: true, user: { id: user.id, name, email } });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'Missing email' });
+  const user = getUserByEmail(email);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.cookie('userId', user.id, { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
+  res.json({ ok: true, user: { id: user.id, name: user.name, email: user.email } });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('userId');
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/invite', (req, res) => {
+  const { nanoid } = require('nanoid');
+  const token = nanoid(32);
+  // Create a placeholder user row with just the invite token
+  const id = nanoid();
+  const { db: rawDb } = require('./db');
+  rawDb.prepare('INSERT INTO users (id, name, email, invite_token) VALUES (?, ?, ?, ?)').run(id, 'Invited', `pending-${token}@invite`, token);
+  const url = `${req.protocol}://${req.get('host')}/?invite=${token}`;
+  res.json({ ok: true, token, url });
+});
+
+app.get('/api/auth/users', (req, res) => {
+  res.json({ users: listUsers() });
+});
+
+// ---------- Pipeline ----------
+app.get('/api/pipeline/board', (req, res) => {
+  res.json({ board: getPipelineBoard(), stages: PIPELINE_STAGES });
+});
+
+app.get('/api/pipeline/stages', (req, res) => {
+  res.json({
+    stages: PIPELINE_STAGES.map(s => ({ key: s, label: formatStage(s) })),
+    closedLostReasons: CLOSED_LOST_REASONS,
+  });
+});
+
+app.post('/api/companies/:id/pipeline', (req, res) => {
+  const { stage, closed_lost_reason } = req.body || {};
+  if (!stage || !PIPELINE_STAGES.includes(stage)) {
+    return res.status(400).json({ error: 'Invalid pipeline stage' });
+  }
+  if (stage === 'closed_lost' && (!closed_lost_reason || !CLOSED_LOST_REASONS.includes(closed_lost_reason))) {
+    return res.status(400).json({ error: 'Closed/Lost requires a valid reason: ' + CLOSED_LOST_REASONS.join(', ') });
+  }
+  const userId = req.currentUser?.id || null;
+  updatePipelineStage(req.params.id, stage, closed_lost_reason || null, userId);
+  emit({ type: 'pipeline_change', id: req.params.id, stage });
+  res.json({ ok: true });
+});
+
+// ---------- Contacts ----------
+app.get('/api/companies/:id/contacts', (req, res) => {
+  res.json({ contacts: listContacts(req.params.id) });
+});
+
+app.post('/api/companies/:id/contacts', (req, res) => {
+  const { name, title, phone, email, linkedin, is_primary, notes } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'Contact name required' });
+  const contact = insertContact({
+    company_id: req.params.id, name, title, phone, email, linkedin, is_primary, notes,
+  });
+  emit({ type: 'contact_added', company_id: req.params.id });
+  res.json({ ok: true, contact });
+});
+
+app.put('/api/contacts/:id', (req, res) => {
+  const existing = getContact(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Contact not found' });
+  updateContact(req.params.id, req.body || {});
+  emit({ type: 'contact_updated', company_id: existing.company_id });
+  res.json({ ok: true });
+});
+
+app.delete('/api/contacts/:id', (req, res) => {
+  const existing = getContact(req.params.id);
+  deleteContact(req.params.id);
+  emit({ type: 'contact_deleted', company_id: existing?.company_id });
+  res.json({ ok: true });
+});
+
+// ---------- Activities ----------
+app.get('/api/companies/:id/activities', (req, res) => {
+  const limit = parseInt(req.query.limit) || 50;
+  const offset = parseInt(req.query.offset) || 0;
+  res.json({ activities: listActivities(req.params.id, { limit, offset }) });
+});
+
+app.post('/api/companies/:id/activities', (req, res) => {
+  const { type, summary, details, contact_id } = req.body || {};
+  const validTypes = ['note', 'call', 'email', 'meeting', 'stage_change', 'research'];
+  if (!type || !validTypes.includes(type)) return res.status(400).json({ error: 'Invalid activity type' });
+  if (!summary) return res.status(400).json({ error: 'Summary required' });
+  const activity = insertActivity({
+    company_id: req.params.id,
+    contact_id: contact_id || null,
+    user_id: req.currentUser?.id || null,
+    type, summary, details,
+  });
+  emit({ type: 'activity_added', company_id: req.params.id });
+  res.json({ ok: true, activity });
 });
 
 // ---------- Export ----------

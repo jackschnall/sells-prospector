@@ -2,12 +2,14 @@
 
 const state = {
   companies: [],
-  filter: { tier: '', search: '', sort: 'score_desc', hideCrm: false, stateFilter: '', outreach: '' },
+  filter: { tier: '', search: '', sort: 'score_desc', hideCrm: false, stateFilter: '', pipelineStage: '' },
   view: 'grid',
   activeId: null,
   running: false,
   sse: null,
   marketIntel: [],
+  pipelineStages: [],
+  pipelineBoard: {},
 };
 
 // ---------- helpers ----------
@@ -73,7 +75,7 @@ async function loadCompanies() {
   if (state.filter.sort) params.set('sort', state.filter.sort);
   if (state.filter.hideCrm) params.set('crm_known', '0');
   if (state.filter.stateFilter) params.set('state', state.filter.stateFilter);
-  if (state.filter.outreach) params.set('outreach', state.filter.outreach);
+  if (state.filter.pipelineStage) params.set('pipeline_stage', state.filter.pipelineStage);
   const res = await fetch(`/api/companies?${params}`);
   const data = await res.json();
   state.companies = data.companies || [];
@@ -124,10 +126,9 @@ function renderCard(c) {
       : c.status === 'skipped'
       ? '<span class="chip chip-skip">Skipped</span>'
       : '';
-  const outreachChip = c.outreach_status === 'initial_contact'
-    ? '<span class="chip chip-outreach chip-outreach-initial">Contacted</span>'
-    : c.outreach_status === 'relationship'
-    ? '<span class="chip chip-outreach chip-outreach-rel">Relationship</span>'
+  const stageInfo = state.pipelineStages.find((s) => s.key === c.pipeline_stage);
+  const stageChip = stageInfo && c.pipeline_stage !== 'no_contact'
+    ? `<span class="chip chip-stage">${escapeHtml(stageInfo.label)}</span>`
     : '';
   return `
     <article class="card ${c.crm_known ? 'card-dim' : ''}" data-id="${c.id}">
@@ -139,7 +140,7 @@ function renderCard(c) {
         </div>
         <div class="card-tier ${tierClass(c.tier)}">${escapeHtml(tierLabel(c.tier))}</div>
       </div>
-      <div class="card-chips">${crmBadge}${status}${outreachChip}</div>
+      <div class="card-chips">${crmBadge}${status}${stageChip}</div>
       ${bars ? `<div class="signals">${bars}</div>` : ''}
       <div class="summary">${escapeHtml(c.summary || (c.status === 'pending' ? 'Not yet researched.' : ''))}</div>
       ${c.outreach_angle ? `<div class="outreach-angle">${escapeHtml(c.outreach_angle)}</div>` : ''}
@@ -206,6 +207,23 @@ function renderDashboard(stats) {
       : `${total} target${total === 1 ? '' : 's'} loaded · ${researched} researched · ${strong} high priority`;
   }
 
+  // Pipeline summary bar
+  const pipHost = $('#dash-pipeline');
+  if (pipHost && state.pipelineBoard && state.pipelineStages.length) {
+    const board = state.pipelineBoard;
+    const stageColors = { no_contact: '#8B8FA3', initial_contact: '#3B82F6', nurture: '#8B5CF6', lead_memo: '#F59E0B', pitch: '#EC4899', engagement_letter: '#10B981', lois_collected: '#06B6D4', deal_closed: '#22C55E', closed_lost: '#EF4444' };
+    const totalInPipeline = Object.values(board).reduce((s, arr) => s + arr.length, 0) || 1;
+    pipHost.innerHTML = '<div class="pip-bar">' + state.pipelineStages.map((s) => {
+      const count = (board[s.key] || []).length;
+      if (!count) return '';
+      const pct = Math.max(2, (count / totalInPipeline) * 100);
+      return `<div class="pip-seg" style="width:${pct}%;background:${stageColors[s.key] || '#888'}" title="${s.label}: ${count}"></div>`;
+    }).join('') + '</div><div class="pip-legend">' + state.pipelineStages.map((s) => {
+      const count = (board[s.key] || []).length;
+      return `<span class="pip-leg-item"><span class="pip-dot" style="background:${stageColors[s.key] || '#888'}"></span>${s.label} <strong>${count}</strong></span>`;
+    }).join('') + '</div>';
+  }
+
   const topHost = $('#dash-top');
   if (topHost) {
     const top = all
@@ -262,6 +280,213 @@ function renderExport() {
   }).join('');
 }
 
+// ---------- pipeline / kanban ----------
+async function loadPipelineStages() {
+  const res = await fetch('/api/pipeline/stages');
+  const data = await res.json();
+  state.pipelineStages = data.stages || [];
+  // Populate pipeline filter dropdown in companies toolbar
+  const sel = $('#pipeline-filter');
+  if (sel && state.pipelineStages.length) {
+    sel.innerHTML = '<option value="">All Stages</option>' +
+      state.pipelineStages.map((s) => `<option value="${s.key}">${escapeHtml(s.label)}</option>`).join('');
+  }
+}
+
+async function loadPipelineBoard() {
+  const res = await fetch('/api/pipeline/board');
+  const data = await res.json();
+  state.pipelineBoard = data.board || {};
+  renderPipelineBoard();
+}
+
+function renderPipelineBoard() {
+  const host = $('#kanban-board');
+  if (!host) return;
+  const stages = state.pipelineStages;
+  if (!stages.length) { host.innerHTML = '<div class="dash-empty">Loading pipeline stages...</div>'; return; }
+
+  let totalCount = 0;
+  host.innerHTML = stages.map((s) => {
+    const companies = state.pipelineBoard[s.key] || [];
+    totalCount += companies.length;
+    return `
+      <div class="kanban-col" data-stage="${s.key}">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">${escapeHtml(s.label)}</span>
+          <span class="kanban-col-count">${companies.length}</span>
+        </div>
+        <div class="kanban-col-body" data-stage="${s.key}">
+          ${companies.length === 0
+            ? '<div class="kanban-empty">No companies</div>'
+            : companies.map(renderKanbanCard).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const countEl = $('#pipeline-total-count');
+  if (countEl) countEl.textContent = `${totalCount} companies total`;
+
+  // Click handlers on kanban cards
+  $$('.kanban-card', host).forEach((el) => {
+    el.addEventListener('click', () => openDetail(el.dataset.id));
+  });
+
+  // Drag and drop
+  $$('.kanban-card', host).forEach((card) => {
+    card.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', card.dataset.id);
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  });
+
+  $$('.kanban-col-body', host).forEach((col) => {
+    col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('drag-over'); });
+    col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
+    col.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      col.classList.remove('drag-over');
+      const companyId = e.dataTransfer.getData('text/plain');
+      const newStage = col.dataset.stage;
+      if (!companyId || !newStage) return;
+
+      if (newStage === 'closed_lost') {
+        const reason = prompt('Closed/Lost reason:\n1) No Interest\n2) Bad Timing\n3) Ineligible\n\nEnter 1, 2, or 3:');
+        const reasons = { '1': 'no_interest', '2': 'bad_timing', '3': 'ineligible' };
+        const mapped = reasons[reason];
+        if (!mapped) { toast('Stage change cancelled', 'info'); return; }
+        await changePipelineStage(companyId, newStage, mapped);
+      } else {
+        await changePipelineStage(companyId, newStage);
+      }
+    });
+  });
+}
+
+function renderKanbanCard(c) {
+  const daysInStage = c.pipeline_stage_changed_at
+    ? Math.max(0, Math.floor((Date.now() - new Date(c.pipeline_stage_changed_at).getTime()) / 86400000))
+    : null;
+  return `
+    <div class="kanban-card ${tierClass(c.tier)}" data-id="${c.id}" draggable="true">
+      <div class="kc-top">
+        <span class="kc-score ${tierClass(c.tier)}">${fmtScore(c.score)}</span>
+        <span class="kc-name">${escapeHtml(c.name)}</span>
+      </div>
+      <div class="kc-meta">
+        ${c.owner ? escapeHtml(c.owner) : ''}
+        ${c.city ? ' · ' + escapeHtml(c.city) + (c.state ? ', ' + escapeHtml(c.state) : '') : ''}
+      </div>
+      ${daysInStage != null ? `<div class="kc-days">${daysInStage}d in stage</div>` : ''}
+      ${c.closed_lost_reason ? `<span class="kc-reason">${escapeHtml(formatClosedReason(c.closed_lost_reason))}</span>` : ''}
+    </div>
+  `;
+}
+
+function formatClosedReason(r) {
+  const map = { no_interest: 'No Interest', bad_timing: 'Bad Timing', ineligible: 'Ineligible' };
+  return map[r] || r;
+}
+
+async function changePipelineStage(companyId, stage, closedLostReason) {
+  const body = { stage };
+  if (closedLostReason) body.closed_lost_reason = closedLostReason;
+  const res = await fetch(`/api/companies/${companyId}/pipeline`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    toast(err.error || 'Failed to change stage', 'error');
+    return;
+  }
+  const stageLabel = state.pipelineStages.find((s) => s.key === stage)?.label || stage;
+  toast(`Moved to ${stageLabel}`, 'ok');
+  loadPipelineBoard();
+  if (state.activeId === companyId) openDetail(companyId);
+}
+
+// ---------- contacts in detail ----------
+function renderContacts(contacts) {
+  const host = $('#d-contacts');
+  const countEl = $('#d-contacts-count');
+  if (countEl) countEl.textContent = contacts.length;
+  if (!contacts.length) {
+    host.innerHTML = '<div class="sb-hint">No contacts yet.</div>';
+    return;
+  }
+  host.innerHTML = contacts.map((ct) => `
+    <div class="ct-card" data-contact-id="${ct.id}">
+      <div class="ct-top">
+        <strong>${escapeHtml(ct.name)}</strong>
+        ${ct.is_primary ? '<span class="ct-badge">Primary</span>' : ''}
+        ${ct.source === 'research' ? '<span class="ct-badge ct-badge-ai">AI</span>' : ''}
+      </div>
+      ${ct.title ? `<div class="ct-detail">${escapeHtml(ct.title)}</div>` : ''}
+      <div class="ct-row">
+        ${ct.phone ? `<span>${escapeHtml(ct.phone)}</span>` : ''}
+        ${ct.email ? `<span>${escapeHtml(ct.email)}</span>` : ''}
+        ${ct.linkedin ? `<a href="${escapeHtml(ct.linkedin)}" target="_blank" rel="noopener">LinkedIn</a>` : ''}
+      </div>
+      <div class="ct-actions">
+        <button type="button" class="btn-ghost btn-xs ct-edit" data-id="${ct.id}">Edit</button>
+        <button type="button" class="btn-ghost btn-xs ct-del" data-id="${ct.id}">Delete</button>
+      </div>
+    </div>
+  `).join('');
+
+  // Bind edit buttons
+  $$('.ct-edit', host).forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const ctId = btn.dataset.id;
+      const ct = contacts.find((c) => c.id === ctId);
+      if (!ct) return;
+      $('#cf-name').value = ct.name || '';
+      $('#cf-title').value = ct.title || '';
+      $('#cf-phone').value = ct.phone || '';
+      $('#cf-email').value = ct.email || '';
+      $('#cf-linkedin').value = ct.linkedin || '';
+      $('#cf-save').dataset.editId = ctId;
+      $('#d-contact-form').hidden = false;
+      $('#cf-name').focus();
+    });
+  });
+  // Bind delete buttons
+  $$('.ct-del', host).forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('Delete this contact?')) return;
+      const res = await fetch(`/api/contacts/${btn.dataset.id}`, { method: 'DELETE' });
+      if (res.ok) { toast('Contact deleted', 'ok'); openDetail(state.activeId); }
+    });
+  });
+}
+
+// ---------- activities in detail ----------
+const ACTIVITY_ICONS = { note: '&#9998;', call: '&#9743;', email: '&#9993;', meeting: '&#9632;', stage_change: '&#9654;', research: '&#9670;' };
+
+function renderActivities(activities) {
+  const host = $('#d-activities');
+  if (!activities.length) {
+    host.innerHTML = '<div class="sb-hint">No activity yet.</div>';
+    return;
+  }
+  host.innerHTML = activities.map((a) => `
+    <div class="act-item act-${a.type}">
+      <span class="act-icon">${ACTIVITY_ICONS[a.type] || '&#9679;'}</span>
+      <div class="act-body">
+        <div class="act-summary">${escapeHtml(a.summary)}</div>
+        ${a.details ? `<div class="act-details">${escapeHtml(a.details)}</div>` : ''}
+        <div class="act-meta">${escapeHtml(new Date(a.created_at).toLocaleString())}${a.user_name ? ' · ' + escapeHtml(a.user_name) : ''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
 // ---------- tabs ----------
 function bindTabs() {
   const tabs = $$('.tab', $('#main-tabs'));
@@ -272,6 +497,7 @@ function bindTabs() {
       $$('.tab-panel').forEach((panel) => {
         panel.classList.toggle('active', panel.id === `tab-${target}`);
       });
+      if (target === 'pipeline') loadPipelineBoard();
     });
   });
 }
@@ -298,7 +524,8 @@ function renderDetail(data) {
   const signals = data.signals || {};
   const flags = data.flags || { hard_stops: [], yellow_flags: [] };
   const sources = data.sources || [];
-  const notes = data.notes || [];
+  const contacts = data.contacts || [];
+  const activities = data.activities || [];
   const loc = [c.city, c.state].filter(Boolean).join(', ');
 
   $('#d-score').textContent = fmtScore(c.score);
@@ -308,6 +535,16 @@ function renderDetail(data) {
   $('#d-tier').textContent = tierLabel(c.tier);
   $('#d-tier').className = `detail-tier ${tierClass(c.tier)}`;
   $('#d-summary').textContent = c.summary || 'No summary yet.';
+
+  // Pipeline stage selector
+  const stageSel = $('#d-pipeline-stage');
+  stageSel.innerHTML = state.pipelineStages.map((s) =>
+    `<option value="${s.key}">${escapeHtml(s.label)}</option>`
+  ).join('');
+  stageSel.value = c.pipeline_stage || 'no_contact';
+  const reasonSel = $('#d-closed-reason');
+  reasonSel.hidden = c.pipeline_stage !== 'closed_lost';
+  if (c.closed_lost_reason) reasonSel.value = c.closed_lost_reason;
 
   // Signals
   const weights = {
@@ -344,32 +581,24 @@ function renderDetail(data) {
     : '';
   $('#d-flags').innerHTML = hardHtml + yellowHtml || '<div class="flag-none">No flags identified.</div>';
 
-  // Contact
-  $('#d-contact').innerHTML = `
-    <div><span class="k">Owner</span><span class="v">${escapeHtml(c.owner || '—')}</span></div>
-    <div><span class="k">Phone</span><span class="v">${escapeHtml(c.phone || '—')}</span></div>
-    <div><span class="k">Email</span><span class="v">${escapeHtml(c.email || '—')}</span></div>
-    <div><span class="k">Address</span><span class="v">${escapeHtml(c.address || '—')}</span></div>
-    <div><span class="k">Website</span><span class="v">${c.website ? `<a href="${escapeHtml(c.website)}" target="_blank" rel="noopener">${escapeHtml(c.website)}</a>` : '—'}</span></div>
-    <div><span class="k">LinkedIn</span><span class="v">${c.linkedin ? `<a href="${escapeHtml(c.linkedin)}" target="_blank" rel="noopener">profile</a>` : '—'}</span></div>
-  `;
+  // Contacts
+  renderContacts(contacts);
 
   // Sources
   $('#d-sources').innerHTML = sources.length
     ? sources.map((s) => `<a class="source-chip" href="${escapeHtml(s.url || '#')}" target="_blank" rel="noopener">${escapeHtml(s.title || s.url || 'source')}</a>`).join('')
     : '<div class="sb-hint">No sources recorded.</div>';
 
-  // Notes
-  $('#d-notes').innerHTML = notes.length
-    ? notes.map((n) => `<div class="note"><div class="note-date">${escapeHtml(new Date(n.created_at).toLocaleString())}</div><div class="note-body">${escapeHtml(n.body)}</div></div>`).join('')
-    : '<div class="sb-hint">No notes yet.</div>';
+  // Activities
+  renderActivities(activities);
 
   // Actions
-  const outSel = $('#d-outreach-status');
-  if (outSel) outSel.value = c.outreach_status || 'no_contact';
   $('#d-override').textContent = c.crm_override ? 'Crm Override: ON' : 'Research Anyway';
   $('#d-override').hidden = !c.crm_known;
   $('#d-tearsheet').href = `/tearsheet/${c.id}`;
+
+  // Reset contact form
+  $('#d-contact-form').hidden = true;
 }
 
 // ---------- upload ----------
@@ -487,8 +716,8 @@ function bindToolbar() {
     state.filter.stateFilter = e.target.value;
     loadCompanies();
   });
-  $('#outreach-filter').addEventListener('change', (e) => {
-    state.filter.outreach = e.target.value;
+  $('#pipeline-filter').addEventListener('change', (e) => {
+    state.filter.pipelineStage = e.target.value;
     loadCompanies();
   });
   $('#view-grid').addEventListener('click', () => {
@@ -520,35 +749,99 @@ function bindToolbar() {
 // ---------- detail actions ----------
 function bindDetailActions() {
   $('#detail-close').addEventListener('click', closeDetail);
-  $('#d-note-save').addEventListener('click', async () => {
+
+  // Pipeline stage change
+  $('#d-pipeline-stage').addEventListener('change', async (e) => {
     if (!state.activeId) return;
-    const body = $('#d-note-input').value.trim();
-    if (!body) return;
-    const res = await fetch(`/api/companies/${state.activeId}/notes`, {
+    const stage = e.target.value;
+    const reasonSel = $('#d-closed-reason');
+    if (stage === 'closed_lost') {
+      reasonSel.hidden = false;
+      return; // Wait for reason selection
+    }
+    reasonSel.hidden = true;
+    await changePipelineStage(state.activeId, stage);
+  });
+
+  $('#d-closed-reason').addEventListener('change', async (e) => {
+    if (!state.activeId) return;
+    const reason = e.target.value;
+    if (!reason) return;
+    await changePipelineStage(state.activeId, 'closed_lost', reason);
+  });
+
+  // Activity logging
+  $('#d-activity-save').addEventListener('click', async () => {
+    if (!state.activeId) return;
+    const type = $('#d-activity-type').value;
+    const summary = $('#d-activity-summary').value.trim();
+    if (!summary) return;
+    const res = await fetch(`/api/companies/${state.activeId}/activities`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ note: body }),
+      body: JSON.stringify({ type, summary }),
     });
     if (res.ok) {
-      $('#d-note-input').value = '';
+      $('#d-activity-summary').value = '';
       openDetail(state.activeId);
-      toast('Note saved', 'ok');
+      toast('Activity logged', 'ok');
     }
   });
-  $('#d-outreach-status').addEventListener('change', async (e) => {
-    if (!state.activeId) return;
-    const outreach_status = e.target.value;
-    await fetch(`/api/companies/${state.activeId}/outreach`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ outreach_status }),
-    });
-    const row = state.companies.find((c) => c.id === state.activeId);
-    if (row) row.outreach_status = outreach_status;
-    renderCompanies();
-    const labels = { no_contact: 'No Contact Made', initial_contact: 'Initial Contact Made', relationship: 'Relationship Established' };
-    toast(`Outreach: ${labels[outreach_status]}`, 'ok');
+
+  // Contact add form toggle
+  $('#d-contact-add-btn').addEventListener('click', () => {
+    const form = $('#d-contact-form');
+    form.hidden = !form.hidden;
+    if (!form.hidden) $('#cf-name').focus();
   });
+  $('#cf-cancel').addEventListener('click', () => {
+    $('#d-contact-form').hidden = true;
+    clearContactForm();
+  });
+  $('#cf-save').addEventListener('click', async () => {
+    if (!state.activeId) return;
+    const name = $('#cf-name').value.trim();
+    if (!name) { toast('Name is required', 'error'); return; }
+    const body = {
+      name,
+      title: $('#cf-title').value.trim() || null,
+      phone: $('#cf-phone').value.trim() || null,
+      email: $('#cf-email').value.trim() || null,
+      linkedin: $('#cf-linkedin').value.trim() || null,
+    };
+    const editId = $('#cf-save').dataset.editId;
+    let res;
+    if (editId) {
+      res = await fetch(`/api/contacts/${editId}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } else {
+      res = await fetch(`/api/companies/${state.activeId}/contacts`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    }
+    if (res.ok) {
+      clearContactForm();
+      $('#d-contact-form').hidden = true;
+      openDetail(state.activeId);
+      toast(editId ? 'Contact updated' : 'Contact added', 'ok');
+    }
+  });
+
+  // Contacts toggle
+  $('#d-contacts-toggle')?.addEventListener('click', () => {
+    const body = $('#d-contacts');
+    const addRow = $('#d-contact-add-row');
+    body.hidden = !body.hidden;
+    addRow.hidden = body.hidden;
+    $('#d-contacts-toggle .d-section-arrow').textContent = body.hidden ? '\u25B8' : '\u25BE';
+  });
+
+  // Override / tearsheet
   $('#d-override').addEventListener('click', async () => {
     if (!state.activeId) return;
     const row = state.companies.find((c) => c.id === state.activeId);
@@ -562,17 +855,15 @@ function bindDetailActions() {
     openDetail(state.activeId);
     toast(override ? 'Will research despite CRM match' : 'CRM override removed', 'ok');
   });
-  $('#d-sf-push').addEventListener('click', async () => {
-    if (!state.activeId) return;
-    const res = await fetch(`/api/companies/${state.activeId}/salesforce-push`, { method: 'POST' });
-    const data = await res.json();
-    if (data.stubbed) {
-      toast('Salesforce push stubbed (see server logs)', 'info');
-      console.log('[SF push stub]', data);
-    } else {
-      toast('Pushed to Salesforce', 'ok');
-    }
-  });
+}
+
+function clearContactForm() {
+  $('#cf-name').value = '';
+  $('#cf-title').value = '';
+  $('#cf-phone').value = '';
+  $('#cf-email').value = '';
+  $('#cf-linkedin').value = '';
+  delete $('#cf-save').dataset.editId;
 }
 
 // ---------- init ----------
@@ -593,6 +884,28 @@ function init() {
   loadStatus();
   loadCompanies();
   loadMarkets();
+  loadPipelineStages().then(() => loadPipelineBoard());
+
+  // SSE for real-time updates
+  const sse = new EventSource('/api/run/stream');
+  sse.onmessage = (e) => {
+    try {
+      const ev = JSON.parse(e.data);
+      if (ev.type === 'pipeline_change') {
+        loadPipelineBoard();
+        loadCompanies();
+        if (state.activeId === ev.id) openDetail(state.activeId);
+      } else if (ev.type === 'contact_added' || ev.type === 'contact_updated' || ev.type === 'contact_deleted') {
+        if (state.activeId === ev.company_id) openDetail(state.activeId);
+      } else if (ev.type === 'activity_added') {
+        if (state.activeId === ev.company_id) openDetail(state.activeId);
+      } else if (ev.type === 'company_done') {
+        loadCompanies();
+        loadPipelineBoard();
+      }
+    } catch {}
+  };
+  state.sse = sse;
 }
 
 document.addEventListener('DOMContentLoaded', init);
