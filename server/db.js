@@ -4,11 +4,14 @@ const fs = require('fs');
 
 // ─── Connection ──────────────────────────────────────────────────────────────
 
+const dbUrl = process.env.DATABASE_URL || '';
+// Railway internal connections (*.railway.internal) don't use SSL.
+// Railway public proxy connections (*.proxy.rlwy.net) do.
+const needsSsl = dbUrl.includes('proxy.rlwy.net') || (dbUrl.includes('railway') && !dbUrl.includes('railway.internal'));
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway')
-    ? { rejectUnauthorized: false }
-    : undefined,
+  connectionString: dbUrl,
+  ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
