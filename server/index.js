@@ -32,6 +32,7 @@ const {
   getPipelineBoard,
   // Contacts
   listContacts,
+  listAllContacts,
   getContact,
   insertContact,
   updateContact,
@@ -181,6 +182,40 @@ app.get('/api/companies/:id', async (req, res) => {
     contacts: await listContacts(row.id),
     activities: await listActivities(row.id),
   });
+});
+
+// Manual company creation
+app.post('/api/companies', requireUser, async (req, res) => {
+  const { nanoid } = require('nanoid');
+  const b = req.body || {};
+  const name = String(b.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Company name is required' });
+  const name_key = normalizeName(name);
+  if (!name_key) return res.status(400).json({ error: 'Invalid company name' });
+  // Check for existing company with same name_key
+  const existing = await pool.query('SELECT id, name FROM companies WHERE name_key = $1 LIMIT 1', [name_key]);
+  if (existing.rows.length > 0) {
+    return res.status(409).json({ error: 'Company already exists', company_id: existing.rows[0].id, company_name: existing.rows[0].name });
+  }
+  const id = nanoid();
+  await insertCompany({
+    id, name, name_key,
+    city: b.city || null,
+    state: b.state ? String(b.state).toUpperCase() : null,
+    phone: b.phone || null,
+    website: b.website || null,
+    owner: b.owner || null,
+    email: b.email || null,
+    address: b.address || null,
+    crm_known: false,
+  });
+  // Optionally set linkedin via direct query since insertCompany doesn't handle it
+  if (b.linkedin) {
+    await execute('UPDATE companies SET linkedin = $1 WHERE id = $2', [b.linkedin, id]);
+  }
+  const created = await getCompany(id);
+  emit({ type: 'company_added', company_id: id });
+  res.json({ ok: true, company: created });
 });
 
 app.post('/api/companies/:id/override', async (req, res) => {
@@ -768,6 +803,29 @@ app.post('/api/companies/:id/pipeline', async (req, res) => {
 // ---------- Contacts ----------
 app.get('/api/companies/:id/contacts', async (req, res) => {
   res.json({ contacts: await listContacts(req.params.id) });
+});
+
+// Cross-company contact list (for Contacts tab)
+app.get('/api/contacts', requireUser, async (req, res) => {
+  const search = String(req.query.q || req.query.search || '').trim();
+  const limit = Math.min(parseInt(req.query.limit) || 500, 2000);
+  const offset = parseInt(req.query.offset) || 0;
+  const contacts = await listAllContacts({ search, limit, offset });
+  res.json({ contacts });
+});
+
+// Create a contact (company_id in body — used by Contacts tab "+ Add")
+app.post('/api/contacts', requireUser, async (req, res) => {
+  const { company_id, name, title, phone, email, linkedin, is_primary, notes } = req.body || {};
+  if (!company_id) return res.status(400).json({ error: 'company_id required' });
+  if (!name || !String(name).trim()) return res.status(400).json({ error: 'Contact name required' });
+  const company = await getCompany(company_id);
+  if (!company) return res.status(404).json({ error: 'Company not found' });
+  const contact = await insertContact({
+    company_id, name: String(name).trim(), title, phone, email, linkedin, is_primary, notes,
+  });
+  emit({ type: 'contact_added', company_id });
+  res.json({ ok: true, contact });
 });
 
 app.post('/api/companies/:id/contacts', async (req, res) => {

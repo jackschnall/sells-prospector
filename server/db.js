@@ -409,6 +409,42 @@ async function listContacts(companyId) {
   );
 }
 
+/**
+ * List ALL contacts with their company info joined in (for the global Contacts tab).
+ * Supports a loose `search` term matched against name/title/email/phone/company name.
+ */
+async function listAllContacts({ search = '', limit = 500, offset = 0 } = {}) {
+  const params = [];
+  let where = '';
+  const s = String(search || '').trim();
+  if (s) {
+    params.push(`%${s.toLowerCase()}%`);
+    where = `WHERE LOWER(ct.name) LIKE $1
+             OR LOWER(COALESCE(ct.title, '')) LIKE $1
+             OR LOWER(COALESCE(ct.email, '')) LIKE $1
+             OR LOWER(COALESCE(ct.phone, '')) LIKE $1
+             OR LOWER(COALESCE(c.name, '')) LIKE $1`;
+  }
+  params.push(limit, offset);
+  const limIdx = params.length - 1;
+  const offIdx = params.length;
+  return query(
+    `SELECT
+        ct.*,
+        c.name   AS company_name,
+        c.city   AS company_city,
+        c.state  AS company_state,
+        c.tier   AS company_tier,
+        c.score  AS company_score
+     FROM contacts ct
+     LEFT JOIN companies c ON ct.company_id = c.id
+     ${where}
+     ORDER BY ct.updated_at DESC NULLS LAST, ct.created_at DESC
+     LIMIT $${limIdx} OFFSET $${offIdx}`,
+    params
+  );
+}
+
 async function getContact(id) {
   return queryOne('SELECT * FROM contacts WHERE id = $1', [id]);
 }
@@ -433,7 +469,7 @@ async function updateContact(id, data) {
   const fields = [];
   const params = [];
   let idx = 1;
-  for (const key of ['name', 'title', 'phone', 'email', 'linkedin', 'is_primary', 'notes']) {
+  for (const key of ['company_id', 'name', 'title', 'phone', 'email', 'linkedin', 'is_primary', 'notes']) {
     if (data[key] !== undefined) {
       fields.push(`${key} = $${idx++}`);
       params.push(key === 'is_primary' ? !!data[key] : data[key]);
@@ -827,6 +863,7 @@ module.exports = {
   getPipelineBoard,
   // Contacts
   listContacts,
+  listAllContacts,
   getContact,
   insertContact,
   updateContact,

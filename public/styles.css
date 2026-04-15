@@ -3378,3 +3378,203 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   .profile-row { flex-direction: column; gap: 4px; }
   .profile-row-label { flex: none; }
 }
+
+/* ───────────────────────────────────────────────────────────
+   Contacts tab + Add Company / Add Contact modals
+   ─────────────────────────────────────────────────────────── */
+.btn-add {
+  font-size: 13px;
+  padding: 7px 14px;
+  white-space: nowrap;
+  margin-left: 8px;
+}
+.contacts-count {
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-size: 12px;
+  color: rgba(13, 27, 42, 0.6);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-right: 10px;
+}
+.contacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+.contact-row {
+  background: #fff;
+  border: 1px solid rgba(13, 27, 42, 0.08);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(180px, 1.4fr) minmax(160px, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+.contact-row:hover {
+  border-color: rgba(201, 168, 76, 0.5);
+  box-shadow: 0 6px 18px rgba(13, 27, 42, 0.08);
+}
+.contact-row-main { min-width: 0; }
+.contact-row-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--navy);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contact-row-title {
+  font-size: 12px;
+  color: rgba(13, 27, 42, 0.65);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contact-row-primary-pill {
+  display: inline-block;
+  background: var(--gold);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.contact-row-contactinfo {
+  font-size: 13px;
+  color: rgba(13, 27, 42, 0.78);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.contact-row-contactinfo a {
+  color: rgba(13, 27, 42, 0.78);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+.contact-row-contactinfo a:hover { color: var(--gold); }
+.contact-row-company {
+  min-width: 0;
+}
+.contact-row-company-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--navy);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgba(201, 168, 76, 0.35);
+  text-underline-offset: 3px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.contact-row-company-link:hover {
+  color: var(--gold);
+  text-decoration-color: var(--gold);
+}
+.contact-row-company-meta {
+  font-size: 11px;
+  color: rgba(13, 27, 42, 0.5);
+  margin-top: 3px;
+  font-family: 'DM Mono', ui-monospace, monospace;
+  letter-spacing: 0.03em;
+}
+.contact-row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.contact-row-btn {
+  background: transparent;
+  border: 1px solid rgba(13, 27, 42, 0.15);
+  color: rgba(13, 27, 42, 0.7);
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.contact-row-btn:hover {
+  background: rgba(201, 168, 76, 0.12);
+  border-color: var(--gold);
+  color: var(--navy);
+}
+.contact-row-btn.danger:hover {
+  background: rgba(231, 76, 60, 0.1);
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+@media (max-width: 860px) {
+  .contact-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+/* Company modal inline two-column row */
+.cm-row {
+  display: grid;
+  grid-template-columns: 1fr 100px;
+  gap: 8px;
+}
+.cm-row .cm-state { text-transform: uppercase; }
+
+/* Contact modal picker */
+.ctm-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(13, 27, 42, 0.8);
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 0;
+}
+.ctm-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--gold);
+  cursor: pointer;
+}
+.ctm-company-picked {
+  background: rgba(201, 168, 76, 0.12);
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: -4px;
+}
+.ctm-company-picked-clear {
+  background: transparent;
+  border: none;
+  color: rgba(13, 27, 42, 0.5);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+  line-height: 1;
+}
+.ctm-company-picked-clear:hover { color: #e74c3c; }

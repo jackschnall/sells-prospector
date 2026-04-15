@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260415d" />
+    <link rel="stylesheet" href="/styles.css?v=20260415e" />
   </head>
   <body>
     <div id="mock-banner" class="mock-banner" hidden>
@@ -75,6 +75,7 @@
           <button type="button" class="tab active" data-tab="dashboard" role="tab">Dashboard</button>
           <button type="button" class="tab" data-tab="pipeline" role="tab">Pipeline</button>
           <button type="button" class="tab" data-tab="companies" role="tab">Companies</button>
+          <button type="button" class="tab" data-tab="contacts" role="tab">Contacts</button>
           <button type="button" class="tab" data-tab="markets" role="tab">Markets</button>
           <button type="button" class="tab" data-tab="agent" role="tab">Agent</button>
           <button type="button" class="tab" data-tab="export" role="tab">Export</button>
@@ -166,6 +167,7 @@
               <button type="button" id="view-grid" class="active" title="Grid">&#9638;</button>
               <button type="button" id="view-list" title="List">&#9776;</button>
             </div>
+            <button type="button" id="btn-add-company" class="btn-primary btn-add" title="Add new company">+ Add Company</button>
           </div>
 
           <div id="companies" class="companies-grid"></div>
@@ -176,6 +178,22 @@
             <div class="empty-sub">
               Upload a CSV of target companies to begin prospecting.
             </div>
+          </div>
+        </div>
+
+        <!-- CONTACTS TAB -->
+        <div id="tab-contacts" class="tab-panel">
+          <div class="toolbar">
+            <input type="search" id="contacts-search" class="search" placeholder="Search contacts by name, email, phone, company&hellip;" />
+            <div class="toolbar-spacer"></div>
+            <div class="contacts-count" id="contacts-count">0 contacts</div>
+            <button type="button" id="btn-add-contact" class="btn-primary btn-add" title="Add new contact">+ Add Contact</button>
+          </div>
+          <div id="contacts-list" class="contacts-list"></div>
+          <div id="contacts-empty" class="empty-state" hidden>
+            <div class="empty-icon">&#9675;</div>
+            <div class="empty-title">No contacts yet</div>
+            <div class="empty-sub">Click "+ Add Contact" to add one manually, or add contacts from a company's detail panel.</div>
           </div>
         </div>
 
@@ -649,6 +667,63 @@
       </div>
     </div>
 
+    <!-- Add Company modal -->
+    <div id="company-modal" class="cal-modal" hidden>
+      <div class="cal-modal-card">
+        <div class="cal-modal-header">
+          <div class="cal-modal-title">Add Company</div>
+          <button type="button" class="detail-close" id="company-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="cal-modal-body">
+          <input type="text" id="cm-name" class="cf-input" placeholder="Company name *" />
+          <div class="cm-row">
+            <input type="text" id="cm-city" class="cf-input" placeholder="City" />
+            <input type="text" id="cm-state" class="cf-input cm-state" placeholder="State (e.g. FL)" maxlength="2" />
+          </div>
+          <input type="text" id="cm-phone" class="cf-input" placeholder="Phone" />
+          <input type="text" id="cm-website" class="cf-input" placeholder="Website (https://...)" />
+          <input type="text" id="cm-owner" class="cf-input" placeholder="Owner / Principal" />
+          <input type="email" id="cm-email" class="cf-input" placeholder="Email" />
+          <input type="text" id="cm-address" class="cf-input" placeholder="Address" />
+          <input type="text" id="cm-linkedin" class="cf-input" placeholder="LinkedIn URL" />
+          <div class="cal-ev-actions">
+            <button type="button" class="btn-ghost" id="cm-cancel">Cancel</button>
+            <button type="button" class="btn-primary" id="cm-save">Save Company</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit Contact modal -->
+    <div id="contact-modal" class="cal-modal" hidden>
+      <div class="cal-modal-card">
+        <div class="cal-modal-header">
+          <div class="cal-modal-title" id="contact-modal-title">Add Contact</div>
+          <button type="button" class="detail-close" id="contact-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="cal-modal-body">
+          <input type="text" id="ctm-company" class="cf-input" placeholder="Company * (start typing to search)" autocomplete="off" />
+          <div id="ctm-company-matches" class="cal-ev-matches"></div>
+          <input type="hidden" id="ctm-company-id" />
+          <div id="ctm-company-picked" class="ctm-company-picked" hidden></div>
+          <input type="text" id="ctm-name" class="cf-input" placeholder="Contact name *" />
+          <input type="text" id="ctm-title" class="cf-input" placeholder="Title (e.g. Owner, CFO)" />
+          <input type="text" id="ctm-phone" class="cf-input" placeholder="Phone" />
+          <input type="email" id="ctm-email" class="cf-input" placeholder="Email" />
+          <input type="text" id="ctm-linkedin" class="cf-input" placeholder="LinkedIn URL" />
+          <label class="ctm-check">
+            <input type="checkbox" id="ctm-primary" />
+            <span>Primary contact for this company</span>
+          </label>
+          <textarea id="ctm-notes" class="cf-input" placeholder="Notes"></textarea>
+          <div class="cal-ev-actions">
+            <button type="button" class="btn-ghost" id="ctm-cancel">Cancel</button>
+            <button type="button" class="btn-primary" id="ctm-save">Save Contact</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Settings user edit modal (Phase 2) -->
     <div id="settings-user-modal" class="cal-modal" hidden>
       <div class="cal-modal-card">
@@ -869,6 +944,6 @@
       </div>
     </div>
 
-    <script src="/app.js?v=20260415d"></script>
+    <script src="/app.js?v=20260415e"></script>
   </body>
 </html>

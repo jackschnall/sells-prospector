@@ -520,6 +520,7 @@ function bindTabs() {
       if (target === 'queue') loadQueue();
       if (target === 'calendar') loadCalendar();
       if (target === 'settings') loadSettings();
+      if (target === 'contacts') loadAllContacts();
     });
   });
 }
@@ -1990,6 +1991,20 @@ function bindPhase2() {
   $('#settings-cooldown-save')?.addEventListener('click', saveCooldown);
   $('#settings-user-close')?.addEventListener('click', closeSettingsUserModal);
   $('#settings-user-save')?.addEventListener('click', saveSettingsUser);
+
+  // Contacts tab + Add Company / Add Contact
+  $('#btn-add-company')?.addEventListener('click', () => openCompanyModal());
+  $('#company-modal-close')?.addEventListener('click', closeCompanyModal);
+  $('#cm-cancel')?.addEventListener('click', closeCompanyModal);
+  $('#cm-save')?.addEventListener('click', saveCompanyModal);
+
+  $('#btn-add-contact')?.addEventListener('click', () => openContactModal());
+  $('#contact-modal-close')?.addEventListener('click', closeContactModal);
+  $('#ctm-cancel')?.addEventListener('click', closeContactModal);
+  $('#ctm-save')?.addEventListener('click', saveContactModal);
+  $('#ctm-company')?.addEventListener('input', updateContactCompanyMatches);
+
+  $('#contacts-search')?.addEventListener('input', debounce(() => loadAllContacts(), 250));
 }
 
 // ---------- init ----------
@@ -2029,6 +2044,9 @@ function init() {
         if (state.activeId === ev.id) openDetail(state.activeId);
       } else if (ev.type === 'contact_added' || ev.type === 'contact_updated' || ev.type === 'contact_deleted') {
         if (state.activeId === ev.company_id) openDetail(state.activeId);
+        if ($('#tab-contacts')?.classList.contains('active')) loadAllContacts();
+      } else if (ev.type === 'company_added') {
+        loadCompanies();
       } else if (ev.type === 'activity_added') {
         if (state.activeId === ev.company_id) openDetail(state.activeId);
       } else if (ev.type === 'company_done') {
@@ -2057,6 +2075,301 @@ function init() {
     } catch {}
   };
   state.sse = sse;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Contacts tab + manual Add Company / Add Contact
+// ═══════════════════════════════════════════════════════════════════
+
+function debounce(fn, ms = 250) {
+  let t = null;
+  return function(...args) {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, args), ms);
+  };
+}
+
+async function loadAllContacts() {
+  const q = ($('#contacts-search')?.value || '').trim();
+  const host = $('#contacts-list');
+  const empty = $('#contacts-empty');
+  if (!host) return;
+  try {
+    const url = q ? `/api/contacts?q=${encodeURIComponent(q)}` : '/api/contacts';
+    const res = await fetch(url);
+    if (!res.ok) {
+      host.innerHTML = '';
+      empty.hidden = false;
+      $('#contacts-count').textContent = '0 contacts';
+      return;
+    }
+    const data = await res.json();
+    const contacts = data.contacts || [];
+    state.allContacts = contacts;
+    renderContactsTab(contacts);
+  } catch (err) {
+    console.error('[contacts] load failed', err);
+    host.innerHTML = '';
+    empty.hidden = false;
+  }
+}
+
+function renderContactsTab(contacts) {
+  const host = $('#contacts-list');
+  const empty = $('#contacts-empty');
+  const count = $('#contacts-count');
+  count.textContent = `${contacts.length} contact${contacts.length === 1 ? '' : 's'}`;
+  if (contacts.length === 0) {
+    host.innerHTML = '';
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  host.innerHTML = contacts.map(renderContactRow).join('');
+  // Wire row actions
+  $$('.contact-row-company-link', host).forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const cid = el.dataset.companyId;
+      if (!cid) return;
+      // Switch to Companies tab and open detail panel
+      const companiesTab = document.querySelector('.tab[data-tab="companies"]');
+      if (companiesTab) companiesTab.click();
+      setTimeout(() => openDetail(cid), 50);
+    });
+  });
+  $$('.contact-row-edit', host).forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = el.dataset.contactId;
+      const contact = (state.allContacts || []).find((c) => c.id === id);
+      if (contact) openContactModal(contact);
+    });
+  });
+  $$('.contact-row-delete', host).forEach((el) => {
+    el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = el.dataset.contactId;
+      const name = el.dataset.name || 'this contact';
+      if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+      try {
+        const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          toast('Contact deleted', 'ok');
+          loadAllContacts();
+        } else {
+          toast('Failed to delete', 'error');
+        }
+      } catch { toast('Failed to delete', 'error'); }
+    });
+  });
+}
+
+function renderContactRow(c) {
+  const name = escapeHtml(c.name || 'Unnamed');
+  const title = c.title ? escapeHtml(c.title) : '';
+  const primary = c.is_primary ? '<span class="contact-row-primary-pill">Primary</span>' : '';
+  const phoneLink = c.phone ? `<a href="tel:${escapeHtml(c.phone)}">${escapeHtml(c.phone)}</a>` : '';
+  const emailLink = c.email ? `<a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>` : '';
+  const linkedinLink = c.linkedin ? `<a href="${escapeHtml(c.linkedin)}" target="_blank" rel="noopener">LinkedIn</a>` : '';
+  const contactInfo = [phoneLink, emailLink, linkedinLink].filter(Boolean).join('') ||
+    '<span style="color: rgba(13,27,42,0.35)">No contact info</span>';
+  const companyName = escapeHtml(c.company_name || 'No company linked');
+  const companyMeta = [c.company_city, c.company_state].filter(Boolean).map(escapeHtml).join(', ');
+  const companyLink = c.company_id
+    ? `<button type="button" class="contact-row-company-link" data-company-id="${escapeHtml(c.company_id)}" title="Open company">${companyName}</button>`
+    : `<span style="color: rgba(13,27,42,0.4)">${companyName}</span>`;
+  return `
+    <div class="contact-row">
+      <div class="contact-row-main">
+        <div class="contact-row-name">${name}${primary}</div>
+        ${title ? `<div class="contact-row-title">${title}</div>` : ''}
+      </div>
+      <div class="contact-row-contactinfo">${contactInfo}</div>
+      <div class="contact-row-company">
+        ${companyLink}
+        ${companyMeta ? `<div class="contact-row-company-meta">${companyMeta}</div>` : ''}
+      </div>
+      <div class="contact-row-actions">
+        <button type="button" class="contact-row-btn contact-row-edit" data-contact-id="${escapeHtml(c.id)}">Edit</button>
+        <button type="button" class="contact-row-btn danger contact-row-delete" data-contact-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name || '')}">Delete</button>
+      </div>
+    </div>
+  `;
+}
+
+// ─── Add Company modal ────────────────────────────────────────────
+function openCompanyModal() {
+  const modal = $('#company-modal');
+  if (!modal) return;
+  ['cm-name','cm-city','cm-state','cm-phone','cm-website','cm-owner','cm-email','cm-address','cm-linkedin'].forEach((id) => {
+    const el = $(`#${id}`);
+    if (el) el.value = '';
+  });
+  modal.hidden = false;
+  setTimeout(() => $('#cm-name')?.focus(), 50);
+}
+
+function closeCompanyModal() {
+  const modal = $('#company-modal');
+  if (modal) modal.hidden = true;
+}
+
+async function saveCompanyModal() {
+  const name = $('#cm-name').value.trim();
+  if (!name) { toast('Company name is required', 'error'); $('#cm-name')?.focus(); return; }
+  const body = {
+    name,
+    city: $('#cm-city').value.trim() || null,
+    state: $('#cm-state').value.trim().toUpperCase() || null,
+    phone: $('#cm-phone').value.trim() || null,
+    website: $('#cm-website').value.trim() || null,
+    owner: $('#cm-owner').value.trim() || null,
+    email: $('#cm-email').value.trim() || null,
+    address: $('#cm-address').value.trim() || null,
+    linkedin: $('#cm-linkedin').value.trim() || null,
+  };
+  try {
+    const res = await fetch('/api/companies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (res.status === 409) {
+      if (confirm(`A company named "${data.company_name}" already exists. Open it?`)) {
+        closeCompanyModal();
+        const companiesTab = document.querySelector('.tab[data-tab="companies"]');
+        if (companiesTab) companiesTab.click();
+        setTimeout(() => openDetail(data.company_id), 50);
+      }
+      return;
+    }
+    if (!res.ok) { toast(data.error || 'Failed to add company', 'error'); return; }
+    toast('Company added', 'ok');
+    closeCompanyModal();
+    await loadCompanies();
+    // Open new company's detail panel
+    const companiesTab = document.querySelector('.tab[data-tab="companies"]');
+    if (companiesTab) companiesTab.click();
+    setTimeout(() => openDetail(data.company.id), 50);
+  } catch (err) {
+    console.error(err);
+    toast('Failed to add company', 'error');
+  }
+}
+
+// ─── Add / Edit Contact modal ─────────────────────────────────────
+function openContactModal(contact = null) {
+  const modal = $('#contact-modal');
+  if (!modal) return;
+  state.editingContactId = contact?.id || null;
+  $('#contact-modal-title').textContent = contact ? 'Edit Contact' : 'Add Contact';
+  $('#ctm-name').value = contact?.name || '';
+  $('#ctm-title').value = contact?.title || '';
+  $('#ctm-phone').value = contact?.phone || '';
+  $('#ctm-email').value = contact?.email || '';
+  $('#ctm-linkedin').value = contact?.linkedin || '';
+  $('#ctm-notes').value = contact?.notes || '';
+  $('#ctm-primary').checked = !!contact?.is_primary;
+  $('#ctm-company-matches').innerHTML = '';
+  $('#ctm-company').value = '';
+  $('#ctm-company-id').value = '';
+  if (contact?.company_id) {
+    setContactModalCompany(contact.company_id, contact.company_name || '(company)');
+  } else {
+    clearContactModalCompany();
+  }
+  modal.hidden = false;
+  setTimeout(() => {
+    if (contact) $('#ctm-name')?.focus();
+    else $('#ctm-company')?.focus();
+  }, 50);
+}
+
+function closeContactModal() {
+  const modal = $('#contact-modal');
+  if (modal) modal.hidden = true;
+  state.editingContactId = null;
+}
+
+function setContactModalCompany(id, name) {
+  $('#ctm-company-id').value = id;
+  $('#ctm-company').hidden = true;
+  $('#ctm-company-matches').innerHTML = '';
+  const picked = $('#ctm-company-picked');
+  picked.hidden = false;
+  picked.innerHTML = `<span>${escapeHtml(name)}</span><button type="button" class="ctm-company-picked-clear" title="Change company">&times;</button>`;
+  picked.querySelector('.ctm-company-picked-clear').addEventListener('click', clearContactModalCompany);
+}
+
+function clearContactModalCompany() {
+  $('#ctm-company-id').value = '';
+  $('#ctm-company').hidden = false;
+  $('#ctm-company').value = '';
+  $('#ctm-company-picked').hidden = true;
+  $('#ctm-company-picked').innerHTML = '';
+  $('#ctm-company-matches').innerHTML = '';
+}
+
+function updateContactCompanyMatches() {
+  const q = $('#ctm-company').value.trim().toLowerCase();
+  const box = $('#ctm-company-matches');
+  if (!q || !state.companies) { box.innerHTML = ''; return; }
+  const matches = state.companies
+    .filter((c) => c.name.toLowerCase().includes(q))
+    .slice(0, 8);
+  box.innerHTML = matches
+    .map((c) => `<div class="cal-ev-match" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}${c.city ? ' — ' + escapeHtml(c.city) : ''}${c.state ? ', ' + escapeHtml(c.state) : ''}</div>`)
+    .join('');
+  $$('.cal-ev-match', box).forEach((el) => {
+    el.addEventListener('click', () => {
+      setContactModalCompany(el.dataset.id, el.dataset.name);
+    });
+  });
+}
+
+async function saveContactModal() {
+  const company_id = $('#ctm-company-id').value.trim();
+  const name = $('#ctm-name').value.trim();
+  if (!company_id) { toast('Please select a company', 'error'); $('#ctm-company')?.focus(); return; }
+  if (!name) { toast('Contact name is required', 'error'); $('#ctm-name')?.focus(); return; }
+  const body = {
+    company_id,
+    name,
+    title: $('#ctm-title').value.trim() || null,
+    phone: $('#ctm-phone').value.trim() || null,
+    email: $('#ctm-email').value.trim() || null,
+    linkedin: $('#ctm-linkedin').value.trim() || null,
+    is_primary: $('#ctm-primary').checked,
+    notes: $('#ctm-notes').value.trim() || null,
+  };
+  try {
+    let res;
+    if (state.editingContactId) {
+      res = await fetch(`/api/contacts/${state.editingContactId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } else {
+      res = await fetch('/api/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    }
+    const data = await res.json();
+    if (!res.ok) { toast(data.error || 'Failed to save contact', 'error'); return; }
+    toast(state.editingContactId ? 'Contact updated' : 'Contact added', 'ok');
+    closeContactModal();
+    loadAllContacts();
+    // Refresh open detail panel if it matches
+    if (state.activeId === company_id) openDetail(state.activeId);
+  } catch (err) {
+    console.error(err);
+    toast('Failed to save contact', 'error');
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
