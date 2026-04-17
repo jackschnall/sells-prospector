@@ -70,6 +70,13 @@ const {
   setUserConfig,
   // User stats (Phase 2)
   getUserStats,
+  // Soft-delete / restore
+  softDeleteCompany,
+  restoreCompany,
+  hardDeleteCompany,
+  restoreContact,
+  hardDeleteContact,
+  listDeleted,
   // Campaigns
   listCampaigns,
   getCampaign,
@@ -937,6 +944,42 @@ app.get('/tearsheet/:id', async (req, res) => {
   );
   res.set('Content-Type', 'text/html');
   res.send(filled);
+});
+
+// ---------- Recently Deleted ----------
+app.get('/api/deleted', requireUser, async (req, res) => {
+  const data = await listDeleted();
+  res.json(data);
+});
+
+app.delete('/api/companies/:id', requireUser, async (req, res) => {
+  const company = await getCompany(req.params.id);
+  if (!company) return res.status(404).json({ error: 'Not found' });
+  await softDeleteCompany(req.params.id);
+  emit({ type: 'company_deleted', id: req.params.id });
+  res.json({ ok: true });
+});
+
+app.post('/api/companies/:id/restore', requireUser, async (req, res) => {
+  await restoreCompany(req.params.id);
+  emit({ type: 'company_restored', id: req.params.id });
+  res.json({ ok: true });
+});
+
+app.post('/api/contacts/:id/restore', requireUser, async (req, res) => {
+  await restoreContact(req.params.id);
+  emit({ type: 'contact_restored' });
+  res.json({ ok: true });
+});
+
+app.delete('/api/deleted/companies/:id/permanent', requireAdmin, async (req, res) => {
+  await hardDeleteCompany(req.params.id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/deleted/contacts/:id/permanent', requireAdmin, async (req, res) => {
+  await hardDeleteContact(req.params.id);
+  res.json({ ok: true });
 });
 
 // ---------- Campaigns ----------

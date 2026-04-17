@@ -82,6 +82,7 @@
           <button type="button" class="tab" data-tab="campaigns" role="tab" data-requires-user="1" hidden>Campaigns</button>
           <button type="button" class="tab" data-tab="queue" role="tab" data-requires-user="1" hidden>Call Queue</button>
           <button type="button" class="tab" data-tab="calendar" role="tab" data-requires-user="1" hidden>Calendar</button>
+          <button type="button" class="tab" data-tab="deleted" role="tab" data-requires-user="1" hidden>Deleted</button>
           <button type="button" class="tab" data-tab="settings" role="tab" data-requires-user="1" data-requires-admin="1" hidden>Settings</button>
         </nav>
 
@@ -716,6 +717,25 @@
           <div class="cal-grid" id="cal-grid"></div>
         </div>
 
+        <!-- RECENTLY DELETED TAB -->
+        <div id="tab-deleted" class="tab-panel">
+          <div class="camp-header">
+            <h2 class="section-title">Recently Deleted</h2>
+          </div>
+          <div id="deleted-companies-section">
+            <h3 class="del-section-title">Companies</h3>
+            <div id="deleted-companies-list" class="del-list">
+              <div class="empty-msg">No deleted companies.</div>
+            </div>
+          </div>
+          <div id="deleted-contacts-section" style="margin-top:24px">
+            <h3 class="del-section-title">Contacts</h3>
+            <div id="deleted-contacts-list" class="del-list">
+              <div class="empty-msg">No deleted contacts.</div>
+            </div>
+          </div>
+        </div>
+
         <!-- SETTINGS TAB (Phase 2, admin) -->
         <div id="tab-settings" class="tab-panel">
           <div class="settings-header">
@@ -1005,6 +1025,8 @@
         <div class="detail-actions">
           <button type="button" class="btn-ghost" id="d-override">Research Anyway</button>
           <a class="btn-ghost" id="d-tearsheet" target="_blank" rel="noopener">Open Tearsheet</a>
+          <div style="flex:1"></div>
+          <button type="button" class="btn-ghost" id="d-delete-company" style="color:var(--red)">Delete Company</button>
         </div>
       </div>
     </aside>

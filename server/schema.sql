@@ -52,6 +52,12 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS contact_enrichment JSONB;
 -- Industry vertical
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS industry TEXT DEFAULT 'Plumbing';
 
+-- Soft-delete
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE contacts  ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_companies_deleted ON companies(deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_contacts_deleted  ON contacts(deleted_at) WHERE deleted_at IS NOT NULL;
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- Notes (legacy — new notes go to activities, kept for backward compat)
 -- ────────────────────────────────────────────────────────────────────────────

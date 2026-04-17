@@ -528,6 +528,7 @@ function bindTabs() {
       if (target === 'settings') loadSettings();
       if (target === 'contacts') loadAllContacts();
       if (target === 'campaigns') loadCampaignsList();
+      if (target === 'deleted') loadDeletedItems();
     });
   });
 }
@@ -1041,6 +1042,24 @@ function bindDetailActions() {
     await loadCompanies();
     openDetail(state.activeId);
     toast(override ? 'Will research despite CRM match' : 'CRM override removed', 'ok');
+  });
+
+  $('#d-delete-company')?.addEventListener('click', async () => {
+    if (!state.activeId) return;
+    const row = state.companies.find((c) => c.id === state.activeId);
+    const name = row?.name || 'this company';
+    if (!confirm(`Are you sure you want to delete "${name}"? It can be restored from the Deleted tab.`)) return;
+    try {
+      const res = await fetch(`/api/companies/${state.activeId}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast(`"${name}" moved to Recently Deleted`, 'ok');
+        closeDetail();
+        await loadCompanies();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast(data.error || 'Delete failed', 'error');
+      }
+    } catch { toast('Delete failed', 'error'); }
   });
 }
 
@@ -2835,6 +2854,82 @@ async function saveContactModal() {
     console.error(err);
     toast('Failed to save contact', 'error');
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Recently Deleted
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadDeletedItems() {
+  try {
+    const res = await fetch('/api/deleted');
+    if (!res.ok) return;
+    const { companies, contacts } = await res.json();
+    renderDeletedCompanies(companies || []);
+    renderDeletedContacts(contacts || []);
+  } catch {}
+}
+
+function renderDeletedCompanies(companies) {
+  const host = $('#deleted-companies-list');
+  if (!host) return;
+  if (!companies.length) {
+    host.innerHTML = '<div class="empty-msg">No deleted companies.</div>';
+    return;
+  }
+  host.innerHTML = companies.map((c) => {
+    const when = c.deleted_at ? new Date(c.deleted_at).toLocaleDateString() : '';
+    const loc = [c.city, c.state].filter(Boolean).join(', ');
+    return `
+    <div class="del-row">
+      <div class="del-info">
+        <div class="del-name">${escapeHtml(c.name)}</div>
+        <div class="del-meta">${escapeHtml(loc)}${c.owner ? ' · ' + escapeHtml(c.owner) : ''}${c.score ? ' · ' + Number(c.score).toFixed(1) : ''} · Deleted ${when}</div>
+      </div>
+      <button type="button" class="btn-primary btn-xs del-restore" data-type="company" data-id="${c.id}">Restore</button>
+    </div>`;
+  }).join('');
+  bindDeletedRestoreButtons(host);
+}
+
+function renderDeletedContacts(contacts) {
+  const host = $('#deleted-contacts-list');
+  if (!host) return;
+  if (!contacts.length) {
+    host.innerHTML = '<div class="empty-msg">No deleted contacts.</div>';
+    return;
+  }
+  host.innerHTML = contacts.map((c) => {
+    const when = c.deleted_at ? new Date(c.deleted_at).toLocaleDateString() : '';
+    return `
+    <div class="del-row">
+      <div class="del-info">
+        <div class="del-name">${escapeHtml(c.name)}${c.title ? ' — ' + escapeHtml(c.title) : ''}</div>
+        <div class="del-meta">${escapeHtml(c.company_name || 'No company')}${c.phone ? ' · ' + escapeHtml(c.phone) : ''} · Deleted ${when}</div>
+      </div>
+      <button type="button" class="btn-primary btn-xs del-restore" data-type="contact" data-id="${c.id}">Restore</button>
+    </div>`;
+  }).join('');
+  bindDeletedRestoreButtons(host);
+}
+
+function bindDeletedRestoreButtons(host) {
+  $$('.del-restore', host).forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const type = btn.dataset.type;
+      const id = btn.dataset.id;
+      try {
+        const res = await fetch(`/api/${type === 'company' ? 'companies' : 'contacts'}/${id}/restore`, { method: 'POST' });
+        if (res.ok) {
+          toast(`${type === 'company' ? 'Company' : 'Contact'} restored`, 'ok');
+          loadDeletedItems();
+          loadCompanies();
+          if ($('#tab-contacts')?.classList.contains('active')) loadAllContacts();
+        } else {
+          toast('Restore failed', 'error');
+        }
+      } catch { toast('Restore failed', 'error'); }
+    });
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

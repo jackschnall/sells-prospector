@@ -111,7 +111,7 @@ async function markCrmKnown(knownNames) {
 }
 
 async function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilter, outreachStatus, pipelineStage, industry } = {}) {
-  const where = [];
+  const where = ['deleted_at IS NULL'];
   const params = [];
   let idx = 1;
   if (tier) {
@@ -222,6 +222,39 @@ async function setOutreachStatus(id, outreachStatus) {
     "UPDATE companies SET outreach_status = $1, updated_at = NOW() WHERE id = $2",
     [outreachStatus, id]
   );
+}
+
+async function softDeleteCompany(id) {
+  await execute('UPDATE companies SET deleted_at = NOW() WHERE id = $1', [id]);
+  // Also soft-delete associated contacts
+  await execute('UPDATE contacts SET deleted_at = NOW() WHERE company_id = $1 AND deleted_at IS NULL', [id]);
+}
+
+async function restoreCompany(id) {
+  await execute('UPDATE companies SET deleted_at = NULL WHERE id = $1', [id]);
+  // Restore contacts that were soft-deleted at the same time
+  await execute('UPDATE contacts SET deleted_at = NULL WHERE company_id = $1 AND deleted_at IS NOT NULL', [id]);
+}
+
+async function hardDeleteCompany(id) {
+  await execute('DELETE FROM companies WHERE id = $1', [id]);
+}
+
+async function listDeleted() {
+  const companies = await query(
+    `SELECT id, name, city, state, score, tier, owner, industry, deleted_at
+     FROM companies WHERE deleted_at IS NOT NULL
+     ORDER BY deleted_at DESC`
+  );
+  const contacts = await query(
+    `SELECT ct.id, ct.name, ct.title, ct.phone, ct.email, ct.company_id,
+            c.name AS company_name, ct.deleted_at
+     FROM contacts ct
+     LEFT JOIN companies c ON c.id = ct.company_id
+     WHERE ct.deleted_at IS NOT NULL AND (c.deleted_at IS NULL OR c.id IS NULL)
+     ORDER BY ct.deleted_at DESC`
+  );
+  return { companies, contacts };
 }
 
 // ─── Notes (legacy) ──────────────────────────────────────────────────────────
@@ -415,7 +448,7 @@ async function getPipelineBoard() {
 
 async function listContacts(companyId) {
   return query(
-    'SELECT * FROM contacts WHERE company_id = $1 ORDER BY is_primary DESC, created_at ASC',
+    'SELECT * FROM contacts WHERE company_id = $1 AND deleted_at IS NULL ORDER BY is_primary DESC, created_at ASC',
     [companyId]
   );
 }
@@ -430,11 +463,13 @@ async function listAllContacts({ search = '', limit = 500, offset = 0 } = {}) {
   const s = String(search || '').trim();
   if (s) {
     params.push(`%${s.toLowerCase()}%`);
-    where = `WHERE LOWER(ct.name) LIKE $1
+    where = `WHERE ct.deleted_at IS NULL AND (LOWER(ct.name) LIKE $1
              OR LOWER(COALESCE(ct.title, '')) LIKE $1
              OR LOWER(COALESCE(ct.email, '')) LIKE $1
              OR LOWER(COALESCE(ct.phone, '')) LIKE $1
-             OR LOWER(COALESCE(c.name, '')) LIKE $1`;
+             OR LOWER(COALESCE(c.name, '')) LIKE $1)`;
+  } else {
+    where = 'WHERE ct.deleted_at IS NULL';
   }
   params.push(limit, offset);
   const limIdx = params.length - 1;
@@ -505,6 +540,14 @@ async function updateContact(id, data) {
 }
 
 async function deleteContact(id) {
+  await execute('UPDATE contacts SET deleted_at = NOW() WHERE id = $1', [id]);
+}
+
+async function restoreContact(id) {
+  await execute('UPDATE contacts SET deleted_at = NULL WHERE id = $1', [id]);
+}
+
+async function hardDeleteContact(id) {
   await execute('DELETE FROM contacts WHERE id = $1', [id]);
 }
 
@@ -1026,6 +1069,13 @@ module.exports = {
   setUserConfig,
   // User stats (Phase 2)
   getUserStats,
+  // Soft-delete / restore
+  softDeleteCompany,
+  restoreCompany,
+  hardDeleteCompany,
+  restoreContact,
+  hardDeleteContact,
+  listDeleted,
   // Campaigns
   listCampaigns,
   getCampaign,
