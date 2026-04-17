@@ -109,3 +109,20 @@ When asked to discover NEW companies:
 - `public/` — Frontend (vanilla HTML/CSS/JS)
 - `data/prospector.db` — Legacy SQLite database (kept for migration reference)
 - `data/p3-universe-names.json` — P3 exclusion list (1,443 names)
+- `server/twilio.js` — Telephony routes (mock-first, live Twilio when keys set)
+- `server/transcription.js` — Whisper wrapper (mock transcript or live OpenAI)
+- `server/call-analyzer.js` — Claude-powered call intelligence + debrief questions
+- `server/call-queue.js` — Priority queue algorithm (5 ranked buckets)
+- `server/debrief.js` — Debrief draft/submit helpers
+- `server/mock-transcripts.js` — 10 canned call transcripts for dev/testing
+- `server/auth.js` — Role enforcement + auto-promote first user to admin
+
+## Phase 2 Telephony
+
+**Mock vs Live:** controlled by `TWILIO_ACCOUNT_SID` env var (absent = mock) or `MOCK_CALLS=1`.
+- Mock: frontend simulates call duration, backend uses canned transcript → analysis → debrief
+- Live: browser Voice SDK connects via TwiML app, Twilio records, Whisper transcribes, Claude analyzes
+
+**Live Twilio setup:** set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY`, `TWILIO_API_SECRET`, `TWILIO_TWIML_APP_SID`, `TWILIO_PHONE_NUMBER`, `PUBLIC_URL` in env. TwiML app voice URL must point to `PUBLIC_URL/api/twilio/voice`.
+
+**Live Whisper:** set `OPENAI_API_KEY` in env. Falls back to empty transcript if missing.

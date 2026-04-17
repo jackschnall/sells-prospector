@@ -13,6 +13,8 @@ const state = {
   // Phase 2
   user: null,
   twilioStatus: null,
+  twilioDevice: null,
+  twilioActiveCall: null,
   queue: [],
   queuePins: [],
   queueActiveId: null,
@@ -1224,7 +1226,43 @@ async function loadTwilioStatus() {
     state.twilioStatus = await res.json();
     const badge = $('#queue-mock-badge');
     if (badge) badge.hidden = !state.twilioStatus.mock;
+    // Initialize Twilio Voice Device for live mode
+    if (!state.twilioStatus.mock && typeof Twilio !== 'undefined') {
+      initTwilioDevice();
+    }
   } catch {}
+}
+
+async function initTwilioDevice() {
+  if (state.twilioDevice) return; // already initialized
+  try {
+    const res = await fetch('/api/twilio/token', { method: 'POST' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.mock || !data.token) return;
+    const device = new Twilio.Device(data.token, {
+      codecPreferences: ['opus', 'pcmu'],
+      closeProtection: true,
+    });
+    device.on('registered', () => console.log('[twilio] Device registered'));
+    device.on('error', (err) => {
+      console.error('[twilio] Device error:', err.message);
+      toast('Phone connection error: ' + err.message, 'error');
+    });
+    device.on('tokenWillExpire', async () => {
+      try {
+        const r = await fetch('/api/twilio/token', { method: 'POST' });
+        if (r.ok) {
+          const d = await r.json();
+          if (d.token) device.updateToken(d.token);
+        }
+      } catch {}
+    });
+    device.register();
+    state.twilioDevice = device;
+  } catch (err) {
+    console.error('[twilio] Device init failed:', err.message);
+  }
 }
 
 // ---------- Pending debrief banner ----------
@@ -1426,6 +1464,79 @@ function selectQueueRow(id) {
   $('#qp-call-btn').disabled = !row.phone;
   $('#qp-call-active').hidden = true;
   $('#qp-processing').hidden = true;
+
+  // Load notes for this company
+  loadQueueNotes(id);
+}
+
+// ---------- Queue panel — inline notes ----------
+async function loadQueueNotes(companyId) {
+  const host = $('#qp-notes-list');
+  const count = $('#qp-notes-count');
+  const ta = $('#qp-notes-input');
+  if (ta) ta.value = '';
+  if (!host) return;
+  try {
+    const res = await fetch(`/api/companies/${companyId}/notes`);
+    if (!res.ok) { host.innerHTML = ''; if (count) count.textContent = '0'; return; }
+    const { notes } = await res.json();
+    if (count) count.textContent = String(notes.length);
+    if (!notes.length) {
+      host.innerHTML = '<div class="d-notes-empty">No notes yet.</div>';
+      return;
+    }
+    host.innerHTML = notes.map((n) => {
+      const ts = n.created_at ? new Date(n.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+      return `
+      <div class="d-note-item">
+        <div class="d-note-body">${escapeHtml(n.note || '')}</div>
+        ${ts ? `<div class="d-note-meta">${escapeHtml(ts)}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch {
+    host.innerHTML = '';
+  }
+}
+
+function insertQueueNoteTimestamp() {
+  const ta = $('#qp-notes-input');
+  if (!ta) return;
+  const prefix = formatStampPrefix();
+  const pos = ta.selectionStart ?? ta.value.length;
+  const before = ta.value.slice(0, pos);
+  const after = ta.value.slice(ta.selectionEnd ?? pos);
+  const needsNewline = before.length > 0 && !before.endsWith('\n');
+  const insert = (needsNewline ? '\n' : '') + prefix;
+  ta.value = before + insert + after;
+  const newPos = before.length + insert.length;
+  ta.setSelectionRange(newPos, newPos);
+  ta.focus();
+}
+
+async function saveQueueNote() {
+  const companyId = state.queueActiveId;
+  if (!companyId) return;
+  const ta = $('#qp-notes-input');
+  if (!ta) return;
+  const note = ta.value.trim();
+  if (!note) { toast('Write a note first', 'error'); return; }
+  try {
+    const res = await fetch(`/api/companies/${companyId}/notes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ note }),
+    });
+    if (res.ok) {
+      ta.value = '';
+      toast('Note saved', 'ok');
+      loadQueueNotes(companyId);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast(data.error || 'Failed to save note', 'error');
+    }
+  } catch {
+    toast('Failed to save note', 'error');
+  }
 }
 
 async function startQueueCall() {
@@ -1450,11 +1561,48 @@ async function startQueueCall() {
     const data = await res.json();
     state.queueCallLogId = data.call_log_id;
     state.queueCallStart = Date.now();
+
+    // Live Twilio — place call via browser Voice SDK
+    if (!data.mock && state.twilioDevice) {
+      try {
+        const call = await state.twilioDevice.connect({
+          params: {
+            To: data.to || row.phone,
+            callLogId: data.call_log_id,
+          },
+        });
+        state.twilioActiveCall = call;
+        call.on('ringing', () => {
+          $('#qp-call-status').textContent = 'Ringing…';
+        });
+        call.on('accept', () => {
+          $('#qp-call-status').textContent = 'Connected';
+          $('#qp-mute-btn').hidden = false;
+        });
+        call.on('disconnect', () => {
+          onCallEnded();
+        });
+        call.on('cancel', () => {
+          onCallEnded();
+        });
+        call.on('error', (err) => {
+          console.error('[twilio] Call error:', err.message);
+          toast('Call error: ' + err.message, 'error');
+          onCallEnded();
+        });
+      } catch (err) {
+        toast('Voice SDK connect failed: ' + err.message, 'error');
+        $('#qp-call-btn').hidden = false;
+        $('#qp-call-active').hidden = true;
+        return;
+      }
+    }
+
     clearInterval(state.queueCallTimer);
     state.queueCallTimer = setInterval(() => {
       const secs = Math.floor((Date.now() - state.queueCallStart) / 1000);
       $('#qp-timer').textContent = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
-      if (secs > 2) $('#qp-call-status').textContent = 'Connected';
+      if (data.mock && secs > 2) $('#qp-call-status').textContent = 'Connected';
     }, 500);
   } catch (err) {
     toast('Call failed: ' + err.message, 'error');
@@ -1463,11 +1611,28 @@ async function startQueueCall() {
   }
 }
 
+function onCallEnded() {
+  clearInterval(state.queueCallTimer);
+  state.twilioActiveCall = null;
+  $('#qp-mute-btn').hidden = true;
+  $('#qp-call-active').hidden = true;
+  $('#qp-processing').hidden = false;
+  if (state.queueCallLogId) pollForDebrief(state.queueCallLogId);
+}
+
+function toggleMute() {
+  const call = state.twilioActiveCall;
+  if (!call) return;
+  const muted = call.isMuted();
+  call.mute(!muted);
+  const btn = $('#qp-mute-btn');
+  btn.textContent = muted ? 'Mute' : 'Unmute';
+  btn.classList.toggle('active', !muted);
+}
+
 async function endQueueCall() {
   clearInterval(state.queueCallTimer);
   const durationSec = Math.max(5, Math.floor((Date.now() - state.queueCallStart) / 1000));
-  $('#qp-call-active').hidden = true;
-  $('#qp-processing').hidden = false;
 
   if (!state.queueCallLogId) {
     $('#qp-processing').hidden = true;
@@ -1475,6 +1640,15 @@ async function endQueueCall() {
     return;
   }
 
+  // Live Twilio — disconnect the Voice SDK call (triggers onCallEnded via 'disconnect' event)
+  if (state.twilioActiveCall) {
+    state.twilioActiveCall.disconnect();
+    return; // onCallEnded handles the rest
+  }
+
+  // Mock mode — manual flow
+  $('#qp-call-active').hidden = true;
+  $('#qp-processing').hidden = false;
   if (state.twilioStatus?.mock) {
     try {
       await fetch('/api/twilio/mock-complete', {
@@ -2082,6 +2256,9 @@ function bindPhase2() {
   $('#queue-refresh')?.addEventListener('click', loadQueue);
   $('#qp-call-btn')?.addEventListener('click', startQueueCall);
   $('#qp-end-btn')?.addEventListener('click', endQueueCall);
+  $('#qp-mute-btn')?.addEventListener('click', toggleMute);
+  $('#qp-notes-stamp')?.addEventListener('click', insertQueueNoteTimestamp);
+  $('#qp-notes-save')?.addEventListener('click', saveQueueNote);
 
   $('#debrief-submit')?.addEventListener('click', submitDebrief);
   $('#debrief-draft-btn')?.addEventListener('click', saveDebriefAndClose);

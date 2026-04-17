@@ -571,12 +571,27 @@
                   <div class="qp-call-active" id="qp-call-active" hidden>
                     <div class="qp-timer" id="qp-timer">00:00</div>
                     <div class="qp-call-status" id="qp-call-status">Ringing&hellip;</div>
-                    <button type="button" class="qp-end-btn" id="qp-end-btn">End Call</button>
+                    <div class="qp-call-controls">
+                      <button type="button" class="qp-mute-btn" id="qp-mute-btn" hidden title="Mute">Mute</button>
+                      <button type="button" class="qp-end-btn" id="qp-end-btn">End Call</button>
+                    </div>
                   </div>
                   <div class="qp-processing" id="qp-processing" hidden>
                     <div class="qp-spinner"></div>
                     <div class="qp-processing-text">Processing call&hellip; analyzing transcript.</div>
                   </div>
+                </div>
+                <div class="qp-notes">
+                  <div class="qp-section-title">Notes <span class="d-section-count" id="qp-notes-count">0</span></div>
+                  <div class="qp-notes-compose">
+                    <textarea id="qp-notes-input" class="cf-input d-notes-input" placeholder="Write a note&hellip;" rows="3"></textarea>
+                    <div class="d-notes-actions">
+                      <button type="button" class="btn-ghost btn-xs" id="qp-notes-stamp" title="Insert date/time + your initials">&#9654; Timestamp</button>
+                      <div class="d-notes-spacer"></div>
+                      <button type="button" class="btn-primary btn-xs" id="qp-notes-save">Save</button>
+                    </div>
+                  </div>
+                  <div id="qp-notes-list" class="d-notes-list"></div>
                 </div>
               </div>
             </aside>
@@ -972,6 +987,8 @@
       </div>
     </div>
 
-    <script src="/app.js?v=20260415g"></script>
+    <!-- Twilio Voice SDK v2 (browser-based calling) -->
+    <script src="https://sdk.twilio.com/js/client/releases/2.7.2/twilio.min.js"></script>
+    <script src="/app.js?v=20260416a"></script>
   </body>
 </html>

@@ -232,6 +232,11 @@ app.post('/api/companies/:id/outreach', async (req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/companies/:id/notes', async (req, res) => {
+  const notes = await getNotes(req.params.id);
+  res.json({ notes });
+});
+
 app.post('/api/companies/:id/notes', async (req, res) => {
   const { note } = req.body || {};
   if (!note || !String(note).trim()) return res.status(400).json({ error: 'Empty note' });

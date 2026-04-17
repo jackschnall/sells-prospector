@@ -95,36 +95,35 @@ function registerRoutes(app) {
       return res.json({ ok: true, call_log_id: callLogId, mock: true, call_sid: mockSid('CA') });
     }
 
-    // Live Twilio call
-    try {
-      const publicUrl = process.env.PUBLIC_URL;
-      if (!publicUrl) throw new Error('PUBLIC_URL env var required for Twilio webhooks');
-      const call = await twilioClient().calls.create({
-        to: to || company.phone,
-        from: process.env.TWILIO_PHONE_NUMBER,
-        url: `${publicUrl}/api/twilio/voice?call_log_id=${callLogId}`,
-        statusCallback: `${publicUrl}/api/twilio/call-status`,
-        statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
-        record: true,
-        recordingStatusCallback: `${publicUrl}/api/twilio/recording-status`,
-        recordingStatusCallbackEvent: ['completed'],
-      });
-      await updateCallLog(callLogId, { call_sid: call.sid, status: call.status });
-      emit({ type: 'call_started', call_log_id: callLogId, company_id, mock: false });
-      res.json({ ok: true, call_log_id: callLogId, call_sid: call.sid, mock: false });
-    } catch (err) {
-      await updateCallLog(callLogId, { status: 'failed', notes: err.message });
-      res.status(500).json({ error: 'Call placement failed', details: err.message });
-    }
+    // Live Twilio — browser Voice SDK places the call via device.connect().
+    // We just create the call_log; the TwiML webhook bridges to the target number.
+    emit({ type: 'call_started', call_log_id: callLogId, company_id, mock: false });
+    res.json({ ok: true, call_log_id: callLogId, to: to || company.phone, mock: false });
   });
 
-  // POST /api/twilio/voice — TwiML webhook Twilio hits when the outbound call connects
-  app.post('/api/twilio/voice', express_urlencoded(), (req, res) => {
-    const to = req.query.to || req.body?.To || '';
+  // POST /api/twilio/voice — TwiML webhook Twilio hits when browser SDK connects
+  app.post('/api/twilio/voice', express_urlencoded(), async (req, res) => {
+    const to = req.body?.To || req.query.to || '';
+    const callLogId = req.body?.callLogId || req.query.callLogId || '';
+    const callSid = req.body?.CallSid || '';
+
+    // Link this Twilio CallSid to our internal call_log row
+    if (callLogId && callSid) {
+      updateCallLog(callLogId, { call_sid: callSid, status: 'ringing' }).catch((err) => {
+        console.error('[twilio/voice] Failed to store call_sid:', err.message);
+      });
+    }
+
+    const publicUrl = process.env.PUBLIC_URL || '';
+    const recordingCb = publicUrl ? `${publicUrl}/api/twilio/recording-status` : '/api/twilio/recording-status';
+    const statusCb = publicUrl ? `${publicUrl}/api/twilio/call-status` : '/api/twilio/call-status';
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial record="record-from-answer" recordingStatusCallback="/api/twilio/recording-status" recordingStatusCallbackEvent="completed">
-    <Number>${to}</Number>
+  <Dial record="record-from-answer"
+        recordingStatusCallback="${recordingCb}"
+        recordingStatusCallbackEvent="completed"
+        action="${statusCb}">
+    <Number statusCallback="${statusCb}" statusCallbackEvent="initiated ringing answered completed">${to}</Number>
   </Dial>
 </Response>`;
     res.set('Content-Type', 'text/xml').send(twiml);
