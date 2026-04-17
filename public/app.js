@@ -649,7 +649,15 @@ function renderDetail(data) {
 
   // Sources
   $('#d-sources').innerHTML = sources.length
-    ? sources.map((s) => `<a class="source-chip" href="${escapeHtml(s.url || '#')}" target="_blank" rel="noopener">${escapeHtml(s.title || s.url || 'source')}</a>`).join('')
+    ? sources.map((s) => {
+        // Sources may be { url, title }, { label, url }, or plain strings
+        const src = typeof s === 'string' ? { url: s, title: s } : s;
+        const url = src.url || '';
+        const label = src.title || src.label || (url ? new URL(url, 'https://x').hostname.replace('www.', '') : 'source');
+        return url && url !== '#'
+          ? `<a class="source-chip" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`
+          : `<span class="source-chip">${escapeHtml(label)}</span>`;
+      }).join('')
     : '<div class="sb-hint">No sources recorded.</div>';
 
   // Activities
