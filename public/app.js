@@ -331,9 +331,11 @@ function renderPipelineBoard() {
   const stages = state.pipelineStages;
   if (!stages.length) { host.innerHTML = '<div class="dash-empty">Loading pipeline stages...</div>'; return; }
 
+  const tierFilter = state.filter.tier || '';
   let totalCount = 0;
   host.innerHTML = stages.map((s) => {
-    const companies = state.pipelineBoard[s.key] || [];
+    const all = state.pipelineBoard[s.key] || [];
+    const companies = tierFilter ? all.filter((c) => c.tier === tierFilter) : all;
     totalCount += companies.length;
     return `
       <div class="kanban-col" data-stage="${s.key}">
@@ -931,6 +933,7 @@ function bindToolbar() {
       chip.classList.add('active');
       state.filter.tier = chip.dataset.tier;
       loadCompanies();
+      renderPipelineBoard();
     });
   });
   $('#hide-crm').addEventListener('change', (e) => {
