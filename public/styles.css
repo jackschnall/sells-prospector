@@ -574,6 +574,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.industry-filter-dropdown[hidden] { display: none !important; }
 .industry-filter-dropdown {
   position: absolute;
   top: calc(100% + 4px);
