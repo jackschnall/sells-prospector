@@ -222,3 +222,35 @@ CREATE TABLE IF NOT EXISTS queue_skips (
   skipped_on DATE NOT NULL DEFAULT CURRENT_DATE,
   PRIMARY KEY (user_id, company_id, skipped_on)
 );
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Email Campaigns
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS campaigns (
+  id               TEXT PRIMARY KEY,
+  name             TEXT NOT NULL,
+  subject_template TEXT NOT NULL DEFAULT '',
+  body_template    TEXT NOT NULL DEFAULT '',
+  status           TEXT DEFAULT 'draft',  -- draft | ready | sending | sent
+  created_by       TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW(),
+  sent_at          TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS campaign_recipients (
+  id            TEXT PRIMARY KEY,
+  campaign_id   TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  company_id    TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  to_email      TEXT,
+  merged_subject TEXT,
+  merged_body   TEXT,
+  status        TEXT DEFAULT 'pending',  -- pending | sent | failed | skipped
+  error_message TEXT,
+  sent_at       TIMESTAMPTZ,
+  UNIQUE (campaign_id, company_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
+CREATE INDEX IF NOT EXISTS idx_campaign_recip_campaign ON campaign_recipients(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_campaign_recip_company  ON campaign_recipients(company_id);

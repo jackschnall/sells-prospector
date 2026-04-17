@@ -523,6 +523,7 @@ function bindTabs() {
       if (target === 'calendar') loadCalendar();
       if (target === 'settings') loadSettings();
       if (target === 'contacts') loadAllContacts();
+      if (target === 'campaigns') loadCampaignsList();
     });
   });
 }
@@ -1712,6 +1713,17 @@ function renderDebriefModal() {
   const d = state.debriefCall;
   if (!d) return;
 
+  // Disposition dropdown — auto-detect No Answer from AI sentiment
+  const disp = $('#debrief-disposition');
+  if (disp) {
+    if (d.sentiment === 'No Answer') {
+      disp.value = 'no_answer_no_vm';
+    } else {
+      disp.value = 'answered';
+    }
+    updateDebriefDisposition();
+  }
+
   // Summary block
   const summary = d.ai_summary || {};
   const bullets = Array.isArray(summary.bullets) ? summary.bullets : [];
@@ -1760,9 +1772,40 @@ function renderDebriefModal() {
   validateDebriefForm();
 }
 
+function updateDebriefDisposition() {
+  const disp = $('#debrief-disposition')?.value || 'answered';
+  const vmSection = $('#debrief-vm-section');
+  const answeredSection = $('#debrief-answered-section');
+  if (disp === 'answered') {
+    if (vmSection) vmSection.hidden = true;
+    if (answeredSection) answeredSection.hidden = false;
+  } else if (disp === 'no_answer_left_vm') {
+    if (vmSection) vmSection.hidden = false;
+    if (answeredSection) answeredSection.hidden = true;
+  } else {
+    // no_answer_no_vm
+    if (vmSection) vmSection.hidden = true;
+    if (answeredSection) answeredSection.hidden = true;
+  }
+  validateDebriefForm();
+}
+
 function validateDebriefForm() {
   const d = state.debriefCall;
   if (!d) return;
+  const disp = $('#debrief-disposition')?.value || 'answered';
+  if (disp === 'no_answer_no_vm') {
+    // No requirements — can submit immediately
+    $('#debrief-submit').disabled = false;
+    return;
+  }
+  if (disp === 'no_answer_left_vm') {
+    // Need at least 10 chars describing the VM
+    const vmNote = ($('#debrief-vm-note')?.value || '').trim();
+    $('#debrief-submit').disabled = vmNote.length < 10;
+    return;
+  }
+  // answered — normal Q&A validation
   const minLen = d.min_answer_len || 10;
   const tas = $$('.debrief-q-textarea');
   const allValid = tas.length > 0 && tas.every((ta) => ta.value.trim().length >= minLen);
@@ -1796,12 +1839,24 @@ async function saveDebriefDraftNow() {
 async function submitDebrief() {
   const d = state.debriefCall;
   if (!d) return;
-  const answers = collectDebriefAnswers();
+  const disp = $('#debrief-disposition')?.value || 'answered';
+  const payload = { disposition: disp };
+  if (disp === 'no_answer_no_vm') {
+    payload.answers = [{ question: 'Call outcome', answer: 'No answer — did not leave a voicemail' }];
+  } else if (disp === 'no_answer_left_vm') {
+    const vmNote = ($('#debrief-vm-note')?.value || '').trim();
+    payload.answers = [
+      { question: 'Call outcome', answer: 'No answer — left a voicemail' },
+      { question: 'Voicemail summary', answer: vmNote },
+    ];
+  } else {
+    payload.answers = collectDebriefAnswers();
+  }
   try {
     const res = await fetch(`/api/calls/${d.id}/debrief`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ answers }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -2262,6 +2317,8 @@ function bindPhase2() {
 
   $('#debrief-submit')?.addEventListener('click', submitDebrief);
   $('#debrief-draft-btn')?.addEventListener('click', saveDebriefAndClose);
+  $('#debrief-disposition')?.addEventListener('change', updateDebriefDisposition);
+  $('#debrief-vm-note')?.addEventListener('input', validateDebriefForm);
   $('#debrief-banner-resume')?.addEventListener('click', resumeOldestDebrief);
   $('#debrief-banner-dismiss')?.addEventListener('click', dismissOldestDebrief);
 
@@ -2335,6 +2392,7 @@ function init() {
 
   // Phase 2 bootstrap
   bindPhase2();
+  initCampaignBindings();
   loadCurrentUser()
     .then(() => { if (state.user) return refreshPendingDebriefs(); })
     .then(() => loadTwilioStatus());
@@ -2688,6 +2746,329 @@ async function saveContactModal() {
     console.error(err);
     toast('Failed to save contact', 'error');
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Campaigns
+// ─────────────────────────────────────────────────────────────────────────────
+const campState = {
+  campaigns: [],
+  activeCampaignId: null,
+  campaign: null,
+  recipients: [],
+  searchResults: [],
+  previewData: [],
+  previewIdx: 0,
+  searchDebounce: null,
+};
+
+async function loadCampaignsList() {
+  try {
+    const res = await fetch('/api/campaigns');
+    if (!res.ok) return;
+    const { campaigns } = await res.json();
+    campState.campaigns = campaigns;
+    renderCampaignsList();
+  } catch {}
+}
+
+function renderCampaignsList() {
+  const host = $('#camp-list');
+  if (!host) return;
+  if (!campState.campaigns.length) {
+    host.innerHTML = '<div class="empty-msg">No campaigns yet. Create one to get started.</div>';
+    return;
+  }
+  host.innerHTML = campState.campaigns.map((c) => {
+    const date = c.created_at ? new Date(c.created_at).toLocaleDateString() : '';
+    return `
+    <div class="camp-card" data-id="${c.id}">
+      <div class="camp-card-name">${escapeHtml(c.name)}</div>
+      <div class="camp-card-meta">${c.recipient_count || 0} recipients${date ? ' &middot; ' + date : ''}</div>
+      <span class="camp-card-status ${c.status || 'draft'}">${c.status || 'draft'}</span>
+    </div>`;
+  }).join('');
+  $$('.camp-card', host).forEach((el) => {
+    el.addEventListener('click', () => openCampaignEditor(el.dataset.id));
+  });
+}
+
+async function createNewCampaign() {
+  try {
+    const res = await fetch('/api/campaigns', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Untitled Campaign' }),
+    });
+    if (!res.ok) { toast('Failed to create campaign', 'error'); return; }
+    const { id } = await res.json();
+    await loadCampaignsList();
+    openCampaignEditor(id);
+  } catch { toast('Failed to create campaign', 'error'); }
+}
+
+async function openCampaignEditor(id) {
+  campState.activeCampaignId = id;
+  try {
+    const res = await fetch(`/api/campaigns/${id}`);
+    if (!res.ok) { toast('Campaign not found', 'error'); return; }
+    const data = await res.json();
+    campState.campaign = data.campaign;
+    campState.recipients = data.recipients;
+  } catch { toast('Failed to load campaign', 'error'); return; }
+
+  $('#camp-list-view').hidden = true;
+  $('#camp-editor-view').hidden = false;
+  $('#camp-name').value = campState.campaign.name || '';
+  $('#camp-subject').value = campState.campaign.subject_template || '';
+  $('#camp-body').value = campState.campaign.body_template || '';
+  const pill = $('#camp-status-pill');
+  pill.textContent = campState.campaign.status || 'draft';
+  pill.className = 'camp-status-pill ' + (campState.campaign.status || 'draft');
+
+  renderCampaignRecipients();
+  populateCampStateFilter();
+  campSearchCompanies();
+}
+
+function closeCampaignEditor() {
+  $('#camp-list-view').hidden = false;
+  $('#camp-editor-view').hidden = true;
+  campState.activeCampaignId = null;
+  campState.campaign = null;
+  campState.recipients = [];
+  loadCampaignsList();
+}
+
+async function saveCampaignDraft() {
+  if (!campState.activeCampaignId) return;
+  const name = $('#camp-name').value.trim();
+  if (!name) { toast('Name required', 'error'); return; }
+  try {
+    await fetch(`/api/campaigns/${campState.activeCampaignId}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        subject_template: $('#camp-subject').value,
+        body_template: $('#camp-body').value,
+      }),
+    });
+    toast('Campaign saved', 'ok');
+  } catch { toast('Save failed', 'error'); }
+}
+
+async function deleteCampaignAction() {
+  if (!campState.activeCampaignId) return;
+  if (!confirm('Delete this campaign?')) return;
+  try {
+    await fetch(`/api/campaigns/${campState.activeCampaignId}`, { method: 'DELETE' });
+    toast('Campaign deleted', 'ok');
+    closeCampaignEditor();
+  } catch { toast('Delete failed', 'error'); }
+}
+
+function renderCampaignRecipients() {
+  const list = $('#camp-selected-list');
+  const count = $('#camp-selected-count');
+  const rcount = $('#camp-recip-count');
+  if (count) count.textContent = campState.recipients.length;
+  if (rcount) rcount.textContent = campState.recipients.length;
+  if (!list) return;
+  if (!campState.recipients.length) {
+    list.innerHTML = '<div class="empty-msg" style="font-size:0.82rem">No companies selected yet.</div>';
+    return;
+  }
+  list.innerHTML = campState.recipients.map((r) => `
+    <span class="camp-selected-chip" data-company-id="${r.company_id}">
+      ${escapeHtml(r.company_name)}
+      <span class="camp-chip-x" title="Remove">&times;</span>
+    </span>
+  `).join('');
+  $$('.camp-chip-x', list).forEach((x) => {
+    x.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const companyId = x.closest('.camp-selected-chip').dataset.companyId;
+      await removeCampaignRecipientAction(companyId);
+    });
+  });
+  // Also refresh checkboxes in search results
+  refreshCampCheckboxes();
+}
+
+async function removeCampaignRecipientAction(companyId) {
+  if (!campState.activeCampaignId) return;
+  try {
+    await fetch(`/api/campaigns/${campState.activeCampaignId}/recipients/${companyId}`, { method: 'DELETE' });
+    campState.recipients = campState.recipients.filter((r) => r.company_id !== companyId);
+    renderCampaignRecipients();
+  } catch {}
+}
+
+async function campSearchCompanies() {
+  const q = $('#camp-search')?.value || '';
+  const tier = $('#camp-tier-filter')?.value || '';
+  const stateVal = $('#camp-state-filter')?.value || '';
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (tier) params.set('tier', tier);
+  if (stateVal) params.set('state', stateVal);
+  if (campState.activeCampaignId) params.set('exclude_campaign', campState.activeCampaignId);
+  try {
+    const res = await fetch(`/api/campaigns/search/companies?${params}`);
+    if (!res.ok) return;
+    const { companies } = await res.json();
+    campState.searchResults = companies;
+    renderCampSearchResults();
+  } catch {}
+}
+
+function renderCampSearchResults() {
+  const host = $('#camp-company-list');
+  if (!host) return;
+  const recipIds = new Set(campState.recipients.map((r) => r.company_id));
+  if (!campState.searchResults.length) {
+    host.innerHTML = '<div class="empty-msg" style="padding:12px">No companies found.</div>';
+    return;
+  }
+  host.innerHTML = campState.searchResults.map((c) => {
+    const checked = recipIds.has(c.id);
+    const meta = [c.city, c.state].filter(Boolean).join(', ');
+    return `
+    <label class="camp-company-row${checked ? ' checked' : ''}" data-id="${c.id}">
+      <input type="checkbox" ${checked ? 'checked' : ''} />
+      <div class="camp-company-name">${escapeHtml(c.name)}</div>
+      ${c.owner ? `<div class="camp-company-meta">${escapeHtml(c.owner)}</div>` : ''}
+      ${meta ? `<div class="camp-company-meta">${escapeHtml(meta)}</div>` : ''}
+      ${c.score != null ? `<div class="camp-company-score">${Number(c.score).toFixed(1)}</div>` : ''}
+    </label>`;
+  }).join('');
+  $$('.camp-company-row input[type="checkbox"]', host).forEach((cb) => {
+    cb.addEventListener('change', async () => {
+      const row = cb.closest('.camp-company-row');
+      const companyId = row.dataset.id;
+      if (cb.checked) {
+        await addCampaignRecipientAction([companyId]);
+        row.classList.add('checked');
+      } else {
+        await removeCampaignRecipientAction(companyId);
+        row.classList.remove('checked');
+      }
+    });
+  });
+}
+
+function refreshCampCheckboxes() {
+  const recipIds = new Set(campState.recipients.map((r) => r.company_id));
+  $$('.camp-company-row', $('#camp-company-list')).forEach((row) => {
+    const cb = row.querySelector('input[type="checkbox"]');
+    if (!cb) return;
+    const checked = recipIds.has(row.dataset.id);
+    cb.checked = checked;
+    row.classList.toggle('checked', checked);
+  });
+}
+
+async function addCampaignRecipientAction(companyIds) {
+  if (!campState.activeCampaignId) return;
+  try {
+    await fetch(`/api/campaigns/${campState.activeCampaignId}/recipients`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ company_ids: companyIds }),
+    });
+    // Reload recipients
+    const res = await fetch(`/api/campaigns/${campState.activeCampaignId}`);
+    if (res.ok) {
+      const data = await res.json();
+      campState.recipients = data.recipients;
+      renderCampaignRecipients();
+    }
+  } catch {}
+}
+
+function populateCampStateFilter() {
+  const sel = $('#camp-state-filter');
+  if (!sel) return;
+  const current = sel.value;
+  // Get unique states from existing companies data
+  const states = [...new Set(state.companies.map((c) => c.state).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All states</option>' +
+    states.map((s) => `<option value="${s}"${s === current ? ' selected' : ''}>${s}</option>`).join('');
+}
+
+// Merge field click-to-insert
+function bindMergeFieldClicks() {
+  $$('.camp-merge-hint code').forEach((el) => {
+    el.addEventListener('click', () => {
+      const field = el.textContent;
+      // Insert into whichever field was last focused, default to body
+      const body = $('#camp-body');
+      const subj = $('#camp-subject');
+      const target = document.activeElement === subj ? subj : body;
+      const pos = target.selectionStart ?? target.value.length;
+      const before = target.value.slice(0, pos);
+      const after = target.value.slice(target.selectionEnd ?? pos);
+      target.value = before + field + after;
+      target.setSelectionRange(pos + field.length, pos + field.length);
+      target.focus();
+    });
+  });
+}
+
+// Preview
+async function openCampaignPreview() {
+  await saveCampaignDraft();
+  if (!campState.recipients.length) {
+    toast('Add recipients first', 'error');
+    return;
+  }
+  try {
+    const res = await fetch(`/api/campaigns/${campState.activeCampaignId}/preview`);
+    if (!res.ok) { toast('Preview failed', 'error'); return; }
+    const { merged } = await res.json();
+    campState.previewData = merged;
+    campState.previewIdx = 0;
+    renderCampaignPreview();
+    $('#camp-preview-modal').hidden = false;
+  } catch { toast('Preview failed', 'error'); }
+}
+
+function renderCampaignPreview() {
+  const d = campState.previewData[campState.previewIdx];
+  if (!d) return;
+  const total = campState.previewData.length;
+  $('#camp-preview-counter').textContent = `${campState.previewIdx + 1} / ${total}`;
+  $('#camp-preview-to').textContent = `To: ${d.to_email || '(no email)'} — ${d.company_name}`;
+  $('#camp-preview-subject').textContent = `Subject: ${d.subject}`;
+  $('#camp-preview-body').textContent = d.body;
+}
+
+function campPreviewNav(dir) {
+  campState.previewIdx = Math.max(0, Math.min(campState.previewData.length - 1, campState.previewIdx + dir));
+  renderCampaignPreview();
+}
+
+function initCampaignBindings() {
+  $('#camp-new-btn')?.addEventListener('click', createNewCampaign);
+  $('#camp-back-btn')?.addEventListener('click', closeCampaignEditor);
+  $('#camp-save-btn')?.addEventListener('click', saveCampaignDraft);
+  $('#camp-delete-btn')?.addEventListener('click', deleteCampaignAction);
+  $('#camp-preview-btn')?.addEventListener('click', openCampaignPreview);
+  $('#camp-close-preview')?.addEventListener('click', () => { $('#camp-preview-modal').hidden = true; });
+  $('#camp-prev-preview')?.addEventListener('click', () => campPreviewNav(-1));
+  $('#camp-next-preview')?.addEventListener('click', () => campPreviewNav(1));
+
+  // Search with debounce
+  const searchHandler = () => {
+    clearTimeout(campState.searchDebounce);
+    campState.searchDebounce = setTimeout(campSearchCompanies, 300);
+  };
+  $('#camp-search')?.addEventListener('input', searchHandler);
+  $('#camp-tier-filter')?.addEventListener('change', campSearchCompanies);
+  $('#camp-state-filter')?.addEventListener('change', campSearchCompanies);
+
+  bindMergeFieldClicks();
 }
 
 document.addEventListener('DOMContentLoaded', init);

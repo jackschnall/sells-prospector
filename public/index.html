@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260415g" />
+    <link rel="stylesheet" href="/styles.css?v=20260417a" />
   </head>
   <body>
     <div id="mock-banner" class="mock-banner" hidden>
@@ -79,6 +79,7 @@
           <button type="button" class="tab" data-tab="markets" role="tab">Markets</button>
           <button type="button" class="tab" data-tab="agent" role="tab">Agent</button>
           <button type="button" class="tab" data-tab="export" role="tab">Export</button>
+          <button type="button" class="tab" data-tab="campaigns" role="tab" data-requires-user="1" hidden>Campaigns</button>
           <button type="button" class="tab" data-tab="queue" role="tab" data-requires-user="1" hidden>Call Queue</button>
           <button type="button" class="tab" data-tab="calendar" role="tab" data-requires-user="1" hidden>Calendar</button>
           <button type="button" class="tab" data-tab="settings" role="tab" data-requires-user="1" data-requires-admin="1" hidden>Settings</button>
@@ -516,6 +517,91 @@
           </section>
         </div>
 
+        <!-- CAMPAIGNS TAB -->
+        <div id="tab-campaigns" class="tab-panel">
+          <!-- Campaign list view -->
+          <div id="camp-list-view">
+            <div class="camp-header">
+              <h2 class="section-title">Email Campaigns</h2>
+              <button type="button" class="btn-primary" id="camp-new-btn">+ New Campaign</button>
+            </div>
+            <div id="camp-list" class="camp-list">
+              <div class="empty-msg">No campaigns yet. Create one to get started.</div>
+            </div>
+          </div>
+
+          <!-- Campaign editor view -->
+          <div id="camp-editor-view" hidden>
+            <div class="camp-editor-header">
+              <button type="button" class="btn-ghost btn-xs" id="camp-back-btn">&larr; All Campaigns</button>
+              <div class="camp-editor-title">
+                <input type="text" id="camp-name" class="cf-input camp-name-input" placeholder="Campaign name&hellip;" />
+                <span class="camp-status-pill" id="camp-status-pill">Draft</span>
+              </div>
+              <div class="camp-editor-actions">
+                <button type="button" class="btn-ghost btn-xs" id="camp-save-btn">Save Draft</button>
+                <button type="button" class="btn-ghost btn-xs" id="camp-preview-btn">Preview</button>
+                <button type="button" class="btn-ghost btn-xs" id="camp-delete-btn" style="color:var(--red)">Delete</button>
+              </div>
+            </div>
+
+            <div class="camp-editor-body">
+              <!-- Left: template editor -->
+              <div class="camp-template-section">
+                <div class="camp-section-title">Email Template</div>
+                <div class="camp-merge-hint">
+                  Merge fields: <code>{{owner}}</code> <code>{{company}}</code> <code>{{city}}</code> <code>{{state}}</code> <code>{{outreach_angle}}</code> <code>{{summary}}</code> <code>{{score}}</code> <code>{{email}}</code> <code>{{phone}}</code>
+                </div>
+                <label class="camp-label">Subject</label>
+                <input type="text" id="camp-subject" class="cf-input" placeholder="e.g. Confidential inquiry regarding {{company}}" />
+                <label class="camp-label">Body</label>
+                <textarea id="camp-body" class="cf-input camp-body-textarea" rows="14" placeholder="Dear {{owner}},&#10;&#10;I'm reaching out regarding {{company}} in {{city}}, {{state}}&hellip;"></textarea>
+              </div>
+
+              <!-- Right: company selection -->
+              <div class="camp-recipients-section">
+                <div class="camp-section-title">Recipients <span class="d-section-count" id="camp-recip-count">0</span></div>
+                <div class="camp-search-row">
+                  <input type="text" id="camp-search" class="cf-input" placeholder="Search companies&hellip;" />
+                  <select id="camp-tier-filter" class="cf-input camp-filter-select">
+                    <option value="">All tiers</option>
+                    <option value="strong-buy">Strong Buy</option>
+                    <option value="watchlist">Watchlist</option>
+                  </select>
+                  <select id="camp-state-filter" class="cf-input camp-filter-select">
+                    <option value="">All states</option>
+                  </select>
+                </div>
+                <div class="camp-company-list" id="camp-company-list">
+                  <div class="empty-msg">Search for companies to add.</div>
+                </div>
+                <div class="camp-selected-section" id="camp-selected-section">
+                  <div class="camp-section-title camp-selected-title">Selected <span class="d-section-count" id="camp-selected-count">0</span></div>
+                  <div id="camp-selected-list" class="camp-selected-list"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Preview overlay -->
+          <div id="camp-preview-modal" class="camp-preview-modal" hidden>
+            <div class="camp-preview-card">
+              <div class="camp-preview-header">
+                <h3>Email Preview</h3>
+                <div class="camp-preview-nav">
+                  <button type="button" class="btn-ghost btn-xs" id="camp-prev-preview">&larr;</button>
+                  <span id="camp-preview-counter">1 / 1</span>
+                  <button type="button" class="btn-ghost btn-xs" id="camp-next-preview">&rarr;</button>
+                </div>
+                <button type="button" class="btn-ghost btn-xs" id="camp-close-preview">&times;</button>
+              </div>
+              <div class="camp-preview-to" id="camp-preview-to">To: —</div>
+              <div class="camp-preview-subject" id="camp-preview-subject">Subject: —</div>
+              <div class="camp-preview-body" id="camp-preview-body"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- CALL QUEUE TAB (Phase 2) -->
         <div id="tab-queue" class="tab-panel">
           <div class="queue-header">
@@ -649,8 +735,22 @@
           <div class="debrief-sub" id="debrief-sub">Answer each question below before continuing. Each answer must be at least 10 characters.</div>
         </div>
         <div class="debrief-body">
-          <div id="debrief-summary" class="debrief-summary"></div>
-          <div id="debrief-questions" class="debrief-questions"></div>
+          <div class="debrief-disposition-row">
+            <label class="camp-label" style="margin:0">Call outcome:</label>
+            <select id="debrief-disposition" class="cf-input" style="max-width:280px">
+              <option value="answered">Answered / Connected</option>
+              <option value="no_answer_no_vm">No Answer &mdash; Did NOT leave a voicemail</option>
+              <option value="no_answer_left_vm">No Answer &mdash; Left a voicemail</option>
+            </select>
+          </div>
+          <div id="debrief-vm-section" hidden>
+            <label class="camp-label">What was the voicemail about?</label>
+            <textarea id="debrief-vm-note" class="cf-input" rows="3" placeholder="Brief description of the voicemail you left&hellip;"></textarea>
+          </div>
+          <div id="debrief-answered-section">
+            <div id="debrief-summary" class="debrief-summary"></div>
+            <div id="debrief-questions" class="debrief-questions"></div>
+          </div>
         </div>
         <div class="debrief-footer">
           <button type="button" class="btn-ghost" id="debrief-draft-btn">Save draft &amp; finish later</button>
@@ -989,6 +1089,6 @@
 
     <!-- Twilio Voice SDK v2 (browser-based calling) -->
     <script src="https://sdk.twilio.com/js/client/releases/2.7.2/twilio.min.js"></script>
-    <script src="/app.js?v=20260416a"></script>
+    <script src="/app.js?v=20260417a"></script>
   </body>
 </html>

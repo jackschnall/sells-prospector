@@ -827,6 +827,108 @@ async function getUserStats(userId, range = 'today') {
   };
 }
 
+// ─── Campaigns ──────────────────────────────────────────────────────────────
+
+async function listCampaigns() {
+  return query(`
+    SELECT c.*, u.name AS creator_name,
+      (SELECT COUNT(*)::int FROM campaign_recipients cr WHERE cr.campaign_id = c.id) AS recipient_count,
+      (SELECT COUNT(*)::int FROM campaign_recipients cr WHERE cr.campaign_id = c.id AND cr.status = 'sent') AS sent_count
+    FROM campaigns c
+    LEFT JOIN users u ON u.id = c.created_by
+    ORDER BY c.created_at DESC
+  `);
+}
+
+async function getCampaign(id) {
+  return queryOne('SELECT * FROM campaigns WHERE id = $1', [id]);
+}
+
+async function insertCampaign(data) {
+  const { nanoid } = require('nanoid');
+  const id = data.id || nanoid();
+  await execute(
+    `INSERT INTO campaigns (id, name, subject_template, body_template, created_by)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [id, data.name, data.subject_template || '', data.body_template || '', data.created_by || null]
+  );
+  return id;
+}
+
+async function updateCampaign(id, data) {
+  const fields = [];
+  const params = [];
+  let idx = 1;
+  for (const key of ['name', 'subject_template', 'body_template', 'status', 'sent_at']) {
+    if (data[key] !== undefined) {
+      fields.push(`${key} = $${idx++}`);
+      params.push(data[key]);
+    }
+  }
+  if (!fields.length) return;
+  fields.push(`updated_at = NOW()`);
+  params.push(id);
+  await execute(`UPDATE campaigns SET ${fields.join(', ')} WHERE id = $${idx}`, params);
+}
+
+async function deleteCampaign(id) {
+  await execute('DELETE FROM campaigns WHERE id = $1', [id]);
+}
+
+async function listCampaignRecipients(campaignId) {
+  return query(`
+    SELECT cr.*, c.name AS company_name, c.owner, c.email AS company_email,
+      c.city, c.state, c.phone, c.score, c.tier, c.summary, c.outreach_angle
+    FROM campaign_recipients cr
+    JOIN companies c ON c.id = cr.company_id
+    WHERE cr.campaign_id = $1
+    ORDER BY c.name
+  `, [campaignId]);
+}
+
+async function addCampaignRecipients(campaignId, companyIds) {
+  const { nanoid } = require('nanoid');
+  let added = 0;
+  for (const companyId of companyIds) {
+    try {
+      await execute(
+        `INSERT INTO campaign_recipients (id, campaign_id, company_id, to_email)
+         SELECT $1, $2, $3, COALESCE(
+           (SELECT ct.email FROM contacts ct WHERE ct.company_id = $3 AND ct.is_primary = TRUE AND ct.email IS NOT NULL LIMIT 1),
+           c.email
+         )
+         FROM companies c WHERE c.id = $3
+         ON CONFLICT (campaign_id, company_id) DO NOTHING`,
+        [nanoid(), campaignId, companyId]
+      );
+      added++;
+    } catch {}
+  }
+  return added;
+}
+
+async function removeCampaignRecipient(campaignId, companyId) {
+  await execute(
+    'DELETE FROM campaign_recipients WHERE campaign_id = $1 AND company_id = $2',
+    [campaignId, companyId]
+  );
+}
+
+async function updateCampaignRecipient(id, data) {
+  const fields = [];
+  const params = [];
+  let idx = 1;
+  for (const key of ['to_email', 'merged_subject', 'merged_body', 'status', 'error_message', 'sent_at']) {
+    if (data[key] !== undefined) {
+      fields.push(`${key} = $${idx++}`);
+      params.push(data[key]);
+    }
+  }
+  if (!fields.length) return;
+  params.push(id);
+  await execute(`UPDATE campaign_recipients SET ${fields.join(', ')} WHERE id = $${idx}`, params);
+}
+
 // ─── Exports ─────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -901,4 +1003,14 @@ module.exports = {
   setUserConfig,
   // User stats (Phase 2)
   getUserStats,
+  // Campaigns
+  listCampaigns,
+  getCampaign,
+  insertCampaign,
+  updateCampaign,
+  deleteCampaign,
+  listCampaignRecipients,
+  addCampaignRecipients,
+  removeCampaignRecipient,
+  updateCampaignRecipient,
 };

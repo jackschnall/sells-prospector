@@ -70,6 +70,16 @@ const {
   setUserConfig,
   // User stats (Phase 2)
   getUserStats,
+  // Campaigns
+  listCampaigns,
+  getCampaign,
+  insertCampaign,
+  updateCampaign,
+  deleteCampaign,
+  listCampaignRecipients,
+  addCampaignRecipients,
+  removeCampaignRecipient,
+  updateCampaignRecipient,
 } = require('./db');
 const { promoteToAdminIfFirstUser, requireUser, requireAdmin, isAdmin } = require('./auth');
 const { registerRoutes: registerTwilioRoutes, isMockMode: isTwilioMockMode } = require('./twilio');
@@ -678,7 +688,8 @@ app.post('/api/calls/:id/debrief-draft', requireUser, async (req, res) => {
 app.post('/api/calls/:id/debrief', requireUser, async (req, res) => {
   try {
     const answers = req.body?.answers;
-    const result = await submitDebrief(req.params.id, req.currentUser.id, answers);
+    const disposition = req.body?.disposition;
+    const result = await submitDebrief(req.params.id, req.currentUser.id, answers, disposition);
     res.json(result);
   } catch (err) {
     const status = err.status || 400;
@@ -927,6 +938,118 @@ app.get('/tearsheet/:id', async (req, res) => {
   res.set('Content-Type', 'text/html');
   res.send(filled);
 });
+
+// ---------- Campaigns ----------
+app.get('/api/campaigns', requireUser, async (req, res) => {
+  const campaigns = await listCampaigns();
+  res.json({ campaigns });
+});
+
+app.post('/api/campaigns', requireUser, async (req, res) => {
+  const { name, subject_template, body_template } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: 'Campaign name required' });
+  const id = await insertCampaign({
+    name: String(name).trim(),
+    subject_template: subject_template || '',
+    body_template: body_template || '',
+    created_by: req.currentUser.id,
+  });
+  res.json({ ok: true, id });
+});
+
+app.get('/api/campaigns/:id', requireUser, async (req, res) => {
+  const campaign = await getCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Not found' });
+  const recipients = await listCampaignRecipients(req.params.id);
+  res.json({ campaign, recipients });
+});
+
+app.put('/api/campaigns/:id', requireUser, async (req, res) => {
+  const campaign = await getCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Not found' });
+  await updateCampaign(req.params.id, req.body);
+  res.json({ ok: true });
+});
+
+app.delete('/api/campaigns/:id', requireUser, async (req, res) => {
+  await deleteCampaign(req.params.id);
+  res.json({ ok: true });
+});
+
+// Add companies to a campaign
+app.post('/api/campaigns/:id/recipients', requireUser, async (req, res) => {
+  const { company_ids } = req.body || {};
+  if (!Array.isArray(company_ids) || !company_ids.length) {
+    return res.status(400).json({ error: 'company_ids array required' });
+  }
+  const added = await addCampaignRecipients(req.params.id, company_ids);
+  res.json({ ok: true, added });
+});
+
+app.delete('/api/campaigns/:id/recipients/:companyId', requireUser, async (req, res) => {
+  await removeCampaignRecipient(req.params.id, req.params.companyId);
+  res.json({ ok: true });
+});
+
+// Merge preview — returns merged subject + body for each recipient
+app.get('/api/campaigns/:id/preview', requireUser, async (req, res) => {
+  const campaign = await getCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Not found' });
+  const recipients = await listCampaignRecipients(req.params.id);
+  const merged = recipients.map((r) => ({
+    company_id: r.company_id,
+    company_name: r.company_name,
+    to_email: r.to_email,
+    subject: mergeCampaignTemplate(campaign.subject_template, r),
+    body: mergeCampaignTemplate(campaign.body_template, r),
+  }));
+  res.json({ merged });
+});
+
+// Search companies for campaign add (lightweight endpoint)
+app.get('/api/campaigns/search/companies', requireUser, async (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase();
+  const tier = req.query.tier || '';
+  const state = req.query.state || '';
+  const stage = req.query.stage || '';
+  const excludeCampaign = req.query.exclude_campaign || '';
+  let sql = `SELECT c.id, c.name, c.owner, c.city, c.state, c.email, c.score, c.tier, c.pipeline_stage,
+              c.outreach_angle, c.phone
+             FROM companies c WHERE c.status = 'done'`;
+  const params = [];
+  let idx = 1;
+  if (q) {
+    sql += ` AND (LOWER(c.name) LIKE $${idx} OR LOWER(c.owner) LIKE $${idx} OR LOWER(c.city) LIKE $${idx})`;
+    params.push(`%${q}%`);
+    idx++;
+  }
+  if (tier) { sql += ` AND c.tier = $${idx}`; params.push(tier); idx++; }
+  if (state) { sql += ` AND c.state = $${idx}`; params.push(state); idx++; }
+  if (stage) { sql += ` AND c.pipeline_stage = $${idx}`; params.push(stage); idx++; }
+  if (excludeCampaign) {
+    sql += ` AND c.id NOT IN (SELECT cr.company_id FROM campaign_recipients cr WHERE cr.campaign_id = $${idx})`;
+    params.push(excludeCampaign);
+    idx++;
+  }
+  sql += ' ORDER BY c.score DESC NULLS LAST LIMIT 200';
+  const rows = await pool.query(sql, params).then((r) => r.rows);
+  res.json({ companies: rows });
+});
+
+function mergeCampaignTemplate(template, recipient) {
+  if (!template) return '';
+  return template
+    .replace(/\{\{owner\}\}/gi, recipient.owner || '')
+    .replace(/\{\{company\}\}/gi, recipient.company_name || '')
+    .replace(/\{\{city\}\}/gi, recipient.city || '')
+    .replace(/\{\{state\}\}/gi, recipient.state || '')
+    .replace(/\{\{phone\}\}/gi, recipient.phone || '')
+    .replace(/\{\{email\}\}/gi, recipient.to_email || recipient.company_email || '')
+    .replace(/\{\{score\}\}/gi, recipient.score != null ? Number(recipient.score).toFixed(1) : '')
+    .replace(/\{\{tier\}\}/gi, recipient.tier || '')
+    .replace(/\{\{outreach_angle\}\}/gi, recipient.outreach_angle || '')
+    .replace(/\{\{summary\}\}/gi, recipient.summary || '');
+}
 
 // ---------- Health check (replaces WAL checkpoint) ----------
 app.post('/api/_checkpoint', (req, res) => {
