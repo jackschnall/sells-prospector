@@ -78,6 +78,15 @@
       .ts-tier.tier-strong { background: #14532d; color: #fff; border-color: #14532d; }
       .ts-tier.tier-watch { background: #c9a84c; color: #fff; border-color: #c9a84c; }
       .ts-tier.tier-pass { background: #6b7280; color: #fff; border-color: #6b7280; }
+      .ts-contact-bar {
+        margin: 12px 0 0;
+        padding: 10px 0;
+        border-bottom: 1px solid #e5e5e0;
+        font-size: 14px;
+        color: #374151;
+      }
+      .ts-contact-bar a { color: #c9a84c; text-decoration: none; }
+      .ts-contact-bar a:hover { text-decoration: underline; }
       .ts-section {
         margin: 28px 0;
       }
@@ -201,6 +210,13 @@
     <div class="ts-loc" id="ts-loc">—</div>
     <div><span class="ts-tier" id="ts-tier">—</span></div>
 
+    <div class="ts-contact-bar" id="ts-contact-bar" hidden>
+      <span id="ts-website"></span>
+      <span id="ts-phone"></span>
+      <span id="ts-email"></span>
+      <span id="ts-owner-name"></span>
+    </div>
+
     <section class="ts-section">
       <div class="ts-section-title">Executive Summary</div>
       <div class="ts-summary" id="ts-summary">—</div>
@@ -274,6 +290,22 @@
         const tierEl = document.getElementById('ts-tier');
         tierEl.textContent = tierLabel(c.tier);
         tierEl.className = `ts-tier ${tierClass(c.tier)}`;
+        // Contact info bar
+        const pc = data.primaryContact;
+        const contactParts = [];
+        if (c.website) contactParts.push(`<a href="${escapeHtml(c.website.startsWith('http') ? c.website : 'https://' + c.website)}" target="_blank" rel="noopener">${escapeHtml(c.website)}</a>`);
+        const phone = pc?.phone || c.phone;
+        if (phone) contactParts.push(`<a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>`);
+        const email = pc?.email || c.email;
+        if (email) contactParts.push(`<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`);
+        const ownerName = pc?.name || c.owner;
+        if (ownerName) contactParts.push(escapeHtml(ownerName) + (pc?.title ? ` (${escapeHtml(pc.title)})` : ''));
+        if (contactParts.length) {
+          const bar = document.getElementById('ts-contact-bar');
+          bar.innerHTML = contactParts.join(' &nbsp;·&nbsp; ');
+          bar.hidden = false;
+        }
+
         document.getElementById('ts-summary').textContent = c.summary || '—';
         if (c.outreach_angle) {
           const oaEl = document.getElementById('ts-outreach-angle');
@@ -292,14 +324,16 @@
         };
         document.getElementById('ts-signals').innerHTML = Object.entries(weights)
           .map(([k, w]) => {
-            const s = signals[k] || {};
+            const v = signals[k];
+            const s = typeof v === 'object' && v !== null ? v : { score: v };
+            const score = s.score != null ? Number(s.score) : null;
             return `
               <tr>
                 <td>${escapeHtml(k.replace(/_/g, ' '))}</td>
                 <td>${Math.round(w * 100)}%</td>
                 <td>${escapeHtml(s.raw ?? '—')}</td>
-                <td>${escapeHtml(s.notes ?? '')}</td>
-                <td class="num">${s.score != null ? Number(s.score).toFixed(1) : '—'}</td>
+                <td>${escapeHtml(s.notes ?? '—')}</td>
+                <td class="num">${score != null ? score.toFixed(1) : '—'}</td>
               </tr>
             `;
           })

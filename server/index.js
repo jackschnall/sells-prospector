@@ -941,12 +941,15 @@ app.get('/api/export.xlsx', async (req, res) => {
 app.get('/tearsheet/:id', async (req, res) => {
   const row = await getCompany(req.params.id);
   if (!row) return res.status(404).send('Not found');
+  const contacts = await listContacts(row.id);
+  const primaryContact = contacts.find((c) => c.is_primary) || contacts[0] || null;
   const tpl = fs.readFileSync(path.join(__dirname, '..', 'public', 'tearsheet.html'), 'utf8');
   const data = {
     company: row,
     signals: safeJson(row.signals_json) || {},
     flags: safeJson(row.flags_json) || { hard_stops: [], yellow_flags: [] },
     sources: safeJson(row.sources_json) || [],
+    primaryContact,
     mockMode: process.env.MOCK_MODE === '1',
   };
   const filled = tpl.replace(
