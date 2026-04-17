@@ -2098,11 +2098,16 @@ function renderCalendar() {
   });
 }
 
+// Format date as YYYY-MM-DD in local time (avoids UTC shift from toISOString)
+function localDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 async function openCalendarEventModal(eventId, dateHint) {
   state.calendarEditing = null;
   $('#cal-ev-title').value = '';
   $('#cal-ev-desc').value = '';
-  $('#cal-ev-date').value = dateHint || new Date().toISOString().slice(0, 10);
+  $('#cal-ev-date').value = dateHint || localDateStr(new Date());
   $('#cal-ev-time').value = '10:00';
   $('#cal-ev-company').value = '';
   $('#cal-ev-company-matches').innerHTML = '';
@@ -2111,6 +2116,8 @@ async function openCalendarEventModal(eventId, dateHint) {
   $('#cal-ev-delete').hidden = true;
   $('#cal-ev-complete').hidden = true;
   $('#cal-modal-title').textContent = 'New Event';
+  resetCalContactDropdown();
+  updateCalTimezoneLabel();
 
   if (eventId) {
     const ev = state.calendarEvents.find((e) => e.id === eventId);
@@ -2120,8 +2127,8 @@ async function openCalendarEventModal(eventId, dateHint) {
       $('#cal-ev-title').value = ev.title || '';
       $('#cal-ev-desc').value = ev.description || '';
       const dt = new Date(ev.starts_at);
-      $('#cal-ev-date').value = dt.toISOString().slice(0, 10);
-      $('#cal-ev-time').value = dt.toTimeString().slice(0, 5);
+      $('#cal-ev-date').value = localDateStr(dt);
+      $('#cal-ev-time').value = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
       if (ev.transcript_quote) {
         $('#cal-ev-quote-row').hidden = false;
         $('#cal-ev-quote').textContent = ev.transcript_quote;
@@ -2130,11 +2137,41 @@ async function openCalendarEventModal(eventId, dateHint) {
       $('#cal-ev-complete').hidden = ev.completed;
       if (ev.company_id) {
         const match = state.companies.find((c) => c.id === ev.company_id);
-        if (match) $('#cal-ev-company').value = match.name;
+        if (match) {
+          $('#cal-ev-company').value = match.name;
+          loadCalContactsForCompany(ev.company_id, ev.contact_id);
+        }
       }
     }
   }
   $('#cal-modal').hidden = false;
+}
+
+function updateCalTimezoneLabel() {
+  const tz = $('#cal-ev-tz');
+  if (tz) tz.textContent = `Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
+}
+
+function resetCalContactDropdown() {
+  const sel = $('#cal-ev-contact');
+  if (sel) {
+    sel.innerHTML = '<option value="">Contact (optional)</option>';
+    sel.hidden = true;
+  }
+}
+
+async function loadCalContactsForCompany(companyId, preselect) {
+  const sel = $('#cal-ev-contact');
+  if (!sel || !companyId) { resetCalContactDropdown(); return; }
+  try {
+    const res = await fetch(`/api/companies/${companyId}/contacts`);
+    if (!res.ok) { resetCalContactDropdown(); return; }
+    const { contacts } = await res.json();
+    if (!contacts || !contacts.length) { resetCalContactDropdown(); return; }
+    sel.innerHTML = '<option value="">Contact (optional)</option>' +
+      contacts.map((c) => `<option value="${c.id}"${c.id === preselect ? ' selected' : ''}>${escapeHtml(c.name)}${c.title ? ' — ' + escapeHtml(c.title) : ''}${c.is_primary ? ' (Primary)' : ''}</option>`).join('');
+    sel.hidden = false;
+  } catch { resetCalContactDropdown(); }
 }
 
 function closeCalendarModal() {
@@ -2157,11 +2194,13 @@ async function saveCalendarEvent() {
       || state.calendarCompanyMatches[0]
     : null;
 
+  const contactId = $('#cal-ev-contact')?.value || null;
   const body = {
     title,
     description: $('#cal-ev-desc').value.trim() || null,
     starts_at,
     company_id: company?.id || null,
+    contact_id: contactId || null,
   };
 
   let res;
@@ -2221,7 +2260,10 @@ function updateCalendarCompanyMatches() {
   $$('.cal-ev-match', box).forEach((el) => {
     el.addEventListener('click', () => {
       const match = state.companies.find((c) => c.id === el.dataset.id);
-      if (match) $('#cal-ev-company').value = match.name;
+      if (match) {
+        $('#cal-ev-company').value = match.name;
+        loadCalContactsForCompany(match.id);
+      }
       box.innerHTML = '';
     });
   });
@@ -2406,6 +2448,7 @@ function bindPhase2() {
   $('#cal-ev-delete')?.addEventListener('click', deleteCalendarEvent);
   $('#cal-ev-complete')?.addEventListener('click', completeCalendarEvent);
   $('#cal-ev-company')?.addEventListener('input', updateCalendarCompanyMatches);
+  $('#cal-new-event')?.addEventListener('click', () => openCalendarEventModal());
 
   $('#settings-cooldown-save')?.addEventListener('click', saveCooldown);
   $('#settings-user-close')?.addEventListener('click', closeSettingsUserModal);

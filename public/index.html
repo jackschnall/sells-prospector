@@ -727,6 +727,7 @@
               <button type="button" class="btn-ghost btn-xs" id="cal-next">&gt;</button>
               <button type="button" class="btn-ghost btn-xs" id="cal-today">Today</button>
             </div>
+            <button type="button" class="btn-primary btn-xs" id="cal-new-event">+ New Event</button>
             <div class="cal-legend">
               <span class="cal-legend-item"><span class="cal-dot cal-dot-manual"></span>Manual</span>
               <span class="cal-legend-item"><span class="cal-dot cal-dot-auto"></span>Auto from transcript</span>
@@ -837,6 +838,10 @@
           <input type="time" id="cal-ev-time" class="cf-input" value="10:00" />
           <input type="text" id="cal-ev-company" class="cf-input" placeholder="Company (optional, search)" />
           <div id="cal-ev-company-matches" class="cal-ev-matches"></div>
+          <select id="cal-ev-contact" class="cf-input" hidden>
+            <option value="">Contact (optional)</option>
+          </select>
+          <div class="cal-ev-tz" id="cal-ev-tz"></div>
           <div id="cal-ev-quote-row" class="cal-ev-quote-row" hidden>
             <div class="cal-ev-quote-label">Transcript quote</div>
             <div class="cal-ev-quote-body" id="cal-ev-quote"></div>

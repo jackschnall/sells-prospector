@@ -3112,6 +3112,7 @@ body.detail-fullscreen { overflow: hidden; }
   font-size: 0.85rem;
 }
 .cal-ev-match:hover { background: var(--gold-tint); }
+.cal-ev-tz { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
 .cal-ev-quote-row { margin-top: 6px; }
 .cal-ev-quote-label { font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
 .cal-ev-quote-body {
