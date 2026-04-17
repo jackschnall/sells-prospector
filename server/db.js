@@ -463,6 +463,10 @@ async function getContact(id) {
 async function insertContact(data) {
   const { nanoid } = require('nanoid');
   const id = data.id || nanoid();
+  // Enforce single primary per company
+  if (data.is_primary && data.company_id) {
+    await execute('UPDATE contacts SET is_primary = FALSE WHERE company_id = $1 AND is_primary = TRUE', [data.company_id]);
+  }
   await execute(
     `INSERT INTO contacts (id, company_id, name, title, phone, email, linkedin, is_primary, source, notes)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
@@ -477,6 +481,14 @@ async function insertContact(data) {
 }
 
 async function updateContact(id, data) {
+  // Enforce single primary per company
+  if (data.is_primary) {
+    const existing = await queryOne('SELECT company_id FROM contacts WHERE id = $1', [id]);
+    const companyId = data.company_id || existing?.company_id;
+    if (companyId) {
+      await execute('UPDATE contacts SET is_primary = FALSE WHERE company_id = $1 AND is_primary = TRUE AND id != $2', [companyId, id]);
+    }
+  }
   const fields = [];
   const params = [];
   let idx = 1;

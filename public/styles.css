@@ -3698,6 +3698,7 @@ body.detail-fullscreen { overflow: hidden; }
   line-height: 1;
 }
 .ctm-company-picked-clear:hover { color: #e74c3c; }
+.ctm-new-company-row { margin: -4px 0 4px; }
 
 /* Add Company notes textarea */
 .cm-notes {

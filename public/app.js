@@ -2401,6 +2401,7 @@ function bindPhase2() {
   $('#contact-modal-close')?.addEventListener('click', closeContactModal);
   $('#ctm-cancel')?.addEventListener('click', closeContactModal);
   $('#ctm-save')?.addEventListener('click', saveContactModal);
+  $('#ctm-new-company')?.addEventListener('click', createCompanyFromContactModal);
   $('#ctm-company')?.addEventListener('input', updateContactCompanyMatches);
 
   $('#contacts-search')?.addEventListener('input', debounce(() => loadAllContacts(), 250));
@@ -2618,6 +2619,12 @@ function openCompanyModal() {
 function closeCompanyModal() {
   const modal = $('#company-modal');
   if (modal) modal.hidden = true;
+  // If returning from "create company for contact" flow without saving, reopen contact modal
+  if (_contactModalStash) {
+    const stash = { ..._contactModalStash };
+    _contactModalStash = null;
+    openContactModal(null, stash);
+  }
 }
 
 async function saveCompanyModal() {
@@ -2665,6 +2672,13 @@ async function saveCompanyModal() {
     toast('Company added', 'ok');
     closeCompanyModal();
     await loadCompanies();
+    // If we came from the Add Contact flow, return there with the new company pre-selected
+    if (_contactModalStash) {
+      const stash = { ..._contactModalStash, company_id: data.company.id, company_name: name };
+      _contactModalStash = null;
+      openContactModal(null, stash);
+      return;
+    }
     // Open new company's detail panel
     const companiesTab = document.querySelector('.tab[data-tab="companies"]');
     if (companiesTab) companiesTab.click();
@@ -2676,31 +2690,58 @@ async function saveCompanyModal() {
 }
 
 // ─── Add / Edit Contact modal ─────────────────────────────────────
-function openContactModal(contact = null) {
+// Stash for "create company → return to contact" flow
+let _contactModalStash = null;
+
+function openContactModal(contact = null, stash = null) {
   const modal = $('#contact-modal');
   if (!modal) return;
   state.editingContactId = contact?.id || null;
   $('#contact-modal-title').textContent = contact ? 'Edit Contact' : 'Add Contact';
-  $('#ctm-name').value = contact?.name || '';
-  $('#ctm-title').value = contact?.title || '';
-  $('#ctm-phone').value = contact?.phone || '';
-  $('#ctm-email').value = contact?.email || '';
-  $('#ctm-linkedin').value = contact?.linkedin || '';
-  $('#ctm-notes').value = contact?.notes || '';
-  $('#ctm-primary').checked = !!contact?.is_primary;
+  // Restore stashed fields if returning from Create Company flow
+  const s = stash || {};
+  $('#ctm-name').value = s.name ?? contact?.name ?? '';
+  $('#ctm-title').value = s.title ?? contact?.title ?? '';
+  $('#ctm-phone').value = s.phone ?? contact?.phone ?? '';
+  $('#ctm-email').value = s.email ?? contact?.email ?? '';
+  $('#ctm-linkedin').value = s.linkedin ?? contact?.linkedin ?? '';
+  $('#ctm-notes').value = s.notes ?? contact?.notes ?? '';
+  $('#ctm-primary').checked = s.is_primary ?? !!contact?.is_primary;
   $('#ctm-company-matches').innerHTML = '';
   $('#ctm-company').value = '';
   $('#ctm-company-id').value = '';
-  if (contact?.company_id) {
+  if (s.company_id) {
+    setContactModalCompany(s.company_id, s.company_name || '(company)');
+  } else if (contact?.company_id) {
     setContactModalCompany(contact.company_id, contact.company_name || '(company)');
   } else {
     clearContactModalCompany();
   }
   modal.hidden = false;
   setTimeout(() => {
-    if (contact) $('#ctm-name')?.focus();
+    if (contact || s.name) $('#ctm-name')?.focus();
     else $('#ctm-company')?.focus();
   }, 50);
+}
+
+function stashContactModalFields() {
+  return {
+    name: $('#ctm-name')?.value || '',
+    title: $('#ctm-title')?.value || '',
+    phone: $('#ctm-phone')?.value || '',
+    email: $('#ctm-email')?.value || '',
+    linkedin: $('#ctm-linkedin')?.value || '',
+    notes: $('#ctm-notes')?.value || '',
+    is_primary: $('#ctm-primary')?.checked || false,
+    company_id: $('#ctm-company-id')?.value || '',
+  };
+}
+
+function createCompanyFromContactModal() {
+  // Stash current contact form state
+  _contactModalStash = stashContactModalFields();
+  closeContactModal();
+  openCompanyModal();
 }
 
 function closeContactModal() {
@@ -2750,6 +2791,14 @@ async function saveContactModal() {
   const name = $('#ctm-name').value.trim();
   if (!company_id) { toast('Please select a company', 'error'); $('#ctm-company')?.focus(); return; }
   if (!name) { toast('Contact name is required', 'error'); $('#ctm-name')?.focus(); return; }
+  const isPrimary = $('#ctm-primary').checked;
+  // Confirm primary change if setting as primary on an existing company
+  if (isPrimary) {
+    const companyName = $('#ctm-company-picked span')?.textContent || 'this company';
+    if (!confirm(`Are you sure you want to make this the primary contact for ${companyName}? Any existing primary contact will be replaced.`)) {
+      return;
+    }
+  }
   const body = {
     company_id,
     name,
@@ -2757,7 +2806,7 @@ async function saveContactModal() {
     phone: $('#ctm-phone').value.trim() || null,
     email: $('#ctm-email').value.trim() || null,
     linkedin: $('#ctm-linkedin').value.trim() || null,
-    is_primary: $('#ctm-primary').checked,
+    is_primary: isPrimary,
     notes: $('#ctm-notes').value.trim() || null,
   };
   try {
