@@ -11,6 +11,7 @@ const { runResearch } = require('./research');
 const { runScoring } = require('./scoring');
 const { runFlags } = require('./flags');
 const { runDiscovery } = require('./discovery');
+const { runContactEnrichment } = require('./contact-enrichment');
 const { analyzeMarket } = require('./markets');
 const sf = require('./salesforce');
 
@@ -167,11 +168,38 @@ async function processOne(company, thesis) {
   // 3. Flags
   const flags = await runStage('flags', company, () => runFlags(company, research));
 
-  // Contacts folded into research — pull the fields directly.
-  const contacts = extractContacts(research);
+  // 4. Contact Enrichment — two-phase identity resolution + people-search
+  let enrichedContact = null;
+  let contactEnrichmentJson = null;
+  try {
+    const enrichResult = await runStage('contact_enrichment', company, () =>
+      runContactEnrichment(company, research)
+    );
+    enrichedContact = enrichResult.contact;
+    contactEnrichmentJson = JSON.stringify({
+      identity: enrichResult.identity,
+      enrichment: enrichResult.enrichment,
+      contact: enrichResult.contact,
+    });
+  } catch (err) {
+    console.warn(`[agent] Contact enrichment failed for ${company.name}:`, err.message);
+    // Fall back to basic contact extraction from research
+  }
+
+  // Contacts — prefer enriched data, fall back to research extraction
+  const basicContacts = extractContacts(research);
+  const contacts = enrichedContact
+    ? {
+        owner: enrichedContact.owner_name || basicContacts.owner,
+        phone: enrichedContact.direct_cell || enrichedContact.business_phone || basicContacts.phone,
+        email: enrichedContact.direct_email || basicContacts.email,
+        address: enrichedContact.business_address || basicContacts.address,
+        linkedin: enrichedContact.linkedin_url || basicContacts.linkedin,
+      }
+    : basicContacts;
 
   // Persist
-  await updateCompanyResearch(company.id, {
+  const persistData = {
     status: 'done',
     score: scored.final_score,
     tier: scored.tier,
@@ -186,10 +214,14 @@ async function processOne(company, thesis) {
     email: contacts.email,
     address: contacts.address,
     linkedin: contacts.linkedin,
-  });
+  };
+  if (contactEnrichmentJson) {
+    persistData.contact_enrichment = contactEnrichmentJson;
+  }
+  await updateCompanyResearch(company.id, persistData);
 
   const elapsedMs = Date.now() - started;
-  return { scored, flags, contacts, elapsedMs };
+  return { scored, flags, contacts, enrichedContact, elapsedMs };
 }
 
 async function runAll() {

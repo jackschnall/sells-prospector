@@ -177,16 +177,18 @@ async function updateCompanyResearch(id, data) {
        email = COALESCE($12, email),
        address = COALESCE($13, address),
        linkedin = COALESCE($14, linkedin),
+       contact_enrichment = COALESCE($15, contact_enrichment),
        last_researched_at = NOW(),
        updated_at = NOW()
-     WHERE id = $15`,
+     WHERE id = $16`,
     [
       data.status, data.score, data.tier,
       data.signals_json || null, data.flags_json || null,
       data.summary || null, data.outreach_angle || null,
       data.sources_json || null, data.raw_research || null,
       data.owner || null, data.phone || null, data.email || null,
-      data.address || null, data.linkedin || null, id,
+      data.address || null, data.linkedin || null,
+      data.contact_enrichment || null, id,
     ]
   );
 }
