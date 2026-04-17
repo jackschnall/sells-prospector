@@ -529,6 +529,7 @@ function bindTabs() {
       if (target === 'contacts') loadAllContacts();
       if (target === 'campaigns') loadCampaignsList();
       if (target === 'deleted') loadDeletedItems();
+      if (target === 'actlog') loadActivityLog();
     });
   });
 }
@@ -2453,6 +2454,7 @@ function init() {
   // Phase 2 bootstrap
   bindPhase2();
   initCampaignBindings();
+  $('#actlog-load-more')?.addEventListener('click', () => loadActivityLog(true));
   loadCurrentUser()
     .then(() => { if (state.user) return refreshPendingDebriefs(); })
     .then(() => loadTwilioStatus());
@@ -2854,6 +2856,55 @@ async function saveContactModal() {
     console.error(err);
     toast('Failed to save contact', 'error');
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Activity Log
+// ─────────────────────────────────────────────────────────────────────────────
+const ACTLOG_ICONS = {
+  note: '&#9998;', call: '&#9743;', email: '&#9993;', meeting: '&#9632;',
+  stage_change: '&#9654;', research: '&#9670;', crm_action: '&#9881;',
+};
+
+let actlogOffset = 0;
+
+async function loadActivityLog(append = false) {
+  if (!append) actlogOffset = 0;
+  try {
+    const res = await fetch(`/api/activity-log?limit=50&offset=${actlogOffset}`);
+    if (!res.ok) return;
+    const { activities } = await res.json();
+    const host = $('#actlog-list');
+    if (!host) return;
+    if (!append) host.innerHTML = '';
+    if (!activities.length && !append) {
+      host.innerHTML = '<div class="empty-msg">No activity yet.</div>';
+      $('#actlog-load-more').hidden = true;
+      return;
+    }
+    host.innerHTML += activities.map((a) => {
+      const icon = ACTLOG_ICONS[a.type] || '&#9679;';
+      const when = a.created_at ? new Date(a.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+      const user = a.user_name || '';
+      const company = a.company_name || '';
+      return `
+      <div class="actlog-row">
+        <span class="actlog-icon">${icon}</span>
+        <div class="actlog-body">
+          <div class="actlog-summary">${escapeHtml(a.summary)}</div>
+          <div class="actlog-meta">
+            ${company ? `<span class="actlog-company">${escapeHtml(company)}</span>` : ''}
+            ${user ? `<span class="actlog-user">${escapeHtml(user)}</span>` : ''}
+            <span class="actlog-when">${when}</span>
+          </div>
+          ${a.details ? `<div class="actlog-details">${escapeHtml(a.details)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    actlogOffset += activities.length;
+    const btn = $('#actlog-load-more');
+    if (btn) btn.hidden = activities.length < 50;
+  } catch {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -580,6 +580,26 @@ async function insertActivity(data) {
   return { id, ...data };
 }
 
+async function listGlobalActivities({ limit = 100, offset = 0, userId } = {}) {
+  const where = [];
+  const params = [];
+  let idx = 1;
+  if (userId) { where.push(`a.user_id = $${idx++}`); params.push(userId); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  params.push(limit, offset);
+  return query(`
+    SELECT a.*, c.name AS company_name, c.city AS company_city, c.state AS company_state,
+           u.name AS user_name, ct.name AS contact_name
+    FROM activities a
+    LEFT JOIN companies c ON c.id = a.company_id
+    LEFT JOIN users u ON u.id = a.user_id
+    LEFT JOIN contacts ct ON ct.id = a.contact_id
+    ${whereSql}
+    ORDER BY a.created_at DESC
+    LIMIT $${idx++} OFFSET $${idx}
+  `, params);
+}
+
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 async function getUserByToken(token) {
@@ -1069,6 +1089,8 @@ module.exports = {
   setUserConfig,
   // User stats (Phase 2)
   getUserStats,
+  // Global activity log
+  listGlobalActivities,
   // Soft-delete / restore
   softDeleteCompany,
   restoreCompany,

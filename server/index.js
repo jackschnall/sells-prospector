@@ -70,6 +70,8 @@ const {
   setUserConfig,
   // User stats (Phase 2)
   getUserStats,
+  // Activity log
+  listGlobalActivities,
   // Soft-delete / restore
   softDeleteCompany,
   restoreCompany,
@@ -232,6 +234,7 @@ app.post('/api/companies', requireUser, async (req, res) => {
   }
   const created = await getCompany(id);
   emit({ type: 'company_added', company_id: id });
+  logAction(id, req.currentUser?.id, `Added company "${b.name}"`);
   res.json({ ok: true, company: created });
 });
 
@@ -848,6 +851,7 @@ app.post('/api/contacts', requireUser, async (req, res) => {
     company_id, name: String(name).trim(), title, phone, email, linkedin, is_primary, notes,
   });
   emit({ type: 'contact_added', company_id });
+  logAction(company_id, req.currentUser?.id, `Added contact "${String(name).trim()}" to "${company.name}"${is_primary ? ' (primary)' : ''}`);
   res.json({ ok: true, contact });
 });
 
@@ -858,6 +862,7 @@ app.post('/api/companies/:id/contacts', async (req, res) => {
     company_id: req.params.id, name, title, phone, email, linkedin, is_primary, notes,
   });
   emit({ type: 'contact_added', company_id: req.params.id });
+  logAction(req.params.id, req.currentUser?.id, `Added contact "${name}"${is_primary ? ' (primary)' : ''}`);
   res.json({ ok: true, contact });
 });
 
@@ -866,6 +871,11 @@ app.put('/api/contacts/:id', async (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Contact not found' });
   await updateContact(req.params.id, req.body || {});
   emit({ type: 'contact_updated', company_id: existing.company_id });
+  const changes = [];
+  if (req.body.is_primary) changes.push('set as primary');
+  if (req.body.name && req.body.name !== existing.name) changes.push(`renamed to "${req.body.name}"`);
+  if (req.body.company_id && req.body.company_id !== existing.company_id) changes.push('linked to different company');
+  logAction(existing.company_id, req.currentUser?.id, `Updated contact "${existing.name}"${changes.length ? ': ' + changes.join(', ') : ''}`);
   res.json({ ok: true });
 });
 
@@ -873,6 +883,7 @@ app.delete('/api/contacts/:id', async (req, res) => {
   const existing = await getContact(req.params.id);
   await deleteContact(req.params.id);
   emit({ type: 'contact_deleted', company_id: existing?.company_id });
+  logAction(existing?.company_id, req.currentUser?.id, `Deleted contact "${existing?.name || 'unknown'}"`);
   res.json({ ok: true });
 });
 
@@ -885,7 +896,7 @@ app.get('/api/companies/:id/activities', async (req, res) => {
 
 app.post('/api/companies/:id/activities', async (req, res) => {
   const { type, summary, details, contact_id } = req.body || {};
-  const validTypes = ['note', 'call', 'email', 'meeting', 'stage_change', 'research'];
+  const validTypes = ['note', 'call', 'email', 'meeting', 'stage_change', 'research', 'crm_action'];
   if (!type || !validTypes.includes(type)) return res.status(400).json({ error: 'Invalid activity type' });
   if (!summary) return res.status(400).json({ error: 'Summary required' });
   const activity = await insertActivity({
@@ -946,6 +957,26 @@ app.get('/tearsheet/:id', async (req, res) => {
   res.send(filled);
 });
 
+// ---------- Global Activity Log ----------
+app.get('/api/activity-log', requireUser, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 100, 500);
+  const offset = Number(req.query.offset) || 0;
+  const userId = req.query.user_id || '';
+  const activities = await listGlobalActivities({ limit, offset, userId: userId || undefined });
+  res.json({ activities });
+});
+
+// Helper: log a CRM action as an activity
+function logAction(companyId, userId, summary, details) {
+  insertActivity({
+    company_id: companyId,
+    user_id: userId || null,
+    type: 'crm_action',
+    summary,
+    details: details || null,
+  }).catch((err) => console.warn('[activity-log]', err.message));
+}
+
 // ---------- Recently Deleted ----------
 app.get('/api/deleted', requireUser, async (req, res) => {
   const data = await listDeleted();
@@ -957,12 +988,15 @@ app.delete('/api/companies/:id', requireUser, async (req, res) => {
   if (!company) return res.status(404).json({ error: 'Not found' });
   await softDeleteCompany(req.params.id);
   emit({ type: 'company_deleted', id: req.params.id });
+  logAction(req.params.id, req.currentUser?.id, `Deleted company "${company.name}"`);
   res.json({ ok: true });
 });
 
 app.post('/api/companies/:id/restore', requireUser, async (req, res) => {
+  const company = await pool.query('SELECT name FROM companies WHERE id = $1', [req.params.id]).then(r => r.rows[0]);
   await restoreCompany(req.params.id);
   emit({ type: 'company_restored', id: req.params.id });
+  logAction(req.params.id, req.currentUser?.id, `Restored company "${company?.name || 'unknown'}"`);
   res.json({ ok: true });
 });
 

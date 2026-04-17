@@ -82,6 +82,7 @@
           <button type="button" class="tab" data-tab="campaigns" role="tab" data-requires-user="1" hidden>Campaigns</button>
           <button type="button" class="tab" data-tab="queue" role="tab" data-requires-user="1" hidden>Call Queue</button>
           <button type="button" class="tab" data-tab="calendar" role="tab" data-requires-user="1" hidden>Calendar</button>
+          <button type="button" class="tab" data-tab="actlog" role="tab" data-requires-user="1" hidden>Activity Log</button>
           <button type="button" class="tab" data-tab="deleted" role="tab" data-requires-user="1" hidden>Deleted</button>
           <button type="button" class="tab" data-tab="settings" role="tab" data-requires-user="1" data-requires-admin="1" hidden>Settings</button>
         </nav>
@@ -715,6 +716,17 @@
             <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
           </div>
           <div class="cal-grid" id="cal-grid"></div>
+        </div>
+
+        <!-- ACTIVITY LOG TAB -->
+        <div id="tab-actlog" class="tab-panel">
+          <div class="camp-header">
+            <h2 class="section-title">Activity Log</h2>
+            <button type="button" class="btn-ghost btn-xs" id="actlog-load-more" hidden>Load More</button>
+          </div>
+          <div id="actlog-list" class="actlog-list">
+            <div class="empty-msg">Loading&hellip;</div>
+          </div>
         </div>
 
         <!-- RECENTLY DELETED TAB -->

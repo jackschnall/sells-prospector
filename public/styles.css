@@ -4016,3 +4016,21 @@ body.detail-fullscreen { overflow: hidden; }
 .del-name { font-weight: 600; }
 .del-meta { font-size: 0.82rem; color: var(--text-muted); margin-top: 2px; }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Activity Log tab
+   ───────────────────────────────────────────────────────────────────────────── */
+.actlog-list { display: flex; flex-direction: column; gap: 2px; }
+.actlog-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--card-border);
+}
+.actlog-icon { font-size: 1rem; margin-top: 2px; flex-shrink: 0; width: 20px; text-align: center; }
+.actlog-body { flex: 1; min-width: 0; }
+.actlog-summary { font-size: 0.9rem; }
+.actlog-meta { display: flex; gap: 10px; font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; flex-wrap: wrap; }
+.actlog-company { font-weight: 600; color: var(--gold); }
+.actlog-details { font-size: 0.82rem; color: var(--text-muted); margin-top: 4px; white-space: pre-wrap; }
+
