@@ -2,7 +2,7 @@
 
 const state = {
   companies: [],
-  filter: { tier: '', search: '', sort: 'score_desc', hideCrm: false, stateFilter: '', pipelineStage: '' },
+  filter: { tier: '', search: '', sort: 'score_desc', hideCrm: false, stateFilter: '', pipelineStage: '', industries: [] },
   view: 'grid',
   activeId: null,
   running: false,
@@ -97,6 +97,9 @@ async function loadCompanies() {
   if (state.filter.hideCrm) params.set('crm_known', '0');
   if (state.filter.stateFilter) params.set('state', state.filter.stateFilter);
   if (state.filter.pipelineStage) params.set('pipeline_stage', state.filter.pipelineStage);
+  if (state.filter.industries.length && state.filter.industries.length < 6) {
+    params.set('industry', state.filter.industries.join(','));
+  }
   const res = await fetch(`/api/companies?${params}`);
   const data = await res.json();
   state.companies = data.companies || [];
@@ -864,6 +867,29 @@ function bindToolbar() {
     state.filter.stateFilter = e.target.value;
     loadCompanies();
   });
+  // Industry multi-select dropdown
+  const indBtn = $('#industry-filter-btn');
+  const indDrop = $('#industry-filter-dropdown');
+  if (indBtn && indDrop) {
+    indBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      indDrop.hidden = !indDrop.hidden;
+    });
+    document.addEventListener('click', (e) => {
+      if (!$('#industry-filter-wrap')?.contains(e.target)) indDrop.hidden = true;
+    });
+    $$('input[type="checkbox"]', indDrop).forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const checked = $$('input[type="checkbox"]:checked', indDrop).map((c) => c.value);
+        state.filter.industries = checked;
+        const total = $$('input[type="checkbox"]', indDrop).length;
+        indBtn.textContent = checked.length === total || checked.length === 0
+          ? 'All Industries \u25BE'
+          : checked.map((v) => v).join(', ') + ' \u25BE';
+        loadCompanies();
+      });
+    });
+  }
   $('#pipeline-filter').addEventListener('change', (e) => {
     state.filter.pipelineStage = e.target.value;
     loadCompanies();

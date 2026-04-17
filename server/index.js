@@ -174,8 +174,8 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 
 // ---------- Companies ----------
 app.get('/api/companies', async (req, res) => {
-  const { tier, crm_known: crmKnown, search, sort, state: stateFilter, outreach: outreachStatus, pipeline_stage: pipelineStage } = req.query;
-  const rows = await listCompanies({ tier, crmKnown, search, sort, stateFilter, outreachStatus, pipelineStage });
+  const { tier, crm_known: crmKnown, search, sort, state: stateFilter, outreach: outreachStatus, pipeline_stage: pipelineStage, industry } = req.query;
+  const rows = await listCompanies({ tier, crmKnown, search, sort, stateFilter, outreachStatus, pipelineStage, industry });
   const slim = rows.map(({ raw_research, ...rest }) => rest);
   res.json({ companies: slim, stats: await rollupStats() });
 });

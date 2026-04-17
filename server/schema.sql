@@ -49,6 +49,9 @@ CREATE INDEX IF NOT EXISTS idx_companies_name_key ON companies(name_key);
 -- Contact enrichment (Phase 1 identity + Phase 2 people-search)
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS contact_enrichment JSONB;
 
+-- Industry vertical
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS industry TEXT DEFAULT 'Plumbing';
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- Notes (legacy — new notes go to activities, kept for backward compat)
 -- ────────────────────────────────────────────────────────────────────────────

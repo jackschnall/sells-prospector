@@ -110,7 +110,7 @@ async function markCrmKnown(knownNames) {
   return res.rowCount;
 }
 
-async function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilter, outreachStatus, pipelineStage } = {}) {
+async function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilter, outreachStatus, pipelineStage, industry } = {}) {
   const where = [];
   const params = [];
   let idx = 1;
@@ -135,6 +135,15 @@ async function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stat
   } else if (outreachStatus) {
     where.push(`outreach_status = $${idx++}`);
     params.push(outreachStatus);
+  }
+  if (industry) {
+    const industries = String(industry).split(',').map((s) => s.trim()).filter(Boolean);
+    if (industries.length) {
+      const placeholders = industries.map((_, i) => `$${idx + i}`).join(', ');
+      where.push(`COALESCE(industry, 'Plumbing') IN (${placeholders})`);
+      params.push(...industries);
+      idx += industries.length;
+    }
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const orderMap = {
