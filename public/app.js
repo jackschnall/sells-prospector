@@ -624,6 +624,16 @@ function renderDetail(data) {
     geographic_fit: 0.1,
     market_quality: 0.1,
   };
+  // Check if any signal has raw or notes data
+  const hasDetail = Object.values(signals).some((v) => {
+    const s = typeof v === 'object' && v !== null ? v : {};
+    return (s.raw && s.raw !== '—') || (s.notes && s.notes !== '—');
+  });
+  // Update table header to match
+  const thead = $('#d-signals thead tr');
+  if (thead) thead.innerHTML = hasDetail
+    ? '<th>Signal</th><th>Weight</th><th>Raw</th><th>Notes</th><th>Score</th>'
+    : '<th>Signal</th><th>Weight</th><th>Score</th>';
   const rows = Object.entries(weights)
     .map(([k, w]) => {
       const v = signals[k];
@@ -632,12 +642,14 @@ function renderDetail(data) {
       const scoreColor = score != null
         ? (score >= 7.5 ? 'var(--green, #4FA974)' : score >= 5 ? 'var(--gold)' : 'var(--red, #E74C3C)')
         : '';
+      const detailCols = hasDetail
+        ? `<td>${escapeHtml(s.raw ?? '—')}</td><td class="signal-notes-cell">${escapeHtml(s.notes ?? '—')}</td>`
+        : '';
       return `
         <tr>
           <td>${escapeHtml(k.replace(/_/g, ' '))}</td>
           <td>${Math.round(w * 100)}%</td>
-          <td>${escapeHtml(s.raw ?? '—')}</td>
-          <td class="signal-notes-cell">${escapeHtml(s.notes ?? '—')}</td>
+          ${detailCols}
           <td class="num" style="${scoreColor ? 'color:' + scoreColor + ';font-weight:700' : ''}">${score != null ? score.toFixed(1) : '—'}</td>
         </tr>
       `;
