@@ -2921,6 +2921,21 @@ body.detail-fullscreen { overflow: hidden; }
   color: var(--sidebar-text);
   border-bottom: 3px solid var(--gold);
 }
+.debrief-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.debrief-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--sidebar-text-dim);
+  padding: 0 4px;
+  line-height: 1;
+}
+.debrief-close:hover { color: var(--red); }
 .debrief-title {
   font-family: var(--font-head);
   font-size: 1.3rem;

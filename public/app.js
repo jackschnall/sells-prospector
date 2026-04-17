@@ -1801,6 +1801,15 @@ function renderDebriefModal() {
   const d = state.debriefCall;
   if (!d) return;
 
+  // Show company/contact in subtitle
+  const subParts = [];
+  if (d.company_name) subParts.push(d.company_name);
+  if (d.owner_name) subParts.push(d.owner_name);
+  const sub = $('#debrief-sub');
+  if (sub) sub.textContent = subParts.length
+    ? `${subParts.join(' — ')} · Minimum 10 characters per answer.`
+    : 'Answer each question below before continuing. Each answer must be at least 10 characters.';
+
   // Disposition dropdown — auto-detect No Answer from AI sentiment
   const disp = $('#debrief-disposition');
   if (disp) {
@@ -2447,6 +2456,7 @@ function bindPhase2() {
 
   $('#debrief-submit')?.addEventListener('click', submitDebrief);
   $('#debrief-draft-btn')?.addEventListener('click', saveDebriefAndClose);
+  $('#debrief-close')?.addEventListener('click', closeDebriefModal);
   $('#debrief-disposition')?.addEventListener('change', updateDebriefDisposition);
   $('#debrief-vm-note')?.addEventListener('input', validateDebriefForm);
   $('#debrief-banner-resume')?.addEventListener('click', resumeOldestDebrief);

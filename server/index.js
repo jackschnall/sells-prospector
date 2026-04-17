@@ -651,6 +651,7 @@ app.get('/api/calls/:id/debrief-questions', requireUser, async (req, res) => {
   if (!Array.isArray(questions) || questions.length < 3) {
     questions = STOCK_DEBRIEF_QUESTIONS.slice();
   }
+  const company = call.company_id ? await getCompany(call.company_id) : null;
   res.json({
     ready: true,
     questions,
@@ -661,6 +662,8 @@ app.get('/api/calls/:id/debrief-questions', requireUser, async (req, res) => {
     next_action: call.next_action || null,
     scheduled_callback_date: call.scheduled_callback_date || null,
     min_answer_len: MIN_ANSWER_LEN,
+    company_name: company?.name || null,
+    owner_name: company?.owner || null,
   });
 });
 
