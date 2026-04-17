@@ -17,7 +17,7 @@ Weighted scoring model — score each signal 0-10, then compute the weighted ave
 | market_quality      | 10%    | Median home value & HHI in service area — drives ticket sizes and buyer appetite. Higher-value housing = higher-ticket residential plumbing (repipes, water heaters, luxury remodels) = more attractive to PE rollups. $200k homes=4, $350k=6, $500k=8, $700k+=9. Default 5 if zillow data missing. Home sales volume in the metro is a key driver — each home sale triggers plumbing inspections, repairs, and upgrades. High-volume markets with growing home sales = sustained plumbing demand. |
 
 Tier thresholds (based on weighted final score 0-10):
-  strong-buy  >= 7.5   (internal value — displayed to user as "Likely to Sell")
+  strong-buy  >= 7.5   (internal value — displayed to user as "Prime")
   watchlist   5.0 - 7.49 (internal value — displayed as "Possible")
   pass        < 5.0    (internal value — displayed as "Unlikely")
 `.trim();
@@ -128,7 +128,7 @@ You will receive raw research data on a company and must:
 
 2. Compute the weighted average final score (the server will recompute it as ground truth, but do your best).
 
-3. Assign a tier: strong-buy (>=7.5), watchlist (5.0-7.49), pass (<5.0). These are INTERNAL values — the UI displays them as "Likely to Sell", "Possible", and "Unlikely".
+3. Assign a tier: strong-buy (>=7.5), watchlist (5.0-7.49), pass (<5.0). These are INTERNAL values — the UI displays them as "Prime", "Possible", and "Unlikely".
 
 4. Write a detailed analyst summary (4-6 sentences MINIMUM) in the voice of a senior origination analyst briefing a deal director ahead of a cold call to the owner. The summary MUST:
    - Open with a factual thumbnail: company name, city/state, Google reviews (exact count + rating), PPP amount and implied revenue range, employee/truck count, years in business, owner name and tenure. State whether the company is primarily residential, commercial, or mixed.

@@ -2,7 +2,7 @@ const XLSX = require('xlsx');
 
 // Sell-side user-facing tier labels (internal values stay the same in DB).
 const TIER_LABELS = {
-  'strong-buy': 'Likely to Sell',
+  'strong-buy': 'Prime',
   watchlist: 'Possible',
   pass: 'Unlikely',
 };
