@@ -85,6 +85,13 @@ async function submitDebrief(callLogId, userId, answersInput, disposition) {
   };
   if (disposition) updateData.disposition = disposition;
   if (sentimentOverride) updateData.sentiment = sentimentOverride;
+  // No-answer: auto-schedule callback for next day so they go to top of queue
+  if (isNoAnswer) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    updateData.scheduled_callback_date = tomorrow.toISOString().slice(0, 10);
+    updateData.scheduling_detected = true;
+  }
   await updateCallLog(callLogId, updateData);
 
   // Auto-log a timeline activity summarizing the call
