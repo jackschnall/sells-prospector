@@ -97,7 +97,8 @@ async function loadCompanies() {
   if (state.filter.hideCrm) params.set('crm_known', '0');
   if (state.filter.stateFilter) params.set('state', state.filter.stateFilter);
   if (state.filter.pipelineStage) params.set('pipeline_stage', state.filter.pipelineStage);
-  if (state.filter.industries.length && state.filter.industries.length < 6) {
+  const allIndustryCount = $$('input[type="checkbox"]', $('#industry-filter-dropdown')).length || 6;
+  if (state.filter.industries.length && state.filter.industries.length < allIndustryCount) {
     params.set('industry', state.filter.industries.join(','));
   }
   const res = await fetch(`/api/companies?${params}`);

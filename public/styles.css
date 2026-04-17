@@ -2790,6 +2790,7 @@ body.detail-fullscreen { overflow: hidden; }
 .qp-call-btn:hover { background: var(--gold-soft); }
 .qp-call-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .qp-call-icon { font-size: 1.2rem; }
+.qp-call-active[hidden] { display: none !important; }
 .qp-call-active {
   display: flex;
   flex-direction: column;
@@ -2828,6 +2829,7 @@ body.detail-fullscreen { overflow: hidden; }
   font-weight: 600;
 }
 .qp-end-btn:hover { background: var(--red-soft); }
+.qp-processing[hidden] { display: none !important; }
 .qp-processing {
   display: flex;
   align-items: center;
