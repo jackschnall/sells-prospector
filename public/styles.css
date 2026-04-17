@@ -357,6 +357,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 .tier-chip.strong-buy .dot { background: var(--green-soft); }
 .tier-chip.watchlist  .dot { background: var(--gold); }
 .tier-chip.pass       .dot { background: var(--red-soft); }
+.tier-disabled { opacity: 0.35; pointer-events: none; }
 
 /* Markets list */
 .markets-list {
@@ -2560,6 +2561,18 @@ body.detail-fullscreen { overflow: hidden; }
   font-size: 0.88rem;
 }
 .debrief-banner-icon { color: var(--red); font-size: 1.1rem; }
+.debrief-banner-pick {
+  background: rgba(201, 168, 76, 0.18);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  padding: 1px 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--navy);
+  margin: 0 2px;
+}
+.debrief-banner-pick:hover { background: var(--gold); color: #fff; }
 
 /* ---------- Sentiment badges ---------- */
 .sentiment-badge {

@@ -530,6 +530,10 @@ function bindTabs() {
       if (target === 'campaigns') loadCampaignsList();
       if (target === 'deleted') loadDeletedItems();
       if (target === 'actlog') loadActivityLog();
+      // Disable tier filter sidebar on tabs where it doesn't apply
+      const tierApplies = ['companies', 'dashboard', 'pipeline'].includes(target);
+      const sidebar = $('#tier-filters');
+      if (sidebar) sidebar.classList.toggle('tier-disabled', !tierApplies);
     });
   });
 }
@@ -1339,11 +1343,20 @@ async function refreshPendingDebriefs() {
     if (state.pendingDebriefs.length === 0) {
       banner.hidden = true;
     } else {
-      const n = state.pendingDebriefs.length;
-      $('#debrief-banner-text').textContent =
-        n === 1
-          ? 'You have 1 pending debrief — resume to continue.'
-          : `You have ${n} pending debriefs — resume the oldest.`;
+      const textEl = $('#debrief-banner-text');
+      if (state.pendingDebriefs.length === 1) {
+        const c = state.pendingDebriefs[0];
+        textEl.textContent = `Pending debrief: ${c.company_name || 'Unknown company'}`;
+      } else {
+        // Show each pending debrief as a clickable link
+        textEl.innerHTML = `${state.pendingDebriefs.length} pending debriefs: ` +
+          state.pendingDebriefs.map((c) =>
+            `<button type="button" class="debrief-banner-pick" data-call-id="${c.id}">${escapeHtml(c.company_name || 'Unknown')}</button>`
+          ).join(' ');
+        $$('.debrief-banner-pick', textEl).forEach((btn) => {
+          btn.addEventListener('click', () => openDebriefModal(btn.dataset.callId));
+        });
+      }
       banner.hidden = false;
     }
   } catch {}
@@ -1352,9 +1365,12 @@ async function refreshPendingDebriefs() {
 function resumeOldestDebrief() {
   const pending = state.pendingDebriefs || [];
   if (!pending.length) return;
-  // Oldest = last in newest-first list.
-  const oldest = pending[pending.length - 1];
-  openDebriefModal(oldest.id);
+  if (pending.length === 1) {
+    openDebriefModal(pending[0].id);
+  } else {
+    // Open the oldest (last in ASC list = first chronologically)
+    openDebriefModal(pending[0].id);
+  }
 }
 
 async function dismissOldestDebrief() {
