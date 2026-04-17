@@ -616,14 +616,19 @@ function renderDetail(data) {
   };
   const rows = Object.entries(weights)
     .map(([k, w]) => {
-      const s = signals[k] || {};
+      const v = signals[k];
+      const s = typeof v === 'object' && v !== null ? v : { score: v };
+      const score = s.score != null ? Number(s.score) : null;
+      const scoreColor = score != null
+        ? (score >= 7.5 ? 'var(--green, #4FA974)' : score >= 5 ? 'var(--gold)' : 'var(--red, #E74C3C)')
+        : '';
       return `
         <tr>
           <td>${escapeHtml(k.replace(/_/g, ' '))}</td>
           <td>${Math.round(w * 100)}%</td>
           <td>${escapeHtml(s.raw ?? '—')}</td>
-          <td>${escapeHtml(s.notes ?? '')}</td>
-          <td class="num">${s.score != null ? Number(s.score).toFixed(1) : '—'}</td>
+          <td class="signal-notes-cell">${escapeHtml(s.notes ?? '—')}</td>
+          <td class="num" style="${scoreColor ? 'color:' + scoreColor + ';font-weight:700' : ''}">${score != null ? score.toFixed(1) : '—'}</td>
         </tr>
       `;
     })

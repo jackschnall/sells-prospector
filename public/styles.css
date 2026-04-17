@@ -1711,6 +1711,12 @@ body.detail-fullscreen { overflow: hidden; }
   font-family: var(--font-mono);
   font-size: 0.8rem;
 }
+.signal-notes-cell {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  max-width: 280px;
+  line-height: 1.4;
+}
 
 .contact-grid {
   display: grid;
