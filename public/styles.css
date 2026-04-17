@@ -1986,6 +1986,11 @@ body.detail-fullscreen { overflow: hidden; }
   color: var(--text-muted);
   border: 1px solid var(--card-border);
 }
+.method-tag-inactive {
+  opacity: 0.4;
+  text-decoration: line-through;
+  cursor: help;
+}
 .method-connector {
   width: 2px;
   height: 20px;

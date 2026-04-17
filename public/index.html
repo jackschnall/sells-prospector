@@ -323,10 +323,11 @@
             <!-- Lines to agents -->
             <div class="arch-lines">
               <svg class="arch-svg arch-svg-mid" viewBox="0 0 800 40" preserveAspectRatio="none">
-                <line x1="400" y1="0" x2="100" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="400" y1="0" x2="300" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="400" y1="0" x2="500" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="400" y1="0" x2="700" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="80" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="240" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="560" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="720" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
               </svg>
             </div>
 
@@ -342,6 +343,10 @@
                 <div class="arch-node-desc">Owner/succession, revenue, reviews, litigation</div>
               </div>
               <div class="arch-node arch-agent">
+                <div class="arch-node-name">Contact Enrichment</div>
+                <div class="arch-node-desc">Identity resolution (license DBs, SoS) + people-search enrichment</div>
+              </div>
+              <div class="arch-node arch-agent">
                 <div class="arch-node-name">Scoring Agent</div>
                 <div class="arch-node-desc">7-signal rubric, weighted composite, tier assignment</div>
               </div>
@@ -354,10 +359,11 @@
             <!-- Lines to synthesis -->
             <div class="arch-lines">
               <svg class="arch-svg arch-svg-mid" viewBox="0 0 800 40" preserveAspectRatio="none">
-                <line x1="100" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="300" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="500" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="700" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="80" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="240" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="560" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="720" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
               </svg>
             </div>
 
@@ -413,10 +419,10 @@
                   <h3>Market Intelligence</h3>
                   <p>40 US metros ranked by population growth, housing permits, median home value, plumbing density, and M&amp;A activity. Identifies high-opportunity geographies in the Sun Belt and Southeast.</p>
                   <div class="method-tags">
-                    <span class="method-tag">Census ACS</span>
-                    <span class="method-tag">HUD Permits</span>
-                    <span class="method-tag">Zillow ZHVI</span>
-                    <span class="method-tag">PitchBook</span>
+                    <span class="method-tag method-tag-inactive" title="Not directly integrated — data sourced via web search">Census ACS</span>
+                    <span class="method-tag method-tag-inactive" title="Not directly integrated — data sourced via web search">HUD Permits</span>
+                    <span class="method-tag method-tag-inactive" title="Requires ZILLOW_RAPIDAPI_KEY">Zillow ZHVI</span>
+                    <span class="method-tag method-tag-inactive" title="Not directly integrated — referenced in web research">PitchBook</span>
                   </div>
                 </div>
               </div>
@@ -430,7 +436,7 @@
                     <span class="method-tag">Google Search</span>
                     <span class="method-tag">BBB Directories</span>
                     <span class="method-tag">Yelp</span>
-                    <span class="method-tag">Angi</span>
+                    <span class="method-tag method-tag-inactive" title="Used in web search queries, no direct API">Angi</span>
                     <span class="method-tag">State License DBs</span>
                   </div>
                 </div>
@@ -446,8 +452,8 @@
                     <span class="method-tag">Google Reviews</span>
                     <span class="method-tag">Secretary of State</span>
                     <span class="method-tag">LinkedIn</span>
-                    <span class="method-tag">ZoomInfo</span>
-                    <span class="method-tag">Court Records</span>
+                    <span class="method-tag method-tag-inactive" title="Not integrated — future enrichment provider">ZoomInfo</span>
+                    <span class="method-tag method-tag-inactive" title="Searched via web, no direct integration">Court Records</span>
                   </div>
                 </div>
               </div>
@@ -471,6 +477,21 @@
               <div class="method-connector"></div>
               <div class="method-step">
                 <div class="method-step-num">5</div>
+                <div class="method-step-body">
+                  <h3>Contact Enrichment</h3>
+                  <p>Two-phase owner contact resolution. Phase 1 builds an identity fingerprint from state license databases, Secretary of State filings, and company websites (full legal name, middle name, license number). Phase 2 queries people-search sites with the fingerprint to find direct cell numbers, home addresses, and spouse/relative data for disambiguation.</p>
+                  <div class="method-tags">
+                    <span class="method-tag">State License DBs</span>
+                    <span class="method-tag">Secretary of State</span>
+                    <span class="method-tag">FastPeopleSearch</span>
+                    <span class="method-tag">ThatsThem</span>
+                    <span class="method-tag">TruePeopleSearch</span>
+                  </div>
+                </div>
+              </div>
+              <div class="method-connector"></div>
+              <div class="method-step">
+                <div class="method-step-num">6</div>
                 <div class="method-step-body">
                   <h3>Output</h3>
                   <p>Each researched company gets an analyst summary, outreach angle, contact info, signal scores, and flag report. Results are injected into the database and available immediately in the Companies tab, tearsheets, and Excel export.</p>
