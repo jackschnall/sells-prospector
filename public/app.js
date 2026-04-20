@@ -1513,13 +1513,24 @@ function selectQueueRow(id) {
   $('#qp-phone').textContent = row.phone || 'Missing — add in research';
   $('#qp-owner').textContent = row.owner || '—';
 
-  // Est. Revenue — only show actual research-derived text, not scores
+  // Est. Revenue — extract from signals, summary, or outreach angle
   const revenueRow = $('#qp-revenue-row');
   if (revenueRow) {
     const company = state.companies.find((c) => c.id === id);
     const sigs = company?.signals_json ? safeParse(company.signals_json) : null;
     const revSig = sigs?.revenue_proxy;
-    const revText = typeof revSig === 'object' ? (revSig?.raw || revSig?.rationale || revSig?.notes) : null;
+    // Try structured signal data first
+    let revText = typeof revSig === 'object' ? (revSig?.raw || revSig?.rationale || revSig?.notes) : null;
+    // Fall back to extracting from summary or outreach angle
+    if (!revText && company) {
+      const haystack = (company.summary || '') + ' ' + (company.outreach_angle || '');
+      const m = haystack.match(/\$[\d,.]+[MBK]?\s*(?:-\s*\$?[\d,.]+[MBK]?)?\s*(?:in\s+)?(?:revenue|rev\b|annual|run[- ]?rate)/i)
+             || haystack.match(/(?:revenue|rev\b|annual|run[- ]?rate)\s*(?:of\s+)?~?\$[\d,.]+[MBK]?\s*(?:-\s*\$?[\d,.]+[MBK]?)?/i)
+             || haystack.match(/~?\$[\d,.]+[MBK]?\s*(?:-\s*\$?[\d,.]+[MBK]?)?\s*revenue/i)
+             || haystack.match(/(?:estimated|implied|~)\s*\$[\d,.]+[MBK]?\s*(?:-\s*\$?[\d,.]+[MBK]?)?/i)
+             || haystack.match(/~?[\d,.]+[MBK]\s+revenue/i);
+      if (m) revText = m[0].trim();
+    }
     if (revText) {
       revenueRow.hidden = false;
       $('#qp-revenue').textContent = revText;
