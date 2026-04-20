@@ -1519,17 +1519,11 @@ function selectQueueRow(id) {
     const company = state.companies.find((c) => c.id === id);
     const sigs = company?.signals_json ? safeParse(company.signals_json) : null;
     const revSig = sigs?.revenue_proxy;
-    const revRaw = typeof revSig === 'object' ? revSig?.raw : null;
+    const revRaw = typeof revSig === 'object' ? (revSig?.raw || revSig?.rationale || revSig?.notes) : null;
     const revScore = typeof revSig === 'object' ? revSig?.score : (typeof revSig === 'number' ? revSig : null);
-    // Map score to rough revenue range if no raw text
-    const revenueFromScore = revScore != null ? (
-      revScore >= 9 ? '$40-50M+' : revScore >= 8 ? '$25-40M' : revScore >= 7 ? '$15-25M' :
-      revScore >= 6 ? '$8-15M' : revScore >= 5 ? '$5-8M' : revScore >= 4 ? '$3-5M' : '<$3M'
-    ) : null;
-    const revDisplay = revRaw || revenueFromScore;
-    if (revDisplay) {
+    if (revRaw || revScore != null) {
       revenueRow.hidden = false;
-      $('#qp-revenue').textContent = revRaw || `~${revenueFromScore} (est. from score ${revScore?.toFixed?.(1) || revScore}/10)`;
+      $('#qp-revenue').textContent = revRaw || `Score: ${revScore}/10`;
     } else {
       revenueRow.hidden = true;
     }
