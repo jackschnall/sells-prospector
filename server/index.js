@@ -963,6 +963,106 @@ app.get('/tearsheet/:id', async (req, res) => {
   res.send(filled);
 });
 
+// ---------- Batch Contact Enrichment (runs on server where API key lives) ----------
+const { runContactEnrichment } = require('./contact-enrichment');
+
+let _enrichRunning = false;
+let _enrichProgress = { running: false, current: 0, total: 0, success: 0, failed: 0, currentCompany: '' };
+
+app.get('/api/enrich/status', requireUser, (req, res) => {
+  res.json(_enrichProgress);
+});
+
+app.post('/api/enrich/start', requireAdmin, async (req, res) => {
+  if (_enrichRunning) return res.status(409).json({ error: 'Enrichment already running' });
+  const limit = Math.min(Number(req.body?.limit) || 999, 999);
+  const offset = Number(req.body?.offset) || 0;
+  _enrichRunning = true;
+  _enrichProgress = { running: true, current: 0, total: 0, success: 0, failed: 0, currentCompany: '' };
+  res.json({ ok: true, message: 'Enrichment started' });
+
+  // Run in background
+  (async () => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, name, city, state, owner, phone, email, website, score, tier
+         FROM companies WHERE status = 'done' AND deleted_at IS NULL
+         ORDER BY score DESC NULLS LAST LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      );
+      _enrichProgress.total = rows.length;
+      emit({ type: 'enrich_started', total: rows.length });
+
+      for (let i = 0; i < rows.length; i++) {
+        const c = rows[i];
+        _enrichProgress.current = i + 1;
+        _enrichProgress.currentCompany = c.name;
+
+        let existingResearch = null;
+        try {
+          const full = await getCompany(c.id);
+          if (full?.raw_research) {
+            existingResearch = typeof full.raw_research === 'string'
+              ? JSON.parse(full.raw_research) : full.raw_research;
+          }
+        } catch {}
+
+        try {
+          const result = await runContactEnrichment(c, existingResearch);
+          const contact = result.contact || {};
+          const enrichJson = JSON.stringify({
+            identity: result.identity,
+            enrichment: result.enrichment,
+            contact: result.contact,
+          });
+
+          const sets = ['contact_enrichment = $1'];
+          const params = [enrichJson];
+          let idx = 2;
+          if (contact.owner_name && (!c.owner || contact.identity_confidence === 'high')) {
+            sets.push(`owner = $${idx++}`);
+            params.push(contact.owner_name);
+          }
+          if (contact.direct_cell || contact.business_phone) {
+            const best = contact.direct_cell || contact.business_phone;
+            if (best && best !== c.phone) { sets.push(`phone = $${idx++}`); params.push(best); }
+          }
+          if (contact.direct_email && !c.email) {
+            sets.push(`email = $${idx++}`);
+            params.push(contact.direct_email);
+          }
+          params.push(c.id);
+          await execute(`UPDATE companies SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${idx}`, params);
+          _enrichProgress.success++;
+          emit({ type: 'enrich_progress', current: i + 1, total: rows.length, company: c.name, status: 'ok' });
+        } catch (err) {
+          _enrichProgress.failed++;
+          emit({ type: 'enrich_progress', current: i + 1, total: rows.length, company: c.name, status: 'error', error: err.message });
+          console.error(`[enrich] ${c.name}: ${err.message}`);
+        }
+
+        // Rate limit
+        if (i < rows.length - 1) await new Promise((r) => setTimeout(r, 2000));
+      }
+
+      emit({ type: 'enrich_done', success: _enrichProgress.success, failed: _enrichProgress.failed, total: rows.length });
+    } catch (err) {
+      console.error('[enrich] Fatal:', err.message);
+      emit({ type: 'enrich_error', error: err.message });
+    } finally {
+      _enrichProgress.running = false;
+      _enrichRunning = false;
+    }
+  })();
+});
+
+app.post('/api/enrich/stop', requireAdmin, (req, res) => {
+  // Simple stop — sets a flag but current company will finish
+  _enrichRunning = false;
+  _enrichProgress.running = false;
+  res.json({ ok: true });
+});
+
 // ---------- Global Activity Log ----------
 app.get('/api/activity-log', requireUser, async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 100, 500);

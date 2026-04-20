@@ -2538,6 +2538,17 @@ function init() {
   // Phase 2 bootstrap
   bindPhase2();
   initCampaignBindings();
+  $('#enrich-start-btn')?.addEventListener('click', startEnrichment);
+  $('#enrich-stop-btn')?.addEventListener('click', stopEnrichment);
+  // Check if enrichment is already running on load
+  fetch('/api/enrich/status').then((r) => r.json()).then((d) => {
+    if (d.running) {
+      $('#enrich-start-btn').hidden = true;
+      $('#enrich-stop-btn').hidden = false;
+      $('#enrich-status').hidden = false;
+      pollEnrichStatus();
+    }
+  }).catch(() => {});
   $('#actlog-load-more')?.addEventListener('click', () => loadActivityLog(true));
   loadCurrentUser()
     .then(() => { if (state.user) return refreshPendingDebriefs(); })
@@ -2940,6 +2951,53 @@ async function saveContactModal() {
     console.error(err);
     toast('Failed to save contact', 'error');
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contact Enrichment Runner
+// ─────────────────────────────────────────────────────────────────────────────
+async function startEnrichment() {
+  if (!confirm('Run contact enrichment on all 282 companies? This will take a while (2-3 hours).')) return;
+  try {
+    const res = await fetch('/api/enrich/start', { method: 'POST', headers: { 'content-type': 'application/json' } });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast(data.error || 'Failed to start', 'error');
+      return;
+    }
+    toast('Contact enrichment started', 'ok');
+    $('#enrich-start-btn').hidden = true;
+    $('#enrich-stop-btn').hidden = false;
+    $('#enrich-status').hidden = false;
+    pollEnrichStatus();
+  } catch { toast('Failed to start enrichment', 'error'); }
+}
+
+async function stopEnrichment() {
+  await fetch('/api/enrich/stop', { method: 'POST' });
+  toast('Stopping after current company', 'info');
+}
+
+let _enrichPoll = null;
+function pollEnrichStatus() {
+  clearInterval(_enrichPoll);
+  _enrichPoll = setInterval(async () => {
+    try {
+      const res = await fetch('/api/enrich/status');
+      if (!res.ok) return;
+      const d = await res.json();
+      const pct = d.total ? Math.round((d.current / d.total) * 100) : 0;
+      $('#enrich-fill').style.width = `${pct}%`;
+      $('#enrich-text').textContent = d.running
+        ? `${d.current} / ${d.total} — ${d.currentCompany} (${d.success} ok, ${d.failed} failed)`
+        : `Done. ${d.success} enriched, ${d.failed} failed out of ${d.total}.`;
+      if (!d.running) {
+        clearInterval(_enrichPoll);
+        $('#enrich-start-btn').hidden = false;
+        $('#enrich-stop-btn').hidden = true;
+      }
+    } catch {}
+  }, 3000);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -2002,6 +2002,23 @@ body.detail-fullscreen { overflow: hidden; }
   color: var(--text-muted);
   border: 1px solid var(--card-border);
 }
+.enrich-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.enrich-status { flex: 1; min-width: 250px; }
+.enrich-progress-bar {
+  height: 8px;
+  background: var(--bg-soft);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.enrich-progress-fill {
+  height: 100%;
+  background: var(--gold);
+  border-radius: 4px;
+  transition: width 0.3s;
+  width: 0%;
+}
+.enrich-progress-text { font-size: 0.82rem; color: var(--text-muted); }
 .method-tag-inactive {
   opacity: 0.4;
   text-decoration: line-through;
