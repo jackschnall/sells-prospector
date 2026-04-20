@@ -178,6 +178,7 @@ function renderCard(c) {
 }
 
 function safeParse(s) {
+  if (s && typeof s === 'object') return s;
   try { return JSON.parse(s); } catch { return null; }
 }
 
