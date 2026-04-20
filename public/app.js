@@ -1512,6 +1512,24 @@ function selectQueueRow(id) {
   $('#qp-phone').textContent = row.phone || 'Missing — add in research';
   $('#qp-owner').textContent = row.owner || '—';
 
+  // Est. Revenue from signals
+  const revenueRow = $('#qp-revenue-row');
+  if (revenueRow) {
+    const company = state.companies.find((c) => c.id === id);
+    const sigs = company?.signals_json ? safeParse(company.signals_json) : null;
+    const revSig = sigs?.revenue_proxy;
+    const revRaw = typeof revSig === 'object' ? revSig?.raw : null;
+    if (revRaw) {
+      revenueRow.hidden = false;
+      $('#qp-revenue').textContent = revRaw;
+    } else {
+      revenueRow.hidden = true;
+    }
+  }
+
+  // Load contacts for this company
+  loadQueueContacts(id);
+
   // Scheduled task / calendar event (pinned to top of queue for today)
   const eventSec = $('#qp-event-section');
   if (eventSec) {
@@ -1559,6 +1577,28 @@ function selectQueueRow(id) {
 
   // Load notes for this company
   loadQueueNotes(id);
+}
+
+// ---------- Queue panel — contacts ----------
+async function loadQueueContacts(companyId) {
+  const section = $('#qp-contacts-section');
+  const host = $('#qp-contacts-list');
+  if (!section || !host) return;
+  try {
+    const res = await fetch(`/api/companies/${companyId}/contacts`);
+    if (!res.ok) { section.hidden = true; return; }
+    const { contacts } = await res.json();
+    if (!contacts || !contacts.length) { section.hidden = true; return; }
+    section.hidden = false;
+    host.innerHTML = contacts.map((c) => {
+      const primary = c.is_primary ? '<span style="color:var(--gold);font-weight:600"> (Primary)</span>' : '';
+      const parts = [c.phone, c.email].filter(Boolean).map(escapeHtml);
+      return `<div class="qp-contact-row">
+        <div class="qp-contact-name">${escapeHtml(c.name)}${c.title ? ' — ' + escapeHtml(c.title) : ''}${primary}</div>
+        ${parts.length ? `<div class="qp-contact-info">${parts.join(' · ')}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch { section.hidden = true; }
 }
 
 // ---------- Queue panel — inline notes ----------

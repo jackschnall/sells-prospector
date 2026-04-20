@@ -2900,6 +2900,10 @@ body.detail-fullscreen { overflow: hidden; }
 .qp-processing-text { color: var(--text-muted); font-size: 0.88rem; }
 
 /* ---------- Queue panel notes ---------- */
+.qp-contact-row { padding: 4px 0; border-bottom: 1px solid var(--card-border); }
+.qp-contact-row:last-child { border-bottom: none; }
+.qp-contact-name { font-size: 0.88rem; font-weight: 600; }
+.qp-contact-info { font-size: 0.82rem; color: var(--text-muted); }
 .qp-notes {
   margin-top: 16px;
   border-top: 1px solid var(--card-border);
