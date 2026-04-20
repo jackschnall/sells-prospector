@@ -1513,17 +1513,16 @@ function selectQueueRow(id) {
   $('#qp-phone').textContent = row.phone || 'Missing — add in research';
   $('#qp-owner').textContent = row.owner || '—';
 
-  // Est. Revenue from signals
+  // Est. Revenue — only show actual research-derived text, not scores
   const revenueRow = $('#qp-revenue-row');
   if (revenueRow) {
     const company = state.companies.find((c) => c.id === id);
     const sigs = company?.signals_json ? safeParse(company.signals_json) : null;
     const revSig = sigs?.revenue_proxy;
-    const revRaw = typeof revSig === 'object' ? (revSig?.raw || revSig?.rationale || revSig?.notes) : null;
-    const revScore = typeof revSig === 'object' ? revSig?.score : (typeof revSig === 'number' ? revSig : null);
-    if (revRaw || revScore != null) {
+    const revText = typeof revSig === 'object' ? (revSig?.raw || revSig?.rationale || revSig?.notes) : null;
+    if (revText) {
       revenueRow.hidden = false;
-      $('#qp-revenue').textContent = revRaw || `Score: ${revScore}/10`;
+      $('#qp-revenue').textContent = revText;
     } else {
       revenueRow.hidden = true;
     }
