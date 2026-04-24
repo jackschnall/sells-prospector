@@ -796,20 +796,21 @@ function renderMarketsTab(markets) {
       rankerBody.innerHTML = '<tr><td colspan="9" class="markets-empty">No market data yet. Click Refresh Data.</td></tr>';
     } else {
       rankerBody.innerHTML = markets
-        .sort((a, b) => (b.market_score || 0) - (a.market_score || 0))
+        .sort((a, b) => (Number(b.market_score) || 0) - (Number(a.market_score) || 0))
         .map((m, i) => {
-          const scoreClass = (m.market_score || 0) >= 7 ? 'score-high' : (m.market_score || 0) >= 5 ? 'score-mid' : 'score-low';
+          const ms = Number(m.market_score) || 0;
+          const scoreClass = ms >= 7 ? 'score-high' : ms >= 5 ? 'score-mid' : 'score-low';
           return `
             <tr class="${scoreClass}">
               <td class="rank-col">${i + 1}</td>
               <td><strong>${escapeHtml(m.city)}, ${escapeHtml(m.state)}</strong><div class="msa-sub">${escapeHtml(m.msa_name || '')}</div></td>
               <td>${fmtPop(m.population)}</td>
-              <td>${m.population_growth != null ? m.population_growth.toFixed(1) + '%' : '—'}</td>
+              <td>${m.population_growth != null ? Number(m.population_growth).toFixed(1) + '%' : '—'}</td>
               <td>${m.home_sales_volume ? fmtNum(m.home_sales_volume) : '—'}</td>
               <td>${m.median_home_value ? '$' + fmtNum(m.median_home_value) : '—'}</td>
               <td>${m.housing_permits ? fmtNum(m.housing_permits) : '—'}</td>
-              <td>${m.ma_activity_score != null ? renderMiniBar(m.ma_activity_score) : '—'}</td>
-              <td class="score-cell"><span class="market-score-badge ${scoreClass}">${(m.market_score || 0).toFixed(1)}</span></td>
+              <td>${m.ma_activity_score != null ? renderMiniBar(Number(m.ma_activity_score)) : '—'}</td>
+              <td class="score-cell"><span class="market-score-badge ${scoreClass}">${ms.toFixed(1)}</span></td>
             </tr>
           `;
         })
