@@ -1802,9 +1802,13 @@ async function startQueueCall() {
     // Live Twilio — place call via browser Voice SDK
     if (!data.mock && state.twilioDevice) {
       try {
+        // Normalize phone to E.164 format for Twilio
+        const rawPhone = data.to || row.phone || '';
+        const digits = rawPhone.replace(/\D/g, '');
+        const e164 = digits.length === 10 ? '+1' + digits : digits.length === 11 && digits[0] === '1' ? '+' + digits : '+' + digits;
         const call = await state.twilioDevice.connect({
           params: {
-            To: data.to || row.phone,
+            To: e164,
             callLogId: data.call_log_id,
           },
         });

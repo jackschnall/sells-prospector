@@ -103,7 +103,10 @@ function registerRoutes(app) {
 
   // POST /api/twilio/voice — TwiML webhook Twilio hits when browser SDK connects
   app.post('/api/twilio/voice', express_urlencoded(), async (req, res) => {
-    const to = req.body?.To || req.query.to || '';
+    const rawTo = req.body?.To || req.query.to || '';
+    // Normalize to E.164
+    const digits = rawTo.replace(/\D/g, '');
+    const to = digits.length === 10 ? '+1' + digits : digits.length === 11 && digits[0] === '1' ? '+' + digits : rawTo;
     const callLogId = req.body?.callLogId || req.query.callLogId || '';
     const callSid = req.body?.CallSid || '';
 
@@ -122,8 +125,8 @@ function registerRoutes(app) {
   <Dial record="record-from-answer"
         recordingStatusCallback="${recordingCb}"
         recordingStatusCallbackEvent="completed"
-        action="${statusCb}">
-    <Number statusCallback="${statusCb}" statusCallbackEvent="initiated ringing answered completed">${to}</Number>
+        callerId="${process.env.TWILIO_PHONE_NUMBER || ''}">
+    <Number>${to}</Number>
   </Dial>
 </Response>`;
     res.set('Content-Type', 'text/xml').send(twiml);
