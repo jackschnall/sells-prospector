@@ -212,8 +212,11 @@ async function analyzeCall(callLogId) {
     outreach_angle_refined: analysis.outreach_angle_refined,
   });
 
-  // Auto-create calendar event when scheduling was detected.
-  if (analysis.scheduling_detected && analysis.scheduled_callback_date) {
+  // Calendar event is NO LONGER auto-created here.
+  // Instead, the suggested callback date is stored on call_logs and surfaced
+  // in the debrief modal where the user can Approve / Change / Decline.
+  // The approved date is then used to create the calendar event in debrief.js.
+  if (false) { // Disabled — user approval flow handles this
     try {
       const title = `Callback: ${company?.name || 'Company'}${company?.owner ? ' — ' + company.owner : ''}`;
       const startsAt = `${analysis.scheduled_callback_date}T10:00:00`;

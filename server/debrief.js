@@ -2,7 +2,7 @@
 // Debrief — save drafts and final Q&A, auto-log an activity on completion.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { getCallLog, updateCallLog, getCompany, insertActivity } = require('./db');
+const { getCallLog, updateCallLog, getCompany, insertActivity, insertCalendarEvent } = require('./db');
 const { emit } = require('./agent');
 
 const MIN_ANSWER_LEN = 10;
@@ -37,7 +37,7 @@ async function saveDraft(callLogId, userId, answersInput) {
   return { ok: true, saved_at: new Date().toISOString() };
 }
 
-async function submitDebrief(callLogId, userId, answersInput, disposition) {
+async function submitDebrief(callLogId, userId, answersInput, disposition, callbackDecision) {
   const call = await getCallLog(callLogId);
   if (!call) throw new Error('call_log not found');
   if (call.user_id && call.user_id !== userId) throw new Error('Not your call');
@@ -85,8 +85,18 @@ async function submitDebrief(callLogId, userId, answersInput, disposition) {
   };
   if (disposition) updateData.disposition = disposition;
   if (sentimentOverride) updateData.sentiment = sentimentOverride;
-  // No-answer: auto-schedule callback for next day so they go to top of queue
-  if (isNoAnswer) {
+
+  // Handle callback scheduling based on user decision
+  if (callbackDecision && callbackDecision.action === 'approve' && callbackDecision.date) {
+    // User approved (possibly changed) the suggested callback date
+    updateData.scheduled_callback_date = callbackDecision.date;
+    updateData.scheduling_detected = true;
+  } else if (callbackDecision && callbackDecision.action === 'decline') {
+    // User explicitly declined — clear any auto-detected date
+    updateData.scheduled_callback_date = null;
+    updateData.scheduling_detected = false;
+  } else if (isNoAnswer) {
+    // No-answer with no explicit decision: auto-schedule for next day
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     updateData.scheduled_callback_date = tomorrow.toISOString().slice(0, 10);
@@ -94,8 +104,28 @@ async function submitDebrief(callLogId, userId, answersInput, disposition) {
   }
   await updateCallLog(callLogId, updateData);
 
-  // Auto-log a timeline activity summarizing the call
+  // Create calendar event if callback was approved
   const company = await getCompany(call.company_id);
+  if (updateData.scheduled_callback_date) {
+    try {
+      const title = `Callback: ${company?.name || 'Company'}${company?.owner ? ' — ' + company.owner : ''}`;
+      await insertCalendarEvent({
+        company_id: call.company_id,
+        contact_id: call.contact_id || null,
+        user_id: userId,
+        title,
+        description: callbackDecision?.action === 'approve' ? 'User-approved callback from debrief' : 'Auto-scheduled (no answer)',
+        event_type: 'callback',
+        starts_at: `${updateData.scheduled_callback_date}T10:00:00`,
+        source: 'auto-transcript',
+        call_log_id: callLogId,
+      });
+    } catch (err) {
+      console.warn('[debrief] Failed to create callback calendar event:', err.message);
+    }
+  }
+
+  // Auto-log a timeline activity summarizing the call
   const aiSummary = typeof call.ai_summary === 'string'
     ? (() => { try { return JSON.parse(call.ai_summary); } catch { return null; } })()
     : call.ai_summary;

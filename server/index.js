@@ -702,7 +702,8 @@ app.post('/api/calls/:id/debrief', requireUser, async (req, res) => {
   try {
     const answers = req.body?.answers;
     const disposition = req.body?.disposition;
-    const result = await submitDebrief(req.params.id, req.currentUser.id, answers, disposition);
+    const callbackDecision = req.body?.callback_decision || null;
+    const result = await submitDebrief(req.params.id, req.currentUser.id, answers, disposition, callbackDecision);
     res.json(result);
   } catch (err) {
     const status = err.status || 400;

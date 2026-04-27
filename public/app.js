@@ -1888,8 +1888,30 @@ function renderDebriefModal() {
     </div>
     ${bullets.length ? `<ul class="debrief-summary-bullets">${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
     ${d.next_action ? `<div style="margin-top:6px;"><strong>Next:</strong> ${escapeHtml(d.next_action)}</div>` : ''}
-    ${d.scheduled_callback_date ? `<div style="margin-top:4px;"><strong>Callback:</strong> ${escapeHtml(d.scheduled_callback_date)}</div>` : ''}
   `;
+
+  // Callback suggestion
+  const cbSection = $('#debrief-callback-section');
+  const cbStatus = $('#debrief-callback-status');
+  if (cbSection) {
+    const aiSummary = d.ai_summary || {};
+    const cbDate = d.scheduled_callback_date;
+    const cbQuote = aiSummary.scheduling_quote || null;
+    if (cbDate) {
+      cbSection.hidden = false;
+      cbStatus.hidden = true;
+      const dateInput = $('#debrief-callback-date');
+      dateInput.value = cbDate;
+      const quoteEl = $('#debrief-callback-quote');
+      quoteEl.textContent = cbQuote
+        ? `Based on: "${cbQuote}"`
+        : `Claude detected scheduling intent and suggests ${new Date(cbDate + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`;
+      // Reset state
+      state.debriefCallbackDecision = null;
+    } else {
+      cbSection.hidden = true;
+    }
+  }
 
   // Pre-fill drafted answers if present
   const draft = Array.isArray(d.draft) ? d.draft : [];
@@ -2004,6 +2026,10 @@ async function submitDebrief() {
     ];
   } else {
     payload.answers = collectDebriefAnswers();
+  }
+  // Callback decision
+  if (state.debriefCallbackDecision) {
+    payload.callback_decision = state.debriefCallbackDecision;
   }
   try {
     const res = await fetch(`/api/calls/${d.id}/debrief`, {
@@ -2515,6 +2541,23 @@ function bindPhase2() {
   $('#debrief-close')?.addEventListener('click', closeDebriefModal);
   $('#debrief-disposition')?.addEventListener('change', updateDebriefDisposition);
   $('#debrief-vm-note')?.addEventListener('input', validateDebriefForm);
+  $('#debrief-callback-approve')?.addEventListener('click', () => {
+    const date = $('#debrief-callback-date').value;
+    if (!date) { toast('Pick a date', 'error'); return; }
+    state.debriefCallbackDecision = { action: 'approve', date };
+    const status = $('#debrief-callback-status');
+    status.textContent = `Callback scheduled for ${new Date(date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}`;
+    status.className = 'debrief-callback-status approved';
+    status.hidden = false;
+    $('#debrief-callback-approve').textContent = 'Updated';
+  });
+  $('#debrief-callback-decline')?.addEventListener('click', () => {
+    state.debriefCallbackDecision = { action: 'decline' };
+    const status = $('#debrief-callback-status');
+    status.textContent = 'No callback — normal queue cooldown will apply';
+    status.className = 'debrief-callback-status declined';
+    status.hidden = false;
+  });
   $('#debrief-banner-resume')?.addEventListener('click', resumeOldestDebrief);
   $('#debrief-banner-dismiss')?.addEventListener('click', dismissOldestDebrief);
 

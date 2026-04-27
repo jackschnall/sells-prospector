@@ -845,6 +845,21 @@
           </div>
           <div id="debrief-answered-section">
             <div id="debrief-summary" class="debrief-summary"></div>
+            <div id="debrief-callback-section" class="debrief-callback" hidden>
+              <div class="debrief-callback-header">
+                <span class="debrief-callback-icon">&#128197;</span>
+                <div>
+                  <strong>Suggested Callback</strong>
+                  <div class="debrief-callback-quote" id="debrief-callback-quote"></div>
+                </div>
+              </div>
+              <div class="debrief-callback-controls">
+                <input type="date" id="debrief-callback-date" class="cf-input" />
+                <button type="button" class="btn-primary btn-xs" id="debrief-callback-approve">Approve</button>
+                <button type="button" class="btn-ghost btn-xs" id="debrief-callback-decline">No Callback</button>
+              </div>
+              <div class="debrief-callback-status" id="debrief-callback-status" hidden></div>
+            </div>
             <div id="debrief-questions" class="debrief-questions"></div>
           </div>
         </div>
