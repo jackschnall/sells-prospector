@@ -727,6 +727,13 @@
                     <div class="qp-processing-text">Processing call&hellip; analyzing transcript.</div>
                   </div>
                 </div>
+                <div class="qp-sms">
+                  <div class="qp-section-title">Quick Text</div>
+                  <div class="qp-sms-compose">
+                    <textarea id="qp-sms-input" class="cf-input" rows="2" placeholder="Send a text message&hellip;"></textarea>
+                    <button type="button" class="btn-primary btn-xs" id="qp-sms-send">Send SMS</button>
+                  </div>
+                </div>
                 <div class="qp-notes">
                   <div class="qp-section-title">Notes <span class="d-section-count" id="qp-notes-count">0</span></div>
                   <div class="qp-notes-compose">
@@ -1086,6 +1093,23 @@
           </div>
           <div id="d-call-history" class="d-call-history">
             <div class="d-empty">No calls recorded.</div>
+          </div>
+        </section>
+
+        <section class="d-section">
+          <div class="d-section-title d-section-title-toggle" id="d-messages-toggle">
+            Messages <span class="d-section-count" id="d-messages-count">0</span>
+            <span class="d-section-arrow">&#9662;</span>
+          </div>
+          <div id="d-messages-body" class="d-messages-body">
+            <div id="d-messages-thread" class="d-messages-thread"></div>
+            <div class="d-messages-compose">
+              <textarea id="d-sms-input" class="cf-input" rows="2" placeholder="Type a message&hellip;"></textarea>
+              <div class="d-messages-actions">
+                <span class="d-sms-to" id="d-sms-to"></span>
+                <button type="button" class="btn-primary btn-xs" id="d-sms-send">Send SMS</button>
+              </div>
+            </div>
           </div>
         </section>
 

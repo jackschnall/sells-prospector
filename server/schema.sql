@@ -52,6 +52,27 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS contact_enrichment JSONB;
 -- Industry vertical
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS industry TEXT DEFAULT 'Plumbing';
 
+-- ────────────────────────────────────────────────────────────────────────────
+-- SMS Messages
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS messages (
+  id            TEXT PRIMARY KEY,
+  company_id    TEXT REFERENCES companies(id) ON DELETE CASCADE,
+  contact_id    TEXT REFERENCES contacts(id) ON DELETE SET NULL,
+  user_id       TEXT REFERENCES users(id) ON DELETE SET NULL,
+  direction     TEXT NOT NULL DEFAULT 'outbound',  -- outbound | inbound
+  to_number     TEXT NOT NULL,
+  from_number   TEXT NOT NULL,
+  body          TEXT NOT NULL,
+  status        TEXT DEFAULT 'sent',  -- sent | delivered | failed | received
+  twilio_sid    TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_company ON messages(company_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_to      ON messages(to_number);
+
 -- Soft-delete
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE contacts  ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;

@@ -2900,6 +2900,54 @@ body.detail-fullscreen { overflow: hidden; }
 .qp-processing-text { color: var(--text-muted); font-size: 0.88rem; }
 
 /* ---------- Queue panel notes ---------- */
+/* ─────────────────────────────────────────────────────────────────────────────
+   SMS Messages
+   ───────────────────────────────────────────────────────────────────────────── */
+.d-messages-body { margin-top: 8px; }
+.d-messages-thread {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+}
+.sms-bubble {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.sms-out {
+  align-self: flex-end;
+  background: var(--gold);
+  color: var(--navy);
+  border-bottom-right-radius: 4px;
+}
+.sms-in {
+  align-self: flex-start;
+  background: var(--bg-soft);
+  color: var(--text-primary);
+  border-bottom-left-radius: 4px;
+}
+.sms-meta {
+  font-size: 0.7rem;
+  color: rgba(0,0,0,0.4);
+  margin-top: 2px;
+}
+.sms-out .sms-meta { color: rgba(13,27,42,0.5); }
+.d-messages-compose { margin-top: 8px; }
+.d-messages-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+.d-sms-to { font-size: 0.78rem; color: var(--text-muted); }
+.qp-sms { margin-top: 12px; border-top: 1px solid var(--card-border); padding-top: 10px; }
+.qp-sms-compose { display: flex; flex-direction: column; gap: 6px; }
+
 .qp-contact-row { padding: 4px 0; border-bottom: 1px solid var(--card-border); }
 .qp-contact-row:last-child { border-bottom: none; }
 .qp-contact-name { font-size: 0.88rem; font-weight: 600; }

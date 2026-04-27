@@ -495,7 +495,7 @@ function renderContacts(contacts) {
 }
 
 // ---------- activities in detail ----------
-const ACTIVITY_ICONS = { note: '&#9998;', call: '&#9743;', email: '&#9993;', meeting: '&#9632;', stage_change: '&#9654;', research: '&#9670;' };
+const ACTIVITY_ICONS = { note: '&#9998;', call: '&#9743;', email: '&#9993;', meeting: '&#9632;', stage_change: '&#9654;', research: '&#9670;', sms: '&#128172;', crm_action: '&#9881;' };
 
 function renderActivities(activities) {
   const host = $('#d-activities');
@@ -690,6 +690,11 @@ function renderDetail(data) {
 
   // Notes
   renderNotes(data.notes || []);
+
+  // Messages
+  loadCompanyMessages(c.id);
+  const smsTo = $('#d-sms-to');
+  if (smsTo) smsTo.textContent = c.phone ? `To: ${c.phone}` : 'No phone number';
 
   // Actions
   $('#d-override').textContent = c.crm_override ? 'Crm Override: ON' : 'Research Anyway';
@@ -1050,6 +1055,15 @@ function bindDetailActions() {
   });
   $('#d-notes-stamp')?.addEventListener('click', insertTimestampIntoNote);
   $('#d-notes-save')?.addEventListener('click', saveCompanyNote);
+  $('#d-messages-toggle')?.addEventListener('click', () => {
+    const body = $('#d-messages-body');
+    if (!body) return;
+    body.hidden = !body.hidden;
+    const arrow = $('#d-messages-toggle .d-section-arrow');
+    if (arrow) arrow.textContent = body.hidden ? '\u25B8' : '\u25BE';
+  });
+  $('#d-sms-send')?.addEventListener('click', () => { if (state.activeId) sendCompanySms(state.activeId); });
+  $('#qp-sms-send')?.addEventListener('click', sendQueueSms);
 
   // Override / tearsheet
   $('#d-override').addEventListener('click', async () => {
@@ -1590,6 +1604,84 @@ function selectQueueRow(id) {
 
   // Load notes for this company
   loadQueueNotes(id);
+}
+
+// ---------- SMS messaging ----------
+async function loadCompanyMessages(companyId) {
+  const thread = $('#d-messages-thread');
+  const count = $('#d-messages-count');
+  if (!thread) return;
+  try {
+    const res = await fetch(`/api/companies/${companyId}/messages`);
+    if (!res.ok) { thread.innerHTML = ''; if (count) count.textContent = '0'; return; }
+    const { messages } = await res.json();
+    if (count) count.textContent = String(messages.length);
+    if (!messages.length) {
+      thread.innerHTML = '<div class="d-notes-empty">No messages yet.</div>';
+      return;
+    }
+    thread.innerHTML = messages.reverse().map((m) => {
+      const isOut = m.direction === 'outbound';
+      const time = m.created_at ? new Date(m.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+      return `
+      <div class="sms-bubble ${isOut ? 'sms-out' : 'sms-in'}">
+        <div class="sms-body">${escapeHtml(m.body)}</div>
+        <div class="sms-meta">${isOut ? (m.user_name || 'You') : m.from_number} · ${time}</div>
+      </div>`;
+    }).join('');
+    thread.scrollTop = thread.scrollHeight;
+  } catch { thread.innerHTML = ''; }
+}
+
+async function sendCompanySms(companyId) {
+  const ta = $('#d-sms-input');
+  if (!ta) return;
+  const body = ta.value.trim();
+  if (!body) { toast('Type a message', 'error'); return; }
+  const company = state.companies.find((c) => c.id === companyId);
+  const phone = company?.phone;
+  if (!phone) { toast('No phone number for this company', 'error'); return; }
+  try {
+    const res = await fetch('/api/sms/send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ company_id: companyId, to: phone, body }),
+    });
+    if (res.ok) {
+      ta.value = '';
+      toast('Message sent', 'ok');
+      loadCompanyMessages(companyId);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast(data.error || 'Send failed', 'error');
+    }
+  } catch { toast('Send failed', 'error'); }
+}
+
+async function sendQueueSms() {
+  const companyId = state.queueActiveId;
+  if (!companyId) return;
+  const ta = $('#qp-sms-input');
+  if (!ta) return;
+  const body = ta.value.trim();
+  if (!body) { toast('Type a message', 'error'); return; }
+  const row = state.queue.find((r) => r.id === companyId);
+  const phone = row?.phone;
+  if (!phone) { toast('No phone number', 'error'); return; }
+  try {
+    const res = await fetch('/api/sms/send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ company_id: companyId, to: phone, body }),
+    });
+    if (res.ok) {
+      ta.value = '';
+      toast('Message sent', 'ok');
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast(data.error || 'Send failed', 'error');
+    }
+  } catch { toast('Send failed', 'error'); }
 }
 
 // ---------- Queue panel — contacts ----------
@@ -2666,6 +2758,9 @@ function init() {
         loadCompanies();
       } else if (ev.type === 'activity_added') {
         if (state.activeId === ev.company_id) openDetail(state.activeId);
+      } else if (ev.type === 'sms_received' || ev.type === 'sms_sent') {
+        if (state.activeId === ev.company_id) loadCompanyMessages(ev.company_id);
+        toast(ev.type === 'sms_received' ? `New text from ${ev.from || 'unknown'}` : 'Message sent', ev.type === 'sms_received' ? 'info' : 'ok');
       } else if (ev.type === 'company_done') {
         loadCompanies();
         loadPipelineBoard();
@@ -3101,7 +3196,7 @@ function pollEnrichStatus() {
 // ─────────────────────────────────────────────────────────────────────────────
 const ACTLOG_ICONS = {
   note: '&#9998;', call: '&#9743;', email: '&#9993;', meeting: '&#9632;',
-  stage_change: '&#9654;', research: '&#9670;', crm_action: '&#9881;',
+  stage_change: '&#9654;', research: '&#9670;', crm_action: '&#9881;', sms: '&#128172;',
 };
 
 let actlogOffset = 0;

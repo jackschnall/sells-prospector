@@ -900,7 +900,7 @@ app.get('/api/companies/:id/activities', async (req, res) => {
 
 app.post('/api/companies/:id/activities', async (req, res) => {
   const { type, summary, details, contact_id } = req.body || {};
-  const validTypes = ['note', 'call', 'email', 'meeting', 'stage_change', 'research', 'crm_action'];
+  const validTypes = ['note', 'call', 'email', 'meeting', 'stage_change', 'research', 'crm_action', 'sms'];
   if (!type || !validTypes.includes(type)) return res.status(400).json({ error: 'Invalid activity type' });
   if (!summary) return res.status(400).json({ error: 'Summary required' });
   const activity = await insertActivity({

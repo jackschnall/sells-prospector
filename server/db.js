@@ -913,6 +913,49 @@ async function getUserStats(userId, range = 'today') {
   };
 }
 
+// ─── Messages (SMS) ─────────────────────────────────────────────────────────
+
+async function insertMessage(data) {
+  const { nanoid } = require('nanoid');
+  const id = data.id || nanoid();
+  await execute(
+    `INSERT INTO messages (id, company_id, contact_id, user_id, direction, to_number, from_number, body, status, twilio_sid)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [id, data.company_id || null, data.contact_id || null, data.user_id || null,
+     data.direction || 'outbound', data.to_number, data.from_number, data.body,
+     data.status || 'sent', data.twilio_sid || null]
+  );
+  return id;
+}
+
+async function listMessages(companyId, limit = 50) {
+  return query(
+    `SELECT m.*, u.name AS user_name, ct.name AS contact_name
+     FROM messages m
+     LEFT JOIN users u ON u.id = m.user_id
+     LEFT JOIN contacts ct ON ct.id = m.contact_id
+     WHERE m.company_id = $1
+     ORDER BY m.created_at DESC
+     LIMIT $2`,
+    [companyId, limit]
+  );
+}
+
+async function listMessagesByPhone(phone, limit = 50) {
+  const cleaned = phone.replace(/\D/g, '').slice(-10);
+  return query(
+    `SELECT m.*, c.name AS company_name, u.name AS user_name
+     FROM messages m
+     LEFT JOIN companies c ON c.id = m.company_id
+     LEFT JOIN users u ON u.id = m.user_id
+     WHERE RIGHT(REGEXP_REPLACE(m.to_number, '[^0-9]', '', 'g'), 10) = $1
+        OR RIGHT(REGEXP_REPLACE(m.from_number, '[^0-9]', '', 'g'), 10) = $1
+     ORDER BY m.created_at DESC
+     LIMIT $2`,
+    [cleaned, limit]
+  );
+}
+
 // ─── Campaigns ──────────────────────────────────────────────────────────────
 
 async function listCampaigns() {
@@ -1098,6 +1141,10 @@ module.exports = {
   restoreContact,
   hardDeleteContact,
   listDeleted,
+  // Messages (SMS)
+  insertMessage,
+  listMessages,
+  listMessagesByPhone,
   // Campaigns
   listCampaigns,
   getCampaign,

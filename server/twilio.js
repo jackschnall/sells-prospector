@@ -10,7 +10,7 @@
 // + status callbacks complete the loop.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { insertCallLog, getCallLog, updateCallLog, getCallLogBySid, getCompany } = require('./db');
+const { insertCallLog, getCallLog, updateCallLog, getCallLogBySid, getCompany, insertMessage, listMessages, insertActivity } = require('./db');
 const { requireUser } = require('./auth');
 const { pickMockTranscript, mockTranscriptById } = require('./mock-transcripts');
 const { attachMockTranscript, transcribeFromRecording } = require('./transcription');
@@ -194,6 +194,101 @@ function registerRoutes(app) {
     });
 
     res.json({ ok: true, call_log_id, duration_sec: dur, transcript_id: pick.id });
+  });
+
+  // ─── SMS ────────────────────────────────────────────────────────────────────
+
+  // Send a text message
+  app.post('/api/sms/send', requireUser, async (req, res) => {
+    const { company_id, contact_id, to, body } = req.body || {};
+    if (!to || !body) return res.status(400).json({ error: 'to and body required' });
+    if (!body.trim()) return res.status(400).json({ error: 'Message body cannot be empty' });
+
+    const from = process.env.TWILIO_PHONE_NUMBER;
+    const mock = isMockMode();
+
+    let twilioSid = null;
+    if (!mock) {
+      if (!from) return res.status(500).json({ error: 'TWILIO_PHONE_NUMBER not configured' });
+      try {
+        const msg = await twilioClient().messages.create({
+          to,
+          from,
+          body: body.trim(),
+        });
+        twilioSid = msg.sid;
+      } catch (err) {
+        return res.status(500).json({ error: 'SMS send failed', details: err.message });
+      }
+    } else {
+      twilioSid = mockSid('SM');
+    }
+
+    const msgId = await insertMessage({
+      company_id: company_id || null,
+      contact_id: contact_id || null,
+      user_id: req.currentUser.id,
+      direction: 'outbound',
+      to_number: to,
+      from_number: from || '+10000000000',
+      body: body.trim(),
+      status: mock ? 'mock' : 'sent',
+      twilio_sid: twilioSid,
+    });
+
+    // Log activity
+    if (company_id) {
+      insertActivity({
+        company_id,
+        contact_id: contact_id || null,
+        user_id: req.currentUser.id,
+        type: 'sms',
+        summary: `Sent SMS: "${body.trim().slice(0, 80)}${body.trim().length > 80 ? '...' : ''}"`,
+      }).catch(() => {});
+    }
+
+    emit({ type: 'sms_sent', message_id: msgId, company_id });
+    res.json({ ok: true, id: msgId, mock, twilio_sid: twilioSid });
+  });
+
+  // Get message thread for a company
+  app.get('/api/companies/:id/messages', requireUser, async (req, res) => {
+    const messages = await listMessages(req.params.id, Number(req.query.limit) || 50);
+    res.json({ messages });
+  });
+
+  // Inbound SMS webhook (Twilio sends incoming texts here)
+  app.post('/api/twilio/sms-inbound', express_urlencoded(), async (req, res) => {
+    const from = req.body.From || '';
+    const to = req.body.To || '';
+    const body = req.body.Body || '';
+    const sid = req.body.MessageSid || '';
+
+    // Try to match incoming number to a company by phone
+    const { pool } = require('./db');
+    const cleaned = from.replace(/\D/g, '').slice(-10);
+    const { rows } = await pool.query(
+      `SELECT id, name FROM companies WHERE RIGHT(REGEXP_REPLACE(COALESCE(phone,''), '[^0-9]', '', 'g'), 10) = $1 LIMIT 1`,
+      [cleaned]
+    );
+    const company = rows[0] || null;
+
+    await insertMessage({
+      company_id: company?.id || null,
+      direction: 'inbound',
+      to_number: to,
+      from_number: from,
+      body,
+      status: 'received',
+      twilio_sid: sid,
+    });
+
+    if (company) {
+      emit({ type: 'sms_received', company_id: company.id, from, body: body.slice(0, 100) });
+    }
+
+    // Respond with empty TwiML (acknowledge receipt, don't auto-reply)
+    res.set('Content-Type', 'text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
   });
 }
 
