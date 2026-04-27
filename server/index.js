@@ -646,9 +646,16 @@ app.get('/api/calls/:id/debrief-questions', requireUser, async (req, res) => {
   }
   let questions = safeJson(call.debrief_questions) || [];
   const draft = safeJson(call.debrief_draft) || null;
-  // Fallback: if no questions generated (e.g. stale test call, analyzer offline),
-  // serve stock questions so the user is never stuck on an un-openable debrief.
-  if (!Array.isArray(questions) || questions.length < 3) {
+  const hasAiQuestions = Array.isArray(questions) && questions.length >= 3;
+
+  // If analysis hasn't produced questions yet AND call was recent (< 3 min),
+  // tell frontend to keep polling. After 3 min, fall back to stock questions.
+  const callAge = Date.now() - new Date(call.called_at).getTime();
+  const isStale = callAge > 3 * 60 * 1000; // 3 minutes
+  if (!hasAiQuestions && !isStale && call.debrief_status === 'pending') {
+    return res.json({ ready: false });
+  }
+  if (!hasAiQuestions) {
     questions = STOCK_DEBRIEF_QUESTIONS.slice();
   }
   const company = call.company_id ? await getCompany(call.company_id) : null;
