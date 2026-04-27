@@ -11,8 +11,11 @@ function normalizeAnswers(questions, answersInput) {
   // answers: array of { question, answer } OR { answer } matched by index
   const questionList = Array.isArray(questions) ? questions : [];
   const incoming = Array.isArray(answersInput) ? answersInput : [];
+  // Match by index first (most reliable), fall back to question text match
   return questionList.map((q, i) => {
-    const match = incoming.find((a) => a && a.question === q) || incoming[i] || {};
+    const byIndex = incoming[i];
+    const byText = incoming.find((a) => a && a.question === q);
+    const match = byIndex || byText || {};
     return {
       question: q,
       answer: typeof match.answer === 'string' ? match.answer : '',
@@ -69,10 +72,20 @@ async function submitDebrief(callLogId, userId, answersInput, disposition, callb
     answers = normalizeAnswers(questions, answersInput);
     const bad = answers.filter((a) => !a.answer || a.answer.trim().length < MIN_ANSWER_LEN);
     if (bad.length) {
-      const err = new Error(`Each answer must be at least ${MIN_ANSWER_LEN} characters.`);
-      err.status = 400;
-      err.details = { missing: bad.map((a) => a.question) };
-      throw err;
+      // If incoming answers have enough text but normalization lost them, just use incoming directly
+      const incomingValid = Array.isArray(answersInput) && answersInput.length >= questions.length
+        && answersInput.every((a) => a?.answer && a.answer.trim().length >= MIN_ANSWER_LEN);
+      if (incomingValid) {
+        answers = answersInput.map((a, i) => ({
+          question: questions[i] || a.question || `Question ${i + 1}`,
+          answer: a.answer,
+        }));
+      } else {
+        const err = new Error(`Each answer must be at least ${MIN_ANSWER_LEN} characters. Missing: ${bad.map((a) => a.question).join(', ')}`);
+        err.status = 400;
+        err.details = { missing: bad.map((a) => a.question) };
+        throw err;
+      }
     }
   }
 
