@@ -2,7 +2,7 @@
 // Debrief — save drafts and final Q&A, auto-log an activity on completion.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { getCallLog, updateCallLog, getCompany, insertActivity, insertCalendarEvent } = require('./db');
+const { getCallLog, updateCallLog, getCompany, insertActivity, insertCalendarEvent, addNote } = require('./db');
 const { emit } = require('./agent');
 
 const MIN_ANSWER_LEN = 10;
@@ -168,6 +168,23 @@ async function submitDebrief(callLogId, userId, answersInput, disposition, callb
     summary,
     details: details || null,
   });
+
+  // Auto-save AI notes to company notes
+  if (aiSummary && call.company_id) {
+    const allBullets = (aiSummary.bullets || []).map((b) => `• ${b}`).join('\n');
+    const noteParts = [
+      `📞 Call Notes — ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
+      `Sentiment: ${call.sentiment || 'Neutral'}`,
+      allBullets,
+      call.next_action ? `Next: ${call.next_action}` : null,
+      call.outreach_angle_refined ? `Outreach angle: ${call.outreach_angle_refined}` : null,
+    ].filter(Boolean).join('\n');
+    try {
+      await addNote(call.company_id, noteParts);
+    } catch (err) {
+      console.warn('[debrief] Failed to save AI notes:', err.message);
+    }
+  }
 
   emit({ type: 'debrief_complete', call_log_id: callLogId, company_id: call.company_id });
   emit({ type: 'activity_added', company_id: call.company_id });

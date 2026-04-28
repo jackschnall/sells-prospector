@@ -2455,6 +2455,7 @@ body.detail-fullscreen { overflow: hidden; }
   margin-top: 6px;
 }
 
+.d-contact-form[hidden] { display: none !important; }
 .d-contact-form {
   display: flex;
   flex-direction: column;
@@ -2945,6 +2946,21 @@ body.detail-fullscreen { overflow: hidden; }
   margin-top: 4px;
 }
 .d-sms-to { font-size: 0.78rem; color: var(--text-muted); }
+.queue-done-btn {
+  background: transparent;
+  border: 1px solid var(--green, #4FA974);
+  color: var(--green, #4FA974);
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.queue-done-btn:hover { background: var(--green, #4FA974); color: #fff; }
+.qp-call-number {
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+.qp-call-number[hidden] { display: none !important; }
 .qp-sms { margin-top: 12px; border-top: 1px solid var(--card-border); padding-top: 10px; }
 .qp-sms-compose { display: flex; flex-direction: column; gap: 6px; }
 

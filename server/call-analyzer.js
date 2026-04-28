@@ -42,10 +42,10 @@ function buildAnalysisPrompt(company, transcript) {
       `Transcript:\n"""\n${transcript}\n"""\n\n` +
       `Return a JSON object with EXACTLY these keys:\n` +
       `{\n` +
-      `  "summary_bullets": [3 to 5 short bullet strings, each a concrete fact or dynamic from the call],\n` +
+      `  "summary_bullets": [3 to 4 short bullet strings, each a concrete fact or dynamic from the call],\n` +
       `  "sentiment": one of ["Receptive","Neutral","Not Interested","No Answer","Callback Requested"],\n` +
       `  "scheduling_detected": true|false,\n` +
-      `  "scheduled_callback_date": "YYYY-MM-DD" or null,\n` +
+      `  "scheduled_callback_date": "YYYY-MM-DD" or null (ALWAYS suggest a date if scheduling_detected is true — resolve relative phrases like 'next week', 'after vacation', 'a couple weeks' to an absolute date; today is ${new Date().toISOString().slice(0, 10)}),\n` +
       `  "scheduling_quote": the exact short quote where scheduling was raised, or null,\n` +
       `  "next_action": one concise sentence about what the analyst should do next,\n` +
       `  "outreach_angle_refined": one concise sentence updating the cold-call angle for the next conversation based on what resonated or didn't\n` +
@@ -58,14 +58,14 @@ function buildDebriefQuestionsPrompt(company, transcript, aiSummary) {
   return {
     system:
       'You generate post-call debrief questions for an M&A analyst. The questions MUST be tailored to ' +
-      'what actually happened in THIS call — not generic. 3 to 5 questions, each a single sentence ' +
+      'what actually happened in THIS call — not generic. Exactly 3 questions maximum, each a single sentence ' +
       'ending with a question mark, each focused on a specific event, name, topic, or signal from ' +
       'the transcript. Output ONLY valid JSON.',
     user:
       `Company: ${company?.name || 'Unknown'}\nOwner: ${company?.owner || 'Unknown'}\n\n` +
       `Call summary:\n${JSON.stringify(aiSummary, null, 2)}\n\n` +
       `Transcript:\n"""\n${transcript}\n"""\n\n` +
-      `Return JSON: { "questions": ["Q1?", "Q2?", ...] } with 3–5 items.\n` +
+      `Return JSON: { "questions": ["Q1?", "Q2?", "Q3?"] } with exactly 3 items.\n` +
       `Rules:\n` +
       `- If scheduling was mentioned, ask about the callback (date, anything to prep).\n` +
       `- If a spouse/partner/co-owner was named, ask about their role in the decision.\n` +

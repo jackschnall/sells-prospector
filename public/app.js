@@ -1482,7 +1482,8 @@ function renderQueue(data) {
             <div class="queue-row-reason">${escapeHtml(r.reason || '')}</div>
           </div>
           <div class="queue-row-actions">
-            <button type="button" class="queue-skip-btn" data-skip="${escapeHtml(r.id)}">Skip today</button>
+            <button type="button" class="queue-skip-btn" data-skip="${escapeHtml(r.id)}">Skip</button>
+            <button type="button" class="queue-done-btn" data-done="${escapeHtml(r.id)}">Done</button>
           </div>
         </div>`;
     })
@@ -1490,7 +1491,7 @@ function renderQueue(data) {
   // Bind clicks
   $$('.queue-row', list).forEach((el) => {
     el.addEventListener('click', (e) => {
-      if (e.target.matches('.queue-skip-btn')) return;
+      if (e.target.matches('.queue-skip-btn') || e.target.matches('.queue-done-btn')) return;
       selectQueueRow(el.dataset.id);
     });
   });
@@ -1504,6 +1505,20 @@ function renderQueue(data) {
         body: JSON.stringify({ company_id: id }),
       });
       toast('Skipped for today', 'info');
+      if (state.queueActiveId === id) state.queueActiveId = null;
+      await loadQueue();
+    });
+  });
+  $$('.queue-done-btn', list).forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.done;
+      await fetch('/api/queue/skip', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ company_id: id }),
+      });
+      toast('Marked done for today', 'ok');
       if (state.queueActiveId === id) state.queueActiveId = null;
       await loadQueue();
     });
@@ -1598,12 +1613,42 @@ function selectQueueRow(id) {
 
   // Reset call UI state
   $('#qp-call-btn').hidden = false;
-  $('#qp-call-btn').disabled = !row.phone;
+  // Populate number picker from contacts + company phone
+  const numberPicker = $('#qp-call-number');
+  loadQueuePhoneOptions(id, row.phone).then((hasMultiple) => {
+    numberPicker.hidden = !hasMultiple;
+    $('#qp-call-btn').disabled = !row.phone && !hasMultiple;
+  });
   $('#qp-call-active').hidden = true;
   $('#qp-processing').hidden = true;
 
   // Load notes for this company
   loadQueueNotes(id);
+}
+
+// ---------- Queue phone number picker ----------
+async function loadQueuePhoneOptions(companyId, companyPhone) {
+  const sel = $('#qp-call-number');
+  if (!sel) return false;
+  const numbers = [];
+  if (companyPhone) numbers.push({ label: 'Main: ' + companyPhone, value: companyPhone });
+  try {
+    const res = await fetch(`/api/companies/${companyId}/contacts`);
+    if (res.ok) {
+      const { contacts } = await res.json();
+      (contacts || []).forEach((c) => {
+        if (c.phone && c.phone !== companyPhone) {
+          numbers.push({ label: `${c.name}${c.title ? ' (' + c.title + ')' : ''}: ${c.phone}`, value: c.phone });
+        }
+      });
+    }
+  } catch {}
+  if (numbers.length <= 1) {
+    sel.innerHTML = '';
+    return false;
+  }
+  sel.innerHTML = numbers.map((n) => `<option value="${escapeHtml(n.value)}">${escapeHtml(n.label)}</option>`).join('');
+  return true;
 }
 
 // ---------- SMS messaging ----------
@@ -1786,7 +1831,7 @@ async function startQueueCall() {
     const res = await fetch('/api/twilio/call', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ company_id: row.id, to: row.phone || '' }),
+      body: JSON.stringify({ company_id: row.id, to: $('#qp-call-number')?.value || row.phone || '' }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -1993,16 +2038,20 @@ function renderDebriefModal() {
     const aiSummary = d.ai_summary || {};
     const cbDate = d.scheduled_callback_date;
     const cbQuote = aiSummary.scheduling_quote || null;
-    if (cbDate) {
+    const showCallback = cbDate || d.sentiment === 'Callback Requested' || aiSummary.scheduling_detected;
+    if (showCallback) {
       cbSection.hidden = false;
       cbStatus.hidden = true;
       const dateInput = $('#debrief-callback-date');
-      dateInput.value = cbDate;
+      // Pre-fill: use Claude's date, or default to 2 weeks from today
+      const twoWeeksOut = localDateStr(new Date(Date.now() + 14 * 86400000));
+      dateInput.value = cbDate || twoWeeksOut;
       const quoteEl = $('#debrief-callback-quote');
       quoteEl.textContent = cbQuote
         ? `Based on: "${cbQuote}"`
-        : `Claude detected scheduling intent and suggests ${new Date(cbDate + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`;
-      // Reset state
+        : cbDate
+          ? `Claude suggests ${new Date(cbDate + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`
+          : 'Callback intent detected — suggested 2 weeks out (adjust as needed)';
       state.debriefCallbackDecision = null;
     } else {
       cbSection.hidden = true;
@@ -2141,10 +2190,16 @@ async function submitDebrief() {
     toast('Debrief saved ✓', 'ok');
     closeDebriefModal();
     await refreshPendingDebriefs();
-    // Auto-advance to next row
+    // Auto-skip this company from queue for today
     if (state.queueActiveId) {
+      fetch('/api/queue/skip', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ company_id: state.queueActiveId }),
+      }).catch(() => {});
+      const doneId = state.queueActiveId;
       await loadQueue();
-      const nextIdx = state.queue.findIndex((r) => r.id !== state.queueActiveId);
+      const nextIdx = state.queue.findIndex((r) => r.id !== doneId);
       if (nextIdx >= 0) selectQueueRow(state.queue[nextIdx].id);
     }
     if (state.activeId) openDetail(state.activeId);
