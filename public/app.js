@@ -1664,18 +1664,28 @@ async function loadQueuePhoneOptions(companyId, companyPhone) {
   const sel = $('#qp-call-number');
   if (!sel) return false;
   const numbers = [];
-  if (companyPhone) numbers.push({ label: 'Main: ' + companyPhone, value: companyPhone });
   try {
     const res = await fetch(`/api/companies/${companyId}/contacts`);
     if (res.ok) {
       const { contacts } = await res.json();
+      // Add company phone with primary contact name if available
+      const primaryMatch = (contacts || []).find((c) => c.phone === companyPhone);
+      if (companyPhone) {
+        const label = primaryMatch
+          ? `${primaryMatch.name}${primaryMatch.title ? ' (' + primaryMatch.title + ')' : ''}: ${companyPhone}`
+          : 'Office: ' + companyPhone;
+        numbers.push({ label, value: companyPhone });
+      }
       (contacts || []).forEach((c) => {
         if (c.phone && c.phone !== companyPhone) {
           numbers.push({ label: `${c.name}${c.title ? ' (' + c.title + ')' : ''}: ${c.phone}`, value: c.phone });
         }
       });
     }
-  } catch {}
+  } catch {
+    // If contacts fetch failed, still add the company phone
+    if (companyPhone && !numbers.length) numbers.push({ label: 'Office: ' + companyPhone, value: companyPhone });
+  }
   if (numbers.length <= 1) {
     sel.innerHTML = '';
     return false;
