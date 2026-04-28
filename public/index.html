@@ -323,11 +323,10 @@
             <!-- Lines to agents -->
             <div class="arch-lines">
               <svg class="arch-svg arch-svg-mid" viewBox="0 0 800 40" preserveAspectRatio="none">
-                <line x1="400" y1="0" x2="80" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="400" y1="0" x2="240" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="400" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="400" y1="0" x2="560" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="400" y1="0" x2="720" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="100" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="300" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="500" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="400" y1="0" x2="700" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
               </svg>
             </div>
 
@@ -340,11 +339,7 @@
               </div>
               <div class="arch-node arch-agent">
                 <div class="arch-node-name">Research Agent</div>
-                <div class="arch-node-desc">Owner/succession, revenue, reviews, litigation</div>
-              </div>
-              <div class="arch-node arch-agent">
-                <div class="arch-node-name">Contact Enrichment</div>
-                <div class="arch-node-desc">Identity resolution (license DBs, SoS) + people-search enrichment</div>
+                <div class="arch-node-desc">Owner/succession, revenue, reviews, litigation, contact info</div>
               </div>
               <div class="arch-node arch-agent">
                 <div class="arch-node-name">Scoring Agent</div>
@@ -359,11 +354,10 @@
             <!-- Lines to synthesis -->
             <div class="arch-lines">
               <svg class="arch-svg arch-svg-mid" viewBox="0 0 800 40" preserveAspectRatio="none">
-                <line x1="80" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="240" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="400" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="560" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
-                <line x1="720" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="100" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="300" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="500" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
+                <line x1="700" y1="0" x2="400" y2="38" stroke="var(--gold)" stroke-width="1.5" opacity="0.35"/>
               </svg>
             </div>
 
@@ -422,6 +416,7 @@
                     <span class="method-tag method-tag-inactive" title="Not directly integrated — data sourced via web search">Census ACS</span>
                     <span class="method-tag method-tag-inactive" title="Not directly integrated — data sourced via web search">HUD Permits</span>
                     <span class="method-tag">Zillow ZHVI</span>
+                    <span class="method-tag">Redfin Sales Data</span>
                     <span class="method-tag method-tag-inactive" title="Not directly integrated — referenced in web research">PitchBook</span>
                   </div>
                 </div>
@@ -479,13 +474,14 @@
                 <div class="method-step-num">5</div>
                 <div class="method-step-body">
                   <h3>Contact Enrichment</h3>
-                  <p>Two-phase owner contact resolution. Phase 1 builds an identity fingerprint from state license databases, Secretary of State filings, and company websites (full legal name, middle name, license number). Phase 2 queries people-search sites with the fingerprint to find direct cell numbers, home addresses, and spouse/relative data for disambiguation.</p>
+                  <p>Owner identity resolution via Claude Code web research. Searches state license databases, Secretary of State filings, company websites, BBB, and ZoomInfo to build an identity fingerprint (full legal name, middle name, license number, title). Office phone numbers found for 99% of companies. Direct cell numbers require manual people-search or a paid enrichment provider (Apollo, RocketReach).</p>
                   <div class="method-tags">
                     <span class="method-tag">State License DBs</span>
                     <span class="method-tag">Secretary of State</span>
-                    <span class="method-tag">FastPeopleSearch</span>
-                    <span class="method-tag">ThatsThem</span>
-                    <span class="method-tag">TruePeopleSearch</span>
+                    <span class="method-tag">Company Websites</span>
+                    <span class="method-tag">BBB / Google</span>
+                    <span class="method-tag method-tag-inactive" title="Web search can't penetrate detail pages — need manual lookup or paid API">FastPeopleSearch</span>
+                    <span class="method-tag method-tag-inactive" title="Web search can't penetrate detail pages — need manual lookup or paid API">ThatsThem</span>
                   </div>
                 </div>
               </div>
@@ -524,23 +520,6 @@
               </div>
             </div>
 
-          </div>
-
-          <!-- Contact Enrichment Runner -->
-          <div class="method-page" style="margin-top:32px">
-            <div class="method-header">
-              <div class="method-icon">&#9743;</div>
-              <h2 class="method-title">Contact Enrichment</h2>
-              <p class="method-subtitle">Re-run two-phase identity resolution + people-search on all researched companies</p>
-            </div>
-            <div class="enrich-controls">
-              <button type="button" class="btn-primary" id="enrich-start-btn">Run Contact Enrichment</button>
-              <button type="button" class="btn-ghost" id="enrich-stop-btn" hidden>Stop</button>
-              <div class="enrich-status" id="enrich-status" hidden>
-                <div class="enrich-progress-bar"><div class="enrich-progress-fill" id="enrich-fill"></div></div>
-                <div class="enrich-progress-text" id="enrich-text">Starting&hellip;</div>
-              </div>
-            </div>
           </div>
 
         </div>
