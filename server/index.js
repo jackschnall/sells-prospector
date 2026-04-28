@@ -647,12 +647,14 @@ app.get('/api/calls/:id/debrief-questions', requireUser, async (req, res) => {
   let questions = safeJson(call.debrief_questions) || [];
   const draft = safeJson(call.debrief_draft) || null;
   const hasAiQuestions = Array.isArray(questions) && questions.length >= 3;
+  const hasAiSummary = call.ai_summary != null;
 
-  // If analysis hasn't produced questions yet AND call was recent (< 3 min),
-  // tell frontend to keep polling. After 3 min, fall back to stock questions.
+  // Wait for AI analysis to complete before returning ready
+  // Only fall back to stock questions for old calls (>5 min) or already-debriefed calls
   const callAge = Date.now() - new Date(call.called_at).getTime();
-  const isStale = callAge > 3 * 60 * 1000; // 3 minutes
-  if (!hasAiQuestions && !isStale && call.debrief_status === 'pending') {
+  const isStale = callAge > 5 * 60 * 1000; // 5 minutes
+  const alreadyDebriefed = call.debrief_status === 'complete' || call.debrief_status === 'draft';
+  if (!hasAiQuestions && !isStale && !alreadyDebriefed) {
     return res.json({ ready: false });
   }
   if (!hasAiQuestions) {
