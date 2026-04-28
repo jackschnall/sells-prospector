@@ -12,6 +12,8 @@ const {
   updateCallLog,
   getCompany,
   insertCalendarEvent,
+  pool,
+  execute,
 } = require('./db');
 const { emit } = require('./agent');
 
@@ -48,9 +50,25 @@ function buildAnalysisPrompt(company, transcript) {
       `  "scheduled_callback_date": "YYYY-MM-DD" or null (ALWAYS suggest a date if scheduling_detected is true — resolve relative phrases like 'next week', 'after vacation', 'a couple weeks' to an absolute date; today is ${new Date().toISOString().slice(0, 10)}),\n` +
       `  "scheduling_quote": the exact short quote where scheduling was raised, or null,\n` +
       `  "next_action": one concise sentence about what the analyst should do next,\n` +
-      `  "outreach_angle_refined": one concise sentence updating the cold-call angle for the next conversation based on what resonated or didn't\n` +
+      `  "outreach_angle_refined": one concise sentence updating the cold-call angle for the next conversation based on what resonated or didn't,\n` +
+      `  "key_info": { extract ANY business facts mentioned in the conversation. Use null for anything NOT mentioned. Fields:\n` +
+      `    "revenue": string or null (e.g. "$8M", "about $12 million"),\n` +
+      `    "net_income": string or null,\n` +
+      `    "ebitda": string or null,\n` +
+      `    "employees": string or null (e.g. "45", "about 30"),\n` +
+      `    "trucks": string or null,\n` +
+      `    "locations": string or null (e.g. "3 offices"),\n` +
+      `    "years_in_business": string or null,\n` +
+      `    "service_type": string or null ("residential", "commercial", "both"),\n` +
+      `    "services_offered": [array of strings] or null (e.g. ["plumbing", "HVAC", "electrical"]),\n` +
+      `    "software_tools": [array of strings] or null (e.g. ["ServiceTitan", "QuickBooks"]),\n` +
+      `    "owner_age": string or null,\n` +
+      `    "spouse_name": string or null,\n` +
+      `    "family_involved": [array of strings] or null (e.g. ["son runs field ops", "wife does books"]),\n` +
+      `    "other": [array of any other notable business facts as strings] or null\n` +
+      `  }\n` +
       `}\n` +
-      `If the call was a voicemail, gatekeeper, or no conversation, use sentiment "No Answer".`,
+      `If the call was a voicemail, gatekeeper, or no conversation, use sentiment "No Answer". For key_info, ONLY include facts explicitly stated in the conversation — do not infer or guess.`,
   };
 }
 
@@ -204,6 +222,8 @@ async function analyzeCall(callLogId) {
     ai_summary: {
       bullets: analysis.summary_bullets,
       scheduling_quote: analysis.scheduling_quote,
+      scheduling_detected: !!analysis.scheduling_detected,
+      key_info: analysis.key_info || null,
     },
     sentiment: analysis.sentiment,
     scheduling_detected: !!analysis.scheduling_detected,
@@ -211,6 +231,30 @@ async function analyzeCall(callLogId) {
     next_action: analysis.next_action,
     outreach_angle_refined: analysis.outreach_angle_refined,
   });
+
+  // Merge key_info into company record (additive — never overwrite with null)
+  if (analysis.key_info && call.company_id) {
+    try {
+      const { rows } = await pool.query('SELECT key_info FROM companies WHERE id = $1', [call.company_id]);
+      const existing = (rows[0]?.key_info && typeof rows[0].key_info === 'object') ? rows[0].key_info : {};
+      const incoming = analysis.key_info;
+      // Merge: only overwrite if incoming has a non-null value
+      const merged = { ...existing };
+      for (const [k, v] of Object.entries(incoming)) {
+        if (v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) {
+          if (Array.isArray(v) && Array.isArray(merged[k])) {
+            // Merge arrays, deduplicate
+            merged[k] = [...new Set([...merged[k], ...v])];
+          } else {
+            merged[k] = v;
+          }
+        }
+      }
+      await execute('UPDATE companies SET key_info = $1, updated_at = NOW() WHERE id = $2', [JSON.stringify(merged), call.company_id]);
+    } catch (err) {
+      console.warn('[call-analyzer] Failed to save key_info:', err.message);
+    }
+  }
 
   // Calendar event is NO LONGER auto-created here.
   // Instead, the suggested callback date is stored on call_logs and surfaced

@@ -2455,6 +2455,15 @@ body.detail-fullscreen { overflow: hidden; }
   margin-top: 6px;
 }
 
+/* Key Info */
+.d-keyinfo, #qp-keyinfo { display: flex; flex-direction: column; gap: 4px; }
+.keyinfo-row { display: flex; gap: 10px; font-size: 0.88rem; padding: 3px 0; border-bottom: 1px solid var(--card-border); }
+.keyinfo-row:last-child { border-bottom: none; }
+.keyinfo-label { font-weight: 600; min-width: 100px; color: var(--text-muted); font-size: 0.82rem; }
+.keyinfo-value { flex: 1; }
+#d-keyinfo-section[hidden] { display: none !important; }
+#qp-keyinfo-section[hidden] { display: none !important; }
+
 .d-contact-form[hidden] { display: none !important; }
 .d-contact-form {
   display: flex;

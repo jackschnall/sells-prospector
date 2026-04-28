@@ -691,6 +691,9 @@ function renderDetail(data) {
   // Notes
   renderNotes(data.notes || []);
 
+  // Key Info
+  renderKeyInfo(c.key_info, '#d-keyinfo', '#d-keyinfo-section');
+
   // Messages
   loadCompanyMessages(c.id);
   const smsTo = $('#d-sms-to');
@@ -1569,6 +1572,10 @@ function selectQueueRow(id) {
     }
   }
 
+  // Key Info
+  const qpCompany = state.companies.find((c) => c.id === id);
+  renderKeyInfo(qpCompany?.key_info, '#qp-keyinfo', '#qp-keyinfo-section');
+
   // Load contacts for this company
   loadQueueContacts(id);
 
@@ -1624,6 +1631,32 @@ function selectQueueRow(id) {
 
   // Load notes for this company
   loadQueueNotes(id);
+}
+
+// ---------- Key Info renderer ----------
+const KEY_INFO_LABELS = {
+  revenue: 'Revenue', net_income: 'Net Income', ebitda: 'EBITDA',
+  employees: 'Employees', trucks: 'Trucks', locations: 'Locations',
+  years_in_business: 'Years in Business', service_type: 'Service Type',
+  services_offered: 'Services', software_tools: 'Software/Tools',
+  owner_age: 'Owner Age', spouse_name: 'Spouse', family_involved: 'Family',
+  other: 'Other',
+};
+
+function renderKeyInfo(keyInfo, hostSel, sectionSel) {
+  const host = $(hostSel);
+  const section = $(sectionSel);
+  if (!host || !section) return;
+  const info = (keyInfo && typeof keyInfo === 'object') ? keyInfo : safeParse(keyInfo);
+  if (!info || !Object.keys(info).length) { section.hidden = true; return; }
+  const entries = Object.entries(info).filter(([k, v]) => v !== null && v !== undefined && !(Array.isArray(v) && !v.length));
+  if (!entries.length) { section.hidden = true; return; }
+  section.hidden = false;
+  host.innerHTML = entries.map(([k, v]) => {
+    const label = KEY_INFO_LABELS[k] || k.replace(/_/g, ' ');
+    const val = Array.isArray(v) ? v.join(', ') : String(v);
+    return `<div class="keyinfo-row"><span class="keyinfo-label">${escapeHtml(label)}</span><span class="keyinfo-value">${escapeHtml(val)}</span></div>`;
+  }).join('');
 }
 
 // ---------- Queue phone number picker ----------

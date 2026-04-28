@@ -52,6 +52,9 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS contact_enrichment JSONB;
 -- Industry vertical
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS industry TEXT DEFAULT 'Plumbing';
 
+-- Key Info (structured facts from calls — revenue, employees, services, etc.)
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS key_info JSONB DEFAULT '{}'::JSONB;
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- SMS Messages
 -- ────────────────────────────────────────────────────────────────────────────
