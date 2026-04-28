@@ -106,7 +106,7 @@ async function buildQueue(user, opts = {}) {
       ORDER BY ce.company_id, ce.starts_at ASC
     )
     SELECT
-      c.id, c.name, c.city, c.state, c.phone, c.owner, c.email,
+      c.id, c.name, c.city, c.state, c.phone, c.phone_type, c.owner, c.email,
       c.score, c.tier, c.outreach_angle, c.pipeline_stage,
       lc.last_call_id, lc.last_called_at, lc.last_sentiment,
       lc.last_status, lc.last_debrief_status,
@@ -146,6 +146,7 @@ async function buildQueue(user, opts = {}) {
       city: row.city,
       state: row.state,
       phone: row.phone,
+      phone_type: row.phone_type || 'office',
       owner: row.owner,
       email: row.email,
       score: row.score,

@@ -6,6 +6,7 @@ const {
   getConfig,
   insertCompany,
   normalizeName,
+  execute,
 } = require('./db');
 const { runResearch } = require('./research');
 const { runScoring } = require('./scoring');
@@ -192,11 +193,12 @@ async function processOne(company, thesis) {
     ? {
         owner: enrichedContact.owner_name || basicContacts.owner,
         phone: enrichedContact.direct_cell || enrichedContact.business_phone || basicContacts.phone,
+        phone_type: enrichedContact.direct_cell ? 'direct_cell' : 'office',
         email: enrichedContact.direct_email || basicContacts.email,
         address: enrichedContact.business_address || basicContacts.address,
         linkedin: enrichedContact.linkedin_url || basicContacts.linkedin,
       }
-    : basicContacts;
+    : { ...basicContacts, phone_type: 'office' };
 
   // Persist
   const persistData = {
@@ -215,6 +217,10 @@ async function processOne(company, thesis) {
     address: contacts.address,
     linkedin: contacts.linkedin,
   };
+  // Set phone_type separately (not in updateCompanyResearch)
+  if (contacts.phone_type) {
+    execute('UPDATE companies SET phone_type = $1 WHERE id = $2', [contacts.phone_type, company.id]).catch(() => {});
+  }
   if (contactEnrichmentJson) {
     persistData.contact_enrichment = contactEnrichmentJson;
   }

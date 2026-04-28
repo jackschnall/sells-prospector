@@ -55,6 +55,9 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS industry TEXT DEFAULT 'Plumbing';
 -- Key Info (structured facts from calls — revenue, employees, services, etc.)
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS key_info JSONB DEFAULT '{}'::JSONB;
 
+-- Phone type (office | direct_cell | home)
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS phone_type TEXT DEFAULT 'office';
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- SMS Messages
 -- ────────────────────────────────────────────────────────────────────────────

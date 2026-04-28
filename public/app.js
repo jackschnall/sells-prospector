@@ -171,7 +171,7 @@ function renderCard(c) {
       ${c.outreach_angle ? `<div class="outreach-angle">${escapeHtml(c.outreach_angle)}</div>` : ''}
       <div class="contact-preview">
         ${c.owner ? `<span>${escapeHtml(c.owner)}</span>` : ''}
-        ${c.phone ? `<span>${escapeHtml(c.phone)}</span>` : ''}
+        ${c.phone ? `<span>${escapeHtml(c.phone)} <small style="color:var(--text-muted)">${c.phone_type === 'direct_cell' ? '(Direct)' : '(Office)'}</small></span>` : ''}
       </div>
     </article>
   `;
@@ -1543,7 +1543,10 @@ function selectQueueRow(id) {
   const tierEl = $('#qp-tier');
   tierEl.textContent = tierLabel(row.tier) || '—';
   tierEl.className = 'qp-tier ' + (row.tier || '');
-  $('#qp-phone').textContent = row.phone || 'Missing — add in research';
+  const phoneLabel = row.phone
+    ? row.phone + (row.phone_type === 'direct_cell' ? ' (Direct)' : ' (Office)')
+    : 'Missing — add in research';
+  $('#qp-phone').textContent = phoneLabel;
   $('#qp-owner').textContent = row.owner || '—';
 
   // Est. Revenue — extract from signals, summary, or outreach angle
