@@ -1,11 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node server/cc-inject.js*)",
-      "Bash(cat*)",
-      "Bash(echo*)",
-      "Bash(cd /Users/jackschnall/sells-prospector*)",
-      "Bash(lsof*)",
+      "Bash(*)",
       "WebSearch",
       "WebFetch"
     ]
