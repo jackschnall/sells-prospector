@@ -129,9 +129,11 @@ async function buildQueue(user, opts = {}) {
   `;
   const { rows: candidates } = await pool.query(sql, baseParams);
 
-  // Filter out today's skips (unless the row is a pinned override).
+  // Filter out today's skips (unless pinned, has a calendar event due, or has a scheduled callback).
   const pinSet = new Set(pins);
-  const usable = candidates.filter((r) => pinSet.has(r.id) || !skipSet.has(r.id));
+  const usable = candidates.filter((r) =>
+    pinSet.has(r.id) || !skipSet.has(r.id) || r.event_id || r.scheduled_callback_date
+  );
 
   // Assign buckets + reason.
   const buckets = { 1: [], 2: [], 3: [], 4: [], 5: [] };
