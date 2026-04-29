@@ -186,20 +186,36 @@ async function submitDebrief(callLogId, userId, answersInput, disposition, callb
     }
   }
 
-  // Accumulate call intelligence summary on company record
-  if (aiSummary && call.company_id) {
+  // Rebuild call intelligence — merged bullet points from all answered calls
+  if (call.company_id) {
     try {
       const { pool } = require('./db');
-      const { rows } = await pool.query('SELECT call_intelligence FROM companies WHERE id = $1', [call.company_id]);
-      const existing = rows[0]?.call_intelligence || '';
-      const dateStr = new Date().toLocaleDateString();
-      const newEntry = [
-        `[${dateStr}] ${call.sentiment || 'Neutral'}`,
-        ...(aiSummary.bullets || []).map((b) => `  • ${b}`),
-        call.next_action ? `  Next: ${call.next_action}` : null,
-      ].filter(Boolean).join('\n');
-      const updated = existing ? existing + '\n\n' + newEntry : newEntry;
-      await pool.query('UPDATE companies SET call_intelligence = $1, updated_at = NOW() WHERE id = $2', [updated, call.company_id]);
+      // Get all completed calls for this company that had real conversations
+      const { rows: allCalls } = await pool.query(
+        `SELECT ai_summary, sentiment FROM call_logs
+         WHERE company_id = $1 AND debrief_status = 'complete'
+           AND sentiment NOT IN ('No Answer')
+           AND ai_summary IS NOT NULL
+         ORDER BY called_at ASC`,
+        [call.company_id]
+      );
+      // Collect all unique bullets across all calls
+      const seen = new Set();
+      const allBullets = [];
+      for (const cl of allCalls) {
+        const bullets = cl.ai_summary?.bullets || [];
+        for (const b of bullets) {
+          const key = b.toLowerCase().trim();
+          if (!seen.has(key)) {
+            seen.add(key);
+            allBullets.push(b);
+          }
+        }
+      }
+      if (allBullets.length) {
+        const intel = allBullets.map((b) => `• ${b}`).join('\n');
+        await pool.query('UPDATE companies SET call_intelligence = $1, updated_at = NOW() WHERE id = $2', [intel, call.company_id]);
+      }
     } catch (err) {
       console.warn('[debrief] Failed to update call_intelligence:', err.message);
     }
