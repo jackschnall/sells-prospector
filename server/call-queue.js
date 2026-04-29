@@ -103,6 +103,7 @@ async function buildQueue(user, opts = {}) {
       WHERE ce.company_id IS NOT NULL
         AND COALESCE(ce.completed, FALSE) = FALSE
         AND ce.starts_at::date <= CURRENT_DATE
+        AND ce.starts_at::date >= (CURRENT_DATE - INTERVAL '7 days')
       ORDER BY ce.company_id, ce.starts_at ASC
     )
     SELECT

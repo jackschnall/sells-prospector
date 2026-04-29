@@ -2601,6 +2601,7 @@ body.detail-fullscreen { overflow: hidden; }
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* ---------- Pending debrief banner ---------- */
+.debrief-banner[hidden] { display: none !important; }
 .debrief-banner {
   position: sticky;
   top: 0;
