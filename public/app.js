@@ -167,7 +167,7 @@ function renderCard(c) {
       </div>
       <div class="card-chips">${crmBadge}${status}${stageChip}</div>
       ${bars ? `<div class="signals">${bars}</div>` : ''}
-      <div class="summary">${escapeHtml(c.summary || (c.status === 'pending' ? 'Not yet researched.' : ''))}</div>
+      <div class="summary">${escapeHtml(c.summary || (c.call_intelligence ? c.call_intelligence.replace(/\*\*/g, '').replace(/^• /gm, '').split('\n').slice(0, 3).join('. ') : (c.status === 'pending' ? 'Not yet researched.' : '')))}</div>
       ${c.outreach_angle ? `<div class="outreach-angle">${escapeHtml(c.outreach_angle)}</div>` : ''}
       <div class="contact-preview">
         ${c.owner ? `<span>${escapeHtml(c.owner)}</span>` : ''}
