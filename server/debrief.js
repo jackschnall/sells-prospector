@@ -186,11 +186,11 @@ async function submitDebrief(callLogId, userId, answersInput, disposition, callb
     }
   }
 
-  // Rebuild call intelligence — merged bullet points from all answered calls
+  // Rebuild call intelligence — Claude consolidates all call facts into clean bullets
   if (call.company_id) {
     try {
       const { pool } = require('./db');
-      // Get all completed calls for this company that had real conversations
+      const { callJson, MODELS } = require('./claude');
       const { rows: allCalls } = await pool.query(
         `SELECT ai_summary, sentiment FROM call_logs
          WHERE company_id = $1 AND debrief_status = 'complete'
@@ -199,22 +199,29 @@ async function submitDebrief(callLogId, userId, answersInput, disposition, callb
          ORDER BY called_at ASC`,
         [call.company_id]
       );
-      // Collect all unique bullets across all calls
-      const seen = new Set();
       const allBullets = [];
       for (const cl of allCalls) {
-        const bullets = cl.ai_summary?.bullets || [];
-        for (const b of bullets) {
-          const key = b.toLowerCase().trim();
-          if (!seen.has(key)) {
-            seen.add(key);
-            allBullets.push(b);
-          }
-        }
+        for (const b of (cl.ai_summary?.bullets || [])) allBullets.push(b);
       }
       if (allBullets.length) {
-        const intel = allBullets.map((b) => `• ${b}`).join('\n');
-        await pool.query('UPDATE companies SET call_intelligence = $1, updated_at = NOW() WHERE id = $2', [intel, call.company_id]);
+        try {
+          const { parsed } = await callJson({
+            model: MODELS.worker,
+            system: 'You consolidate call notes into a concise intelligence brief. Remove duplicates. Merge related facts. Keep each bullet SHORT (under 15 words). Put the most important keyword or number in **bold**. Skip filler, context, and obvious details. Only keep facts that matter for a future call.',
+            user: `Raw notes from multiple calls with this company:\n${allBullets.map(b => '- ' + b).join('\n')}\n\nConsolidate into a clean bullet list. Return JSON: {"bullets":["short fact 1","short fact 2",...]}. Use **bold** for the key term in each bullet. No duplicates. Max 8 bullets.`,
+            maxTokens: 500,
+          });
+          if (parsed?.bullets?.length) {
+            const intel = parsed.bullets.map((b) => `• ${b}`).join('\n');
+            await pool.query('UPDATE companies SET call_intelligence = $1, updated_at = NOW() WHERE id = $2', [intel, call.company_id]);
+          }
+        } catch (claudeErr) {
+          // Fallback: just deduplicate without Claude
+          const seen = new Set();
+          const deduped = allBullets.filter((b) => { const k = b.toLowerCase().trim(); if (seen.has(k)) return false; seen.add(k); return true; });
+          const intel = deduped.slice(0, 8).map((b) => `• ${b}`).join('\n');
+          await pool.query('UPDATE companies SET call_intelligence = $1, updated_at = NOW() WHERE id = $2', [intel, call.company_id]);
+        }
       }
     } catch (err) {
       console.warn('[debrief] Failed to update call_intelligence:', err.message);

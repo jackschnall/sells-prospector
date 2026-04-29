@@ -613,7 +613,7 @@ function renderDetail(data) {
   if (callIntelSection && callIntelBody) {
     if (c.call_intelligence) {
       callIntelSection.hidden = false;
-      callIntelBody.textContent = c.call_intelligence;
+      callIntelBody.innerHTML = escapeHtml(c.call_intelligence).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     } else {
       callIntelSection.hidden = true;
     }
@@ -1561,15 +1561,20 @@ function selectQueueRow(id) {
   $('#qp-phone').textContent = phoneLabel;
   $('#qp-owner').textContent = row.owner || '—';
 
-  // Est. Revenue — extract from signals, summary, or outreach angle
+  // Est. Revenue — priority: key_info from calls > signal data > summary text
   const revenueRow = $('#qp-revenue-row');
   if (revenueRow) {
     const company = state.companies.find((c) => c.id === id);
-    const sigs = company?.signals_json ? safeParse(company.signals_json) : null;
-    const revSig = sigs?.revenue_proxy;
-    // Try structured signal data first
-    let revText = typeof revSig === 'object' ? (revSig?.raw || revSig?.rationale || revSig?.notes) : null;
-    // Fall back to extracting from summary or outreach angle
+    const keyInfo = company?.key_info ? (typeof company.key_info === 'object' ? company.key_info : safeParse(company.key_info)) : null;
+    // 1. Key info from calls (owner-stated revenue is most accurate)
+    let revText = keyInfo?.revenue || null;
+    // 2. Structured signal data from research
+    if (!revText) {
+      const sigs = company?.signals_json ? safeParse(company.signals_json) : null;
+      const revSig = sigs?.revenue_proxy;
+      revText = typeof revSig === 'object' ? (revSig?.raw || revSig?.rationale || revSig?.notes) : null;
+    }
+    // 3. Extract from summary or outreach angle text
     if (!revText && company) {
       const haystack = (company.summary || '') + ' ' + (company.outreach_angle || '');
       const m = haystack.match(/\$[\d,.]+[MBK]?\s*(?:-\s*\$?[\d,.]+[MBK]?)?\s*(?:in\s+)?(?:revenue|rev\b|annual|run[- ]?rate)/i)
@@ -1581,7 +1586,7 @@ function selectQueueRow(id) {
     }
     if (revText) {
       revenueRow.hidden = false;
-      $('#qp-revenue').textContent = revText;
+      $('#qp-revenue').textContent = revText + (keyInfo?.revenue ? ' (owner-stated)' : '');
     } else {
       revenueRow.hidden = true;
     }
@@ -1597,7 +1602,7 @@ function selectQueueRow(id) {
   if (qpCallIntelSection && qpCallIntelBody) {
     if (qpCompany?.call_intelligence) {
       qpCallIntelSection.hidden = false;
-      qpCallIntelBody.textContent = qpCompany.call_intelligence;
+      qpCallIntelBody.innerHTML = escapeHtml(qpCompany.call_intelligence).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     } else {
       qpCallIntelSection.hidden = true;
     }
