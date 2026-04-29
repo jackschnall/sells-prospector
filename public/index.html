@@ -1065,6 +1065,33 @@
         </section>
 
         <section class="d-section">
+          <div class="d-section-title">Call & Message</div>
+          <div class="d-call-section">
+            <select id="d-call-number" class="cf-input" style="margin-bottom:8px">
+              <option value="">Select number to call&hellip;</option>
+            </select>
+            <div class="d-call-buttons">
+              <button type="button" class="qp-call-btn" id="d-call-btn" style="flex:1">
+                <span class="qp-call-icon">&#9743;</span>
+                <span>Call</span>
+              </button>
+            </div>
+            <div class="d-call-active" id="d-call-active" hidden>
+              <div class="qp-timer" id="d-call-timer">00:00</div>
+              <div class="qp-call-status" id="d-call-status">Ringing&hellip;</div>
+              <div class="qp-call-controls">
+                <button type="button" class="qp-mute-btn" id="d-call-mute" hidden>Mute</button>
+                <button type="button" class="qp-end-btn" id="d-call-end">End Call</button>
+              </div>
+            </div>
+            <div class="d-call-processing" id="d-call-processing" hidden>
+              <div class="qp-spinner"></div>
+              <div class="qp-processing-text">Processing call&hellip;</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="d-section">
           <div class="d-section-title">Sources</div>
           <div id="d-sources" class="sources"></div>
         </section>

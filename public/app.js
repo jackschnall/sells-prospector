@@ -22,6 +22,10 @@ const state = {
   queueCallTimer: null,
   queueCallStart: 0,
   queuePollTimer: null,
+  detailCallLogId: null,
+  detailCallTimer: null,
+  detailCallStart: 0,
+  detailActiveCall: null,
   debriefCall: null,
   debriefDraftTimer: null,
   calendarCursor: null, // {year, month}
@@ -739,6 +743,13 @@ function renderDetail(data) {
 
   // Messages
   loadCompanyMessages(c.id);
+
+  // Call section — reset and populate number picker
+  $('#d-call-btn')?.parentElement && ($('#d-call-btn').parentElement.hidden = false);
+  $('#d-call-active').hidden = true;
+  $('#d-call-processing').hidden = true;
+  $('#d-call-mute').hidden = true;
+  loadDetailPhoneOptions(c);
   const smsTo = $('#d-sms-to');
   if (smsTo) smsTo.textContent = c.phone ? `To: ${c.phone}` : 'No phone number';
 
@@ -1143,6 +1154,128 @@ function bindDetailActions() {
       }
     } catch { toast('Delete failed', 'error'); }
   });
+
+  // Detail panel call controls
+  $('#d-call-btn')?.addEventListener('click', startDetailCall);
+  $('#d-call-end')?.addEventListener('click', endDetailCall);
+  $('#d-call-mute')?.addEventListener('click', () => {
+    const call = state.detailActiveCall;
+    if (!call) return;
+    call.mute(!call.isMuted());
+    $('#d-call-mute').textContent = call.isMuted() ? 'Unmute' : 'Mute';
+  });
+}
+
+async function loadDetailPhoneOptions(company) {
+  const sel = $('#d-call-number');
+  if (!sel) return;
+  const numbers = [];
+  try {
+    const res = await fetch(`/api/companies/${company.id}/contacts`);
+    if (res.ok) {
+      const { contacts } = await res.json();
+      const primaryMatch = (contacts || []).find((c) => c.phone === company.phone);
+      if (company.phone) {
+        const label = primaryMatch
+          ? `${primaryMatch.name}${primaryMatch.title ? ' (' + primaryMatch.title + ')' : ''}: ${company.phone}`
+          : 'Office: ' + company.phone;
+        numbers.push({ label, value: company.phone });
+      }
+      (contacts || []).forEach((c) => {
+        if (c.phone && c.phone !== company.phone) {
+          numbers.push({ label: `${c.name}${c.title ? ' (' + c.title + ')' : ''}: ${c.phone}`, value: c.phone });
+        }
+      });
+    }
+  } catch {
+    if (company.phone) numbers.push({ label: 'Office: ' + company.phone, value: company.phone });
+  }
+  if (!numbers.length) {
+    sel.innerHTML = '<option value="">No phone numbers available</option>';
+    $('#d-call-btn').disabled = true;
+    return;
+  }
+  sel.innerHTML = numbers.map((n) => `<option value="${escapeHtml(n.value)}">${escapeHtml(n.label)}</option>`).join('');
+  $('#d-call-btn').disabled = false;
+}
+
+async function startDetailCall() {
+  if (!state.activeId) return;
+  const phone = $('#d-call-number')?.value;
+  if (!phone) { toast('Select a number', 'error'); return; }
+  $('#d-call-btn').parentElement.hidden = true;
+  $('#d-call-active').hidden = false;
+  $('#d-call-status').textContent = 'Ringing…';
+  try {
+    const res = await fetch('/api/twilio/call', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ company_id: state.activeId, to: phone }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast(data.error || 'Call failed', 'error');
+      $('#d-call-btn').parentElement.hidden = false;
+      $('#d-call-active').hidden = true;
+      return;
+    }
+    const data = await res.json();
+    state.detailCallLogId = data.call_log_id;
+    state.detailCallStart = Date.now();
+    clearInterval(state.detailCallTimer);
+    state.detailCallTimer = setInterval(() => {
+      const secs = Math.floor((Date.now() - state.detailCallStart) / 1000);
+      $('#d-call-timer').textContent = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
+      if (data.mock && secs > 2) $('#d-call-status').textContent = 'Connected';
+    }, 500);
+
+    // Live Twilio
+    if (!data.mock && state.twilioDevice) {
+      const digits = phone.replace(/\D/g, '');
+      const e164 = digits.length === 10 ? '+1' + digits : digits.length === 11 && digits[0] === '1' ? '+' + digits : '+' + digits;
+      const call = await state.twilioDevice.connect({ params: { To: e164, callLogId: data.call_log_id } });
+      state.detailActiveCall = call;
+      call.on('accept', () => { $('#d-call-status').textContent = 'Connected'; $('#d-call-mute').hidden = false; });
+      call.on('disconnect', () => onDetailCallEnded());
+      call.on('cancel', () => onDetailCallEnded());
+      call.on('error', (err) => { toast('Call error: ' + err.message, 'error'); onDetailCallEnded(); });
+    }
+  } catch (err) {
+    toast('Call failed: ' + err.message, 'error');
+    $('#d-call-btn').parentElement.hidden = false;
+    $('#d-call-active').hidden = true;
+  }
+}
+
+function onDetailCallEnded() {
+  clearInterval(state.detailCallTimer);
+  state.detailActiveCall = null;
+  $('#d-call-mute').hidden = true;
+  $('#d-call-active').hidden = true;
+  $('#d-call-processing').hidden = false;
+  if (state.detailCallLogId) pollForDebrief(state.detailCallLogId);
+}
+
+async function endDetailCall() {
+  clearInterval(state.detailCallTimer);
+  const durationSec = Math.max(5, Math.floor((Date.now() - state.detailCallStart) / 1000));
+  if (state.detailActiveCall) {
+    state.detailActiveCall.disconnect();
+    return;
+  }
+  // Mock mode
+  $('#d-call-active').hidden = true;
+  $('#d-call-processing').hidden = false;
+  if (state.twilioStatus?.mock && state.detailCallLogId) {
+    try {
+      await fetch('/api/twilio/mock-complete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ call_log_id: state.detailCallLogId, duration_sec: durationSec }),
+      });
+    } catch {}
+  }
+  if (state.detailCallLogId) pollForDebrief(state.detailCallLogId);
 }
 
 function clearContactForm() {

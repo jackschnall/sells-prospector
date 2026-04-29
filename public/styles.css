@@ -2478,6 +2478,12 @@ body.detail-fullscreen { overflow: hidden; }
 #qp-keyinfo-section[hidden] { display: none !important; }
 
 .d-contact-form[hidden] { display: none !important; }
+.d-call-section { margin-top: 8px; }
+.d-call-buttons { display: flex; gap: 8px; }
+.d-call-active[hidden] { display: none !important; }
+.d-call-active { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px; background: var(--bg-soft); border-radius: 8px; margin-top: 8px; }
+.d-call-processing[hidden] { display: none !important; }
+.d-call-processing { display: flex; align-items: center; gap: 10px; padding: 14px; background: var(--bg-soft); border-radius: 8px; margin-top: 8px; }
 .d-contact-form {
   display: flex;
   flex-direction: column;
