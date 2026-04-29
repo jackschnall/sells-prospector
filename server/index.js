@@ -728,7 +728,7 @@ app.get('/api/queue', requireUser, async (req, res) => {
     const result = await buildQueue(req.currentUser, { pins, limit });
     // Today's call count for this user
     const { rows: [countRow] } = await pool.query(
-      `SELECT COUNT(*)::int AS n FROM call_logs WHERE user_id = $1 AND called_at >= date_trunc('day', NOW())`,
+      `SELECT COUNT(*)::int AS n FROM call_logs WHERE user_id = $1 AND called_at >= date_trunc('day', NOW()) AND COALESCE(duration_sec, 0) > 5`,
       [req.currentUser.id]
     );
     result.calls_today = countRow?.n || 0;
