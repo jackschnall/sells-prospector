@@ -127,11 +127,42 @@ function renderCompanies() {
   });
 }
 
+// Derive rough signal scores from key_info for manually added companies
+function deriveSignalsFromKeyInfo(c) {
+  const ki = c.key_info ? (typeof c.key_info === 'object' ? c.key_info : safeParse(c.key_info)) : null;
+  const intel = c.call_intelligence || '';
+  if (!ki && !intel) return null;
+  const derived = {};
+  // Revenue: map dollar amount to score
+  if (ki?.revenue) {
+    const m = String(ki.revenue).match(/(\d+)/);
+    if (m) {
+      const rev = Number(m[1]);
+      derived.revenue_proxy = rev >= 50 ? 9 : rev >= 20 ? 7 : rev >= 10 ? 6 : rev >= 5 ? 5 : 4;
+    }
+  }
+  // Succession: check for age, retirement, family mentions
+  if (ki?.owner_age || intel.match(/retire|succession|exit|sell/i)) {
+    const age = Number(ki?.owner_age) || 0;
+    derived.succession_signal = age >= 65 ? 8 : age >= 55 ? 6 : intel.match(/retire|exit|sell/i) ? 7 : null;
+  }
+  // Growth: check for growth mentions
+  if (intel.match(/growth|growing|200%|expanded|expansion/i)) {
+    derived.growth_trajectory = 7;
+  }
+  // Only return if we have at least one signal
+  const keys = Object.keys(derived).filter((k) => derived[k] != null);
+  return keys.length > 0 ? derived : null;
+}
+
 function renderCard(c) {
-  const signals = c.signals_json ? safeParse(c.signals_json) : null;
+  let signals = c.signals_json ? safeParse(c.signals_json) : null;
+  // Fall back to derived signals from call data for manually added companies
+  if (!signals) signals = deriveSignalsFromKeyInfo(c);
   const barLabels = { revenue_proxy: 'Revenue', operational_quality: 'Quality', succession_signal: 'Succession', growth_trajectory: 'Growth' };
   const bars = signals
     ? ['revenue_proxy', 'operational_quality', 'succession_signal', 'growth_trajectory']
+        .filter((k) => signals[k] != null)
         .map((k) => {
           const v = signals[k] ?? 0;
           const score = typeof v === 'object' ? (v.score ?? 0) : v;
