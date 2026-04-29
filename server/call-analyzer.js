@@ -51,24 +51,9 @@ function buildAnalysisPrompt(company, transcript) {
       `  "scheduling_quote": the exact short quote where scheduling was raised, or null,\n` +
       `  "next_action": one concise sentence about what the analyst should do next,\n` +
       `  "outreach_angle_refined": one concise sentence updating the cold-call angle for the next conversation based on what resonated or didn't,\n` +
-      `  "key_info": { extract ANY business facts mentioned in the conversation. Use null for anything NOT mentioned. Fields:\n` +
-      `    "revenue": string or null (e.g. "$8M", "about $12 million"),\n` +
-      `    "net_income": string or null,\n` +
-      `    "ebitda": string or null,\n` +
-      `    "employees": string or null (e.g. "45", "about 30"),\n` +
-      `    "trucks": string or null,\n` +
-      `    "locations": string or null (e.g. "3 offices"),\n` +
-      `    "years_in_business": string or null,\n` +
-      `    "service_type": string or null ("residential", "commercial", "both"),\n` +
-      `    "services_offered": [array of strings] or null (e.g. ["plumbing", "HVAC", "electrical"]),\n` +
-      `    "software_tools": [array of strings] or null (e.g. ["ServiceTitan", "QuickBooks"]),\n` +
-      `    "owner_age": string or null,\n` +
-      `    "spouse_name": string or null,\n` +
-      `    "family_involved": [array of strings] or null (e.g. ["son runs field ops", "wife does books"]),\n` +
-      `    "other": [array of any other notable business facts as strings] or null\n` +
-      `  }\n` +
+      `  "key_info": object with business facts EXPLICITLY mentioned in the call. Only include fields that were actually stated. Example: {"revenue":"$10M","employees":"25","trucks":"7","service_type":"residential","owner_age":"65","spouse_name":"Shirley","software_tools":"ServiceTitan"}. Valid keys: revenue, net_income, ebitda, employees, trucks, locations, years_in_business, service_type, services_offered, software_tools, owner_age, spouse_name, family_involved, other. Use null if nothing was mentioned.\n` +
       `}\n` +
-      `If the call was a voicemail, gatekeeper, or no conversation, use sentiment "No Answer". For key_info, ONLY include facts explicitly stated in the conversation — do not infer or guess.`,
+      `If the call was a voicemail, gatekeeper, or no conversation, use sentiment "No Answer".`,
   };
 }
 

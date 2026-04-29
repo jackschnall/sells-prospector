@@ -186,6 +186,25 @@ async function submitDebrief(callLogId, userId, answersInput, disposition, callb
     }
   }
 
+  // Accumulate call intelligence summary on company record
+  if (aiSummary && call.company_id) {
+    try {
+      const { pool } = require('./db');
+      const { rows } = await pool.query('SELECT call_intelligence FROM companies WHERE id = $1', [call.company_id]);
+      const existing = rows[0]?.call_intelligence || '';
+      const dateStr = new Date().toLocaleDateString();
+      const newEntry = [
+        `[${dateStr}] ${call.sentiment || 'Neutral'}`,
+        ...(aiSummary.bullets || []).map((b) => `  • ${b}`),
+        call.next_action ? `  Next: ${call.next_action}` : null,
+      ].filter(Boolean).join('\n');
+      const updated = existing ? existing + '\n\n' + newEntry : newEntry;
+      await pool.query('UPDATE companies SET call_intelligence = $1, updated_at = NOW() WHERE id = $2', [updated, call.company_id]);
+    } catch (err) {
+      console.warn('[debrief] Failed to update call_intelligence:', err.message);
+    }
+  }
+
   emit({ type: 'debrief_complete', call_log_id: callLogId, company_id: call.company_id });
   emit({ type: 'activity_added', company_id: call.company_id });
   return { ok: true };

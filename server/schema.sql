@@ -58,6 +58,9 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS key_info JSONB DEFAULT '{}'::JSON
 -- Phone type (office | direct_cell | home)
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS phone_type TEXT DEFAULT 'office';
 
+-- Call intelligence (accumulated summary from all calls with this company)
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS call_intelligence TEXT;
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- SMS Messages
 -- ────────────────────────────────────────────────────────────────────────────

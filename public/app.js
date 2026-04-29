@@ -605,7 +605,19 @@ function renderDetail(data) {
   $('#d-sub').textContent = loc || '—';
   $('#d-tier').textContent = tierLabel(c.tier);
   $('#d-tier').className = `detail-tier ${tierClass(c.tier)}`;
-  $('#d-summary').textContent = c.summary || 'No summary yet.';
+  $('#d-summary').textContent = c.summary || 'No research summary yet.';
+
+  // Call Intelligence summary
+  const callIntelSection = $('#d-call-intel-section');
+  const callIntelBody = $('#d-call-intel');
+  if (callIntelSection && callIntelBody) {
+    if (c.call_intelligence) {
+      callIntelSection.hidden = false;
+      callIntelBody.textContent = c.call_intelligence;
+    } else {
+      callIntelSection.hidden = true;
+    }
+  }
 
   // Pipeline stage selector
   const stageSel = $('#d-pipeline-stage');
@@ -1579,6 +1591,18 @@ function selectQueueRow(id) {
   const qpCompany = state.companies.find((c) => c.id === id);
   renderKeyInfo(qpCompany?.key_info, '#qp-keyinfo', '#qp-keyinfo-section');
 
+  // Call Intelligence in queue
+  const qpCallIntelSection = $('#qp-call-intel-section');
+  const qpCallIntelBody = $('#qp-call-intel');
+  if (qpCallIntelSection && qpCallIntelBody) {
+    if (qpCompany?.call_intelligence) {
+      qpCallIntelSection.hidden = false;
+      qpCallIntelBody.textContent = qpCompany.call_intelligence;
+    } else {
+      qpCallIntelSection.hidden = true;
+    }
+  }
+
   // Load contacts for this company
   loadQueueContacts(id);
 
@@ -2091,12 +2115,14 @@ function renderDebriefModal() {
       const dateInput = $('#debrief-callback-date');
       // Pre-fill: use Claude's date, or default to 2 weeks from today
       const twoWeeksOut = localDateStr(new Date(Date.now() + 14 * 86400000));
-      dateInput.value = cbDate || twoWeeksOut;
+      const normalizedDate = cbDate ? (typeof cbDate === 'string' ? cbDate.slice(0, 10) : localDateStr(new Date(cbDate))) : null;
+      dateInput.value = normalizedDate || twoWeeksOut;
+      const displayDate = normalizedDate || twoWeeksOut;
       const quoteEl = $('#debrief-callback-quote');
       quoteEl.textContent = cbQuote
         ? `Based on: "${cbQuote}"`
-        : cbDate
-          ? `Claude suggests ${new Date(cbDate + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`
+        : normalizedDate
+          ? `Claude suggests ${new Date(displayDate + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`
           : 'Callback intent detected — suggested 2 weeks out (adjust as needed)';
       state.debriefCallbackDecision = null;
     } else {
