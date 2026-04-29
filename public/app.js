@@ -636,6 +636,8 @@ function renderDetail(data) {
 
   $('#d-score').textContent = fmtScore(c.score);
   $('#d-score').className = `detail-score ${tierClass(c.tier)}`;
+  $('#d-score-edit').hidden = true;
+  $('#d-score').hidden = false;
   $('#d-name').textContent = c.name;
   $('#d-sub').textContent = loc || '—';
   $('#d-tier').textContent = tierLabel(c.tier);
@@ -1153,6 +1155,36 @@ function bindDetailActions() {
         toast(data.error || 'Delete failed', 'error');
       }
     } catch { toast('Delete failed', 'error'); }
+  });
+
+  // Manual score editing
+  $('#d-score')?.addEventListener('click', () => {
+    if (!state.activeId) return;
+    const c = state.companies.find((x) => x.id === state.activeId);
+    $('#d-score-input').value = c?.score != null ? Number(c.score).toFixed(1) : '';
+    $('#d-score').hidden = true;
+    $('#d-score-edit').hidden = false;
+    $('#d-score-input').focus();
+  });
+  $('#d-score-save')?.addEventListener('click', async () => {
+    if (!state.activeId) return;
+    const val = parseFloat($('#d-score-input').value);
+    if (isNaN(val) || val < 0 || val > 10) { toast('Score must be 0-10', 'error'); return; }
+    const tier = val >= 7.5 ? 'strong-buy' : val >= 5 ? 'watchlist' : 'pass';
+    try {
+      await fetch(`/api/companies/${state.activeId}/score`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ score: val, tier }),
+      });
+      toast('Score saved', 'ok');
+      await loadCompanies();
+      openDetail(state.activeId);
+    } catch { toast('Failed to save score', 'error'); }
+  });
+  $('#d-score-cancel')?.addEventListener('click', () => {
+    $('#d-score-edit').hidden = true;
+    $('#d-score').hidden = false;
   });
 
   // Detail panel call controls

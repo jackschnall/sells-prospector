@@ -1676,6 +1676,11 @@ body.detail-fullscreen { overflow: hidden; }
 .detail-score.strong-buy { border-color: var(--green); color: var(--green); }
 .detail-score.watchlist  { border-color: var(--gold); color: var(--gold-dark); }
 .detail-score.pass       { border-color: var(--red); color: var(--red); }
+.detail-score { cursor: pointer; }
+.detail-score:hover { opacity: 0.7; }
+.detail-score[hidden] { display: none !important; }
+.detail-score-edit { display: flex; align-items: center; gap: 6px; }
+.detail-score-edit[hidden] { display: none !important; }
 
 .detail-headline { flex: 1; min-width: 0; }
 .detail-name {

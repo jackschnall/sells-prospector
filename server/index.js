@@ -831,6 +831,17 @@ app.get('/api/pipeline/stages', (req, res) => {
   });
 });
 
+app.put('/api/companies/:id/score', async (req, res) => {
+  const { score, tier } = req.body || {};
+  if (score == null || isNaN(Number(score)) || Number(score) < 0 || Number(score) > 10) {
+    return res.status(400).json({ error: 'Score must be 0-10' });
+  }
+  const validTier = tier === 'strong-buy' || tier === 'watchlist' || tier === 'pass' ? tier : (Number(score) >= 7.5 ? 'strong-buy' : Number(score) >= 5 ? 'watchlist' : 'pass');
+  await pool.query('UPDATE companies SET score = $1, tier = $2, updated_at = NOW() WHERE id = $3', [Number(score), validTier, req.params.id]);
+  emit({ type: 'company_updated', id: req.params.id });
+  res.json({ ok: true });
+});
+
 app.post('/api/companies/:id/pipeline', async (req, res) => {
   const { stage, closed_lost_reason } = req.body || {};
   if (!stage || !PIPELINE_STAGES.includes(stage)) {
