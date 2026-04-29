@@ -1458,6 +1458,8 @@ async function loadQueue() {
     }
     const data = await res.json();
     state.queue = data.queue || [];
+    const countEl = $('#queue-today-count');
+    if (countEl) countEl.textContent = `${data.calls_today || 0} call${(data.calls_today || 0) === 1 ? '' : 's'} today`;
     renderQueue(data);
   } catch (err) {
     list.innerHTML = `<div class="queue-empty">Error loading queue: ${escapeHtml(err.message)}</div>`;

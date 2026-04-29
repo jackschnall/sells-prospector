@@ -2660,6 +2660,17 @@ body.detail-fullscreen { overflow: hidden; }
   color: var(--head);
   font-weight: 600;
 }
+.queue-today-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  background: var(--gold);
+  color: var(--navy);
+  padding: 2px 10px;
+  border-radius: 12px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
 .queue-sub { color: var(--text-muted); font-size: 0.9rem; margin-top: 4px; }
 .queue-header-right { display: flex; gap: 10px; align-items: center; }
 .queue-mock-badge {

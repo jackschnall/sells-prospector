@@ -726,6 +726,12 @@ app.get('/api/queue', requireUser, async (req, res) => {
     const pins = req.query.pins ? String(req.query.pins).split(',').filter(Boolean) : [];
     const limit = Number(req.query.limit) || 50;
     const result = await buildQueue(req.currentUser, { pins, limit });
+    // Today's call count for this user
+    const { rows: [countRow] } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM call_logs WHERE user_id = $1 AND called_at >= date_trunc('day', NOW())`,
+      [req.currentUser.id]
+    );
+    result.calls_today = countRow?.n || 0;
     res.json(result);
   } catch (err) {
     console.error('[queue] build failed:', err);
