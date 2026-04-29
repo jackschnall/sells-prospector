@@ -1631,13 +1631,16 @@ function selectQueueRow(id) {
     }
   }
 
+  // Outreach Angle — prefer call-refined over research-based
   const angleSec = $('#qp-angle-section');
-  if (row.outreach_angle) {
-    angleSec.hidden = false;
-    $('#qp-angle').textContent = row.outreach_angle;
-  } else {
-    angleSec.hidden = true;
-  }
+  loadLatestOutreachAngle(id, row.outreach_angle).then((angle) => {
+    if (angle) {
+      angleSec.hidden = false;
+      $('#qp-angle').textContent = angle;
+    } else {
+      angleSec.hidden = true;
+    }
+  });
 
   const lastSec = $('#qp-last-section');
   if (row.last_call) {
@@ -1691,6 +1694,18 @@ function renderKeyInfo(keyInfo, hostSel, sectionSel) {
     const val = Array.isArray(v) ? v.join(', ') : String(v);
     return `<div class="keyinfo-row"><span class="keyinfo-label">${escapeHtml(label)}</span><span class="keyinfo-value">${escapeHtml(val)}</span></div>`;
   }).join('');
+}
+
+// ---------- Queue outreach angle (prefer call-refined) ----------
+async function loadLatestOutreachAngle(companyId, fallback) {
+  try {
+    const res = await fetch(`/api/companies/${companyId}/calls`);
+    if (!res.ok) return fallback;
+    const { calls } = await res.json();
+    // Find most recent call with a refined angle
+    const withAngle = (calls || []).find((c) => c.outreach_angle_refined);
+    return withAngle?.outreach_angle_refined || fallback;
+  } catch { return fallback; }
 }
 
 // ---------- Queue phone number picker ----------
