@@ -61,6 +61,8 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS phone_type TEXT DEFAULT 'office';
 -- Call intelligence (accumulated summary from all calls with this company)
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS call_intelligence TEXT;
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS restricted BOOLEAN DEFAULT FALSE;
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- SMS Messages
 -- ────────────────────────────────────────────────────────────────────────────
@@ -118,6 +120,7 @@ CREATE TABLE IF NOT EXISTS users (
   invite_token          TEXT UNIQUE,
   assigned_verticals    JSONB DEFAULT '[]'::JSONB,
   assigned_territories  JSONB DEFAULT '[]'::JSONB,
+  restricted            BOOLEAN DEFAULT FALSE,
   created_at            TIMESTAMPTZ DEFAULT NOW()
 );
 

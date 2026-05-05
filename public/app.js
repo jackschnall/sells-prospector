@@ -2958,12 +2958,13 @@ function renderSettingsUsers() {
   box.innerHTML = state.settingsUsers
     .map((u) => {
       const roleLabel = ROLE_LABELS[u.role] || u.role;
+      const restrictedBadge = u.restricted ? ' <span class="settings-user-tag restricted">restricted</span>' : '';
       const verts = (u.assigned_verticals || []).map((v) => `<span class="settings-user-tag">${escapeHtml(v)}</span>`).join('');
       const terrs = (u.assigned_territories || []).map((v) => `<span class="settings-user-tag">${escapeHtml(v)}</span>`).join('');
       return `
         <div class="settings-user-row" data-user="${escapeHtml(u.id)}">
           <div>
-            <div class="settings-user-name">${escapeHtml(u.name || '—')} <span class="settings-user-role ${u.role}">${escapeHtml(roleLabel)}</span></div>
+            <div class="settings-user-name">${escapeHtml(u.name || '—')} <span class="settings-user-role ${u.role}">${escapeHtml(roleLabel)}</span>${restrictedBadge}</div>
             <div class="settings-user-email">${escapeHtml(u.email || '')}</div>
             <div class="settings-user-tags">
               ${verts || '<span class="settings-user-tag dim">no industries</span>'}
@@ -3021,6 +3022,9 @@ function openSettingsUserModal(userId) {
   $$('.settings-chip[data-terr]', tBox).forEach((chip) => {
     chip.addEventListener('click', () => chip.classList.toggle('active'));
   });
+  // Restricted toggle
+  const restrictCb = $('#settings-user-restricted');
+  if (restrictCb) restrictCb.checked = !!u.restricted;
   $('#settings-user-modal').hidden = false;
 }
 
@@ -3035,6 +3039,7 @@ async function saveSettingsUser() {
   const role = $('#settings-user-role').value;
   const verticals = $$('.settings-chip.active[data-vert]').map((c) => c.dataset.vert);
   const territories = $$('.settings-chip.active[data-terr]').map((c) => c.dataset.terr);
+  const restricted = !!$('#settings-user-restricted')?.checked;
   try {
     if (role !== u.role) {
       const res = await fetch(`/api/admin/users/${u.id}/role`, {
@@ -3051,7 +3056,7 @@ async function saveSettingsUser() {
     const res2 = await fetch(`/api/admin/users/${u.id}/assignments`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ verticals, territories }),
+      body: JSON.stringify({ verticals, territories, restricted }),
     });
     if (!res2.ok) {
       const err = await res2.json().catch(() => ({}));

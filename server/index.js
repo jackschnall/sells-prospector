@@ -182,10 +182,22 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   });
 });
 
+// ---------- User visibility restrictions ----------
+function getUserRestrictions(user) {
+  if (!user || !user.restricted) return {};
+  const v = safeJson(user.assigned_verticals) || [];
+  const t = safeJson(user.assigned_territories) || [];
+  const out = {};
+  if (v.length) out.restrictToVerticals = v;
+  if (t.length) out.restrictToTerritories = t;
+  return out;
+}
+
 // ---------- Companies ----------
 app.get('/api/companies', async (req, res) => {
   const { tier, crm_known: crmKnown, search, sort, state: stateFilter, outreach: outreachStatus, pipeline_stage: pipelineStage, industry } = req.query;
-  const rows = await listCompanies({ tier, crmKnown, search, sort, stateFilter, outreachStatus, pipelineStage, industry });
+  const restrictions = getUserRestrictions(req.currentUser);
+  const rows = await listCompanies({ tier, crmKnown, search, sort, stateFilter, outreachStatus, pipelineStage, industry, ...restrictions });
   const slim = rows.map(({ raw_research, ...rest }) => rest);
   res.json({ companies: slim, stats: await rollupStats() });
 });
@@ -459,6 +471,7 @@ function userPublic(user) {
     role: user.role || 'analyst',
     assigned_verticals: safeJson(user.assigned_verticals) || [],
     assigned_territories: safeJson(user.assigned_territories) || [],
+    restricted: !!user.restricted,
   };
 }
 
@@ -572,7 +585,7 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 });
 
 app.put('/api/admin/users/:id/assignments', requireAdmin, async (req, res) => {
-  const { verticals, territories } = req.body || {};
+  const { verticals, territories, restricted } = req.body || {};
   if (!Array.isArray(verticals) || !Array.isArray(territories)) {
     return res.status(400).json({ error: 'verticals and territories must be arrays' });
   }
@@ -581,6 +594,7 @@ app.put('/api/admin/users/:id/assignments', requireAdmin, async (req, res) => {
   await updateUser(user.id, {
     assigned_verticals: verticals,
     assigned_territories: territories.map((t) => String(t).toUpperCase()),
+    restricted: !!restricted,
   });
   res.json({ ok: true });
 });
@@ -827,7 +841,8 @@ app.post('/api/calendar/:id/complete', requireUser, async (req, res) => {
 
 // ---------- Pipeline ----------
 app.get('/api/pipeline/board', async (req, res) => {
-  res.json({ board: await getPipelineBoard(), stages: PIPELINE_STAGES });
+  const restrictions = getUserRestrictions(req.currentUser);
+  res.json({ board: await getPipelineBoard(restrictions), stages: PIPELINE_STAGES });
 });
 
 app.get('/api/pipeline/stages', (req, res) => {
@@ -872,7 +887,8 @@ app.get('/api/contacts', requireUser, async (req, res) => {
   const search = String(req.query.q || req.query.search || '').trim();
   const limit = Math.min(parseInt(req.query.limit) || 500, 2000);
   const offset = parseInt(req.query.offset) || 0;
-  const contacts = await listAllContacts({ search, limit, offset });
+  const restrictions = getUserRestrictions(req.currentUser);
+  const contacts = await listAllContacts({ search, limit, offset, ...restrictions });
   res.json({ contacts });
 });
 

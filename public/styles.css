@@ -3398,6 +3398,17 @@ body.detail-fullscreen { overflow: hidden; }
 }
 .settings-user-role.admin { background: var(--gold); color: #3a2e0a; }
 .settings-user-role.analyst { background: var(--card-bg); border: 1px solid var(--card-border); color: var(--text-muted); }
+.settings-user-role.researcher { background: #1a3a5c; border: 1px solid #2a5a8c; color: #8cb4e0; }
+.settings-user-role.associate { background: #2a1a3c; border: 1px solid #4a2a6c; color: #b89ce0; }
+.settings-user-tag.restricted { background: #5c2a1a; border-color: #8c3a2a; color: #e0a08c; font-weight: 600; }
+.settings-user-tag.dim { opacity: 0.5; }
+.settings-toggle-row {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  font-size: 0.82rem; color: var(--text-secondary);
+}
+.settings-toggle-row input[type="checkbox"] {
+  accent-color: var(--gold); width: 16px; height: 16px; cursor: pointer;
+}
 .settings-user-label {
   font-size: 0.75rem;
   color: var(--text-dim);

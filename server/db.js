@@ -110,10 +110,23 @@ async function markCrmKnown(knownNames) {
   return res.rowCount;
 }
 
-async function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilter, outreachStatus, pipelineStage, industry } = {}) {
+async function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stateFilter, outreachStatus, pipelineStage, industry, restrictToVerticals, restrictToTerritories } = {}) {
   const where = ['deleted_at IS NULL'];
   const params = [];
   let idx = 1;
+  // Per-user visibility restrictions
+  if (restrictToVerticals && restrictToVerticals.length) {
+    const ph = restrictToVerticals.map((_, i) => `$${idx + i}`).join(', ');
+    where.push(`COALESCE(industry, 'Plumbing') IN (${ph})`);
+    params.push(...restrictToVerticals);
+    idx += restrictToVerticals.length;
+  }
+  if (restrictToTerritories && restrictToTerritories.length) {
+    const ph = restrictToTerritories.map((_, i) => `$${idx + i}`).join(', ');
+    where.push(`UPPER(state) IN (${ph})`);
+    params.push(...restrictToTerritories.map(t => t.toUpperCase()));
+    idx += restrictToTerritories.length;
+  }
   if (tier) {
     where.push(`tier = $${idx++}`);
     params.push(tier);
@@ -426,13 +439,29 @@ function formatReason(r) {
   return map[r] || r || '';
 }
 
-async function getPipelineBoard() {
+async function getPipelineBoard({ restrictToVerticals, restrictToTerritories } = {}) {
+  const conds = ["(status = 'done' OR pipeline_stage != 'no_contact')"];
+  const params = [];
+  let idx = 1;
+  if (restrictToVerticals && restrictToVerticals.length) {
+    const ph = restrictToVerticals.map((_, i) => `$${idx + i}`).join(', ');
+    conds.push(`COALESCE(industry, 'Plumbing') IN (${ph})`);
+    params.push(...restrictToVerticals);
+    idx += restrictToVerticals.length;
+  }
+  if (restrictToTerritories && restrictToTerritories.length) {
+    const ph = restrictToTerritories.map((_, i) => `$${idx + i}`).join(', ');
+    conds.push(`UPPER(state) IN (${ph})`);
+    params.push(...restrictToTerritories.map(t => t.toUpperCase()));
+    idx += restrictToTerritories.length;
+  }
   const rows = await query(
     `SELECT id, name, score, tier, owner, pipeline_stage, closed_lost_reason,
             pipeline_stage_changed_at, city, state, assigned_to
      FROM companies
-     WHERE status = 'done' OR pipeline_stage != 'no_contact'
-     ORDER BY score DESC NULLS LAST, name ASC`
+     WHERE ${conds.join(' AND ')}
+     ORDER BY score DESC NULLS LAST, name ASC`,
+    params
   );
   const board = {};
   for (const stage of PIPELINE_STAGES) board[stage] = [];
@@ -457,23 +486,34 @@ async function listContacts(companyId) {
  * List ALL contacts with their company info joined in (for the global Contacts tab).
  * Supports a loose `search` term matched against name/title/email/phone/company name.
  */
-async function listAllContacts({ search = '', limit = 500, offset = 0 } = {}) {
+async function listAllContacts({ search = '', limit = 500, offset = 0, restrictToVerticals, restrictToTerritories } = {}) {
   const params = [];
-  let where = '';
+  const conds = ['ct.deleted_at IS NULL'];
+  let idx = 1;
   const s = String(search || '').trim();
   if (s) {
     params.push(`%${s.toLowerCase()}%`);
-    where = `WHERE ct.deleted_at IS NULL AND (LOWER(ct.name) LIKE $1
-             OR LOWER(COALESCE(ct.title, '')) LIKE $1
-             OR LOWER(COALESCE(ct.email, '')) LIKE $1
-             OR LOWER(COALESCE(ct.phone, '')) LIKE $1
-             OR LOWER(COALESCE(c.name, '')) LIKE $1)`;
-  } else {
-    where = 'WHERE ct.deleted_at IS NULL';
+    conds.push(`(LOWER(ct.name) LIKE $${idx}
+             OR LOWER(COALESCE(ct.title, '')) LIKE $${idx}
+             OR LOWER(COALESCE(ct.email, '')) LIKE $${idx}
+             OR LOWER(COALESCE(ct.phone, '')) LIKE $${idx}
+             OR LOWER(COALESCE(c.name, '')) LIKE $${idx})`);
+    idx++;
   }
+  if (restrictToVerticals && restrictToVerticals.length) {
+    const ph = restrictToVerticals.map((_, i) => `$${idx + i}`).join(', ');
+    conds.push(`COALESCE(c.industry, 'Plumbing') IN (${ph})`);
+    params.push(...restrictToVerticals);
+    idx += restrictToVerticals.length;
+  }
+  if (restrictToTerritories && restrictToTerritories.length) {
+    const ph = restrictToTerritories.map((_, i) => `$${idx + i}`).join(', ');
+    conds.push(`UPPER(c.state) IN (${ph})`);
+    params.push(...restrictToTerritories.map(t => t.toUpperCase()));
+    idx += restrictToTerritories.length;
+  }
+  const where = `WHERE ${conds.join(' AND ')}`;
   params.push(limit, offset);
-  const limIdx = params.length - 1;
-  const offIdx = params.length;
   return query(
     `SELECT
         ct.*,
@@ -486,7 +526,7 @@ async function listAllContacts({ search = '', limit = 500, offset = 0 } = {}) {
      LEFT JOIN companies c ON ct.company_id = c.id
      ${where}
      ORDER BY ct.updated_at DESC NULLS LAST, ct.created_at DESC
-     LIMIT $${limIdx} OFFSET $${offIdx}`,
+     LIMIT $${idx++} OFFSET $${idx}`,
     params
   );
 }
@@ -637,7 +677,7 @@ async function updateUser(id, data) {
   const fields = [];
   const params = [];
   let idx = 1;
-  for (const key of ['name', 'role', 'assigned_verticals', 'assigned_territories']) {
+  for (const key of ['name', 'role', 'assigned_verticals', 'assigned_territories', 'restricted']) {
     if (data[key] !== undefined) {
       fields.push(`${key} = $${idx++}`);
       if (key === 'assigned_verticals' || key === 'assigned_territories') {
@@ -655,7 +695,7 @@ async function updateUser(id, data) {
 async function listUsersFull() {
   return query(
     `SELECT id, name, email, role, assigned_verticals, assigned_territories,
-            invite_token, created_at
+            restricted, invite_token, created_at
      FROM users ORDER BY created_at ASC`
   );
 }

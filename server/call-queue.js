@@ -42,11 +42,12 @@ async function buildQueue(user, opts = {}) {
   const limit = Math.max(1, Math.min(200, opts.limit || 50));
   const pins = Array.isArray(opts.pins) ? opts.pins : [];
   const cooldownDays = Number(await getUserConfig(user.id, 'queue_cooldown_days', 7)) || 7;
-  const isAdmin = user.role === 'admin';
+  const isRestricted = !!user.restricted;
 
-  // Analyst scope: territories (state codes). Empty → empty queue w/ hint.
+  // Scope: restricted users see only their assigned territories + verticals.
   const territories = parseArr(user.assigned_territories).map((t) => String(t).toUpperCase());
-  if (!isAdmin && territories.length === 0) {
+  const verticals = parseArr(user.assigned_verticals);
+  if (isRestricted && territories.length === 0 && verticals.length === 0) {
     return { queue: [], cooldown_days: cooldownDays, empty_reason: 'no_assignments' };
   }
 
@@ -58,8 +59,17 @@ async function buildQueue(user, opts = {}) {
   const skipSet = new Set(skipRows.map((r) => r.company_id));
 
   // Base candidate set: companies in scope, excluding terminal stages.
-  const territoryFilter = isAdmin ? '' : `AND UPPER(COALESCE(c.state, '')) = ANY($1::text[])`;
-  const baseParams = isAdmin ? [] : [territories];
+  const baseParams = [];
+  let territoryFilter = '';
+  let verticalFilter = '';
+  if (isRestricted && territories.length) {
+    baseParams.push(territories);
+    territoryFilter = `AND UPPER(COALESCE(c.state, '')) = ANY($${baseParams.length}::text[])`;
+  }
+  if (isRestricted && verticals.length) {
+    baseParams.push(verticals);
+    verticalFilter = `AND COALESCE(c.industry, 'Plumbing') = ANY($${baseParams.length}::text[])`;
+  }
   const terminalIdx = baseParams.length + 1;
   baseParams.push(TERMINAL_STAGES);
   const cooldownIdx = baseParams.length + 1;
@@ -119,6 +129,7 @@ async function buildQueue(user, opts = {}) {
     LEFT JOIN pending_event pe ON pe.company_id = c.id
     WHERE (c.pipeline_stage IS NULL OR NOT (c.pipeline_stage = ANY($${terminalIdx}::text[])))
       ${territoryFilter}
+      ${verticalFilter}
       -- cooldown: exclude if last call within cooldown_days AND no pending callback/event due
       AND (
         lc.last_called_at IS NULL
