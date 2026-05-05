@@ -618,9 +618,9 @@ async function createUser(data) {
   const { nanoid } = require('nanoid');
   const id = data.id || nanoid();
   await execute(
-    `INSERT INTO users (id, name, email, invite_token)
-     VALUES ($1, $2, $3, $4)`,
-    [id, data.name, data.email, data.invite_token || null]
+    `INSERT INTO users (id, name, email, password_hash, invite_token)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [id, data.name, data.email, data.password_hash || null, data.invite_token || null]
   );
   return { id, name: data.name, email: data.email };
 }

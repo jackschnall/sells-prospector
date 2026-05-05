@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cookieParser = require('cookie-parser');
+const bcrypt = require('bcrypt');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -467,36 +468,41 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 app.post('/api/auth/accept', async (req, res) => {
-  const { token, name, email } = req.body || {};
-  if (!token || !name || !email) return res.status(400).json({ error: 'Missing token, name, or email' });
-  const invite = await getUserByToken(token);
-  if (!invite) {
-    const existing = await getUserByEmail(email);
-    if (existing) return res.status(409).json({ error: 'Email already registered' });
-    const user = await createUser({ name, email, invite_token: null });
-    await promoteToAdminIfFirstUser(user.id);
-    res.cookie('userId', user.id, { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
-    return res.json({ ok: true, user: userPublic(await getUserById(user.id)) });
-  }
+  const { token, name, email, password } = req.body || {};
+  if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password are required' });
+  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
   const existing = await getUserByEmail(email);
-  if (existing) {
-    res.cookie('userId', existing.id, { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
-    await clearInviteToken(existing.id);
-    await promoteToAdminIfFirstUser(existing.id);
-    return res.json({ ok: true, user: userPublic(await getUserById(existing.id)) });
-  }
-  const user = await createUser({ name, email });
-  await clearInviteToken(invite.id);
+  if (existing) return res.status(409).json({ error: 'Email already registered' });
+  const password_hash = await bcrypt.hash(password, 10);
+  const user = await createUser({ name, email, password_hash, invite_token: null });
+  await promoteToAdminIfFirstUser(user.id);
+  const setCookie = { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' };
+  res.cookie('userId', user.id, setCookie);
+  res.json({ ok: true, user: userPublic(await getUserById(user.id)) });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+  const user = await getUserByEmail(email);
+  if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+  if (!user.password_hash) return res.status(449).json({ error: 'needs_password', message: 'This account needs a password. Please set one now.' });
+  const match = await bcrypt.compare(password, user.password_hash);
+  if (!match) return res.status(401).json({ error: 'Invalid email or password' });
   await promoteToAdminIfFirstUser(user.id);
   res.cookie('userId', user.id, { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
   res.json({ ok: true, user: userPublic(await getUserById(user.id)) });
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  const { email } = req.body || {};
-  if (!email) return res.status(400).json({ error: 'Missing email' });
+app.post('/api/auth/set-password', async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
   const user = await getUserByEmail(email);
-  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (!user) return res.status(404).json({ error: 'Account not found' });
+  if (user.password_hash) return res.status(409).json({ error: 'Password already set. Use sign in.' });
+  const password_hash = await bcrypt.hash(password, 10);
+  await execute('UPDATE users SET password_hash = $1 WHERE id = $2', [password_hash, user.id]);
   await promoteToAdminIfFirstUser(user.id);
   res.cookie('userId', user.id, { signed: true, httpOnly: true, maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
   res.json({ ok: true, user: userPublic(await getUserById(user.id)) });

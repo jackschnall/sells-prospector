@@ -1371,16 +1371,19 @@ function bindLogin() {
       tabs.forEach((x) => x.classList.toggle('active', x === t));
       const mode = t.dataset.loginMode;
       const nameField = $('#login-name-field');
+      const pwField = $('#login-password');
       if (mode === 'signup') {
         nameField.hidden = false;
+        if (pwField) pwField.autocomplete = 'new-password';
         $('#login-submit').textContent = 'Create account';
         $('#login-title').textContent = 'Create your account';
-        $('#login-sub').textContent = 'New analysts: enter your name and email to get started.';
+        $('#login-sub').textContent = 'New analysts: enter your name, email, and password.';
       } else {
         nameField.hidden = true;
+        if (pwField) pwField.autocomplete = 'current-password';
         $('#login-submit').textContent = 'Sign in';
         $('#login-title').textContent = 'Sign in to continue';
-        $('#login-sub').textContent = 'Enter your work email to access the prospector.';
+        $('#login-sub').textContent = 'Enter your email and password to access the prospector.';
       }
       $('#login-error').hidden = true;
     });
@@ -1391,10 +1394,21 @@ function bindLogin() {
     const mode = $('.login-tab.active')?.dataset.loginMode || 'signin';
     const email = $('#login-email').value.trim();
     const name = $('#login-name').value.trim();
+    const password = $('#login-password')?.value || '';
     const err = $('#login-error');
     err.hidden = true;
     if (!email) {
       err.textContent = 'Email is required.';
+      err.hidden = false;
+      return;
+    }
+    if (!password) {
+      err.textContent = 'Password is required.';
+      err.hidden = false;
+      return;
+    }
+    if (mode === 'signup' && password.length < 6) {
+      err.textContent = 'Password must be at least 6 characters.';
       err.hidden = false;
       return;
     }
@@ -1413,18 +1427,22 @@ function bindLogin() {
         res = await fetch('/api/auth/accept', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ token: 'self-signup', name, email }),
+          body: JSON.stringify({ name, email, password }),
         });
       } else {
         res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({ email, password }),
         });
       }
       const data = await res.json();
       if (!res.ok) {
-        err.textContent = data.error || 'Sign in failed. Try again.';
+        if (data.error === 'needs_password') {
+          showSetPasswordMode(email);
+          return;
+        }
+        err.textContent = data.message || data.error || 'Sign in failed. Try again.';
         err.hidden = false;
         return;
       }
@@ -1433,6 +1451,7 @@ function bindLogin() {
       applyAuthUI();
       $('#login-email').value = '';
       $('#login-name').value = '';
+      if ($('#login-password')) $('#login-password').value = '';
       toast(`Welcome, ${state.user?.name || 'friend'} ✓`, 'ok');
       refreshPendingDebriefs();
       loadTwilioStatus();
@@ -1444,6 +1463,79 @@ function bindLogin() {
       submit.textContent = originalLabel;
     }
   });
+}
+
+// ---------- Set password mode (for existing accounts without password) ----------
+function showSetPasswordMode(email) {
+  const tabs = $$('.login-tab');
+  tabs.forEach(t => t.style.display = 'none');
+  $('#login-name-field').hidden = true;
+  $('#login-email').value = email;
+  $('#login-email').readOnly = true;
+  $('#login-password').value = '';
+  $('#login-password').autocomplete = 'new-password';
+  $('#login-password').focus();
+  $('#login-title').textContent = 'Set your password';
+  $('#login-sub').textContent = 'Your account exists but needs a password. Choose one now.';
+  $('#login-submit').textContent = 'Set password & sign in';
+  $('#login-error').hidden = true;
+
+  const form = $('#login-form');
+  const newForm = form.cloneNode(true);
+  form.parentNode.replaceChild(newForm, form);
+
+  newForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const pw = newForm.querySelector('#login-password').value;
+    const err = newForm.querySelector('#login-error');
+    err.hidden = true;
+    if (!pw || pw.length < 6) {
+      err.textContent = 'Password must be at least 6 characters.';
+      err.hidden = false;
+      return;
+    }
+    const btn = newForm.querySelector('#login-submit');
+    btn.disabled = true;
+    btn.textContent = 'Setting password…';
+    try {
+      const res = await fetch('/api/auth/set-password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password: pw }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        err.textContent = data.error || 'Failed to set password.';
+        err.hidden = false;
+        return;
+      }
+      state.user = data.user || null;
+      applyTabVisibility();
+      applyAuthUI();
+      toast(`Welcome back, ${state.user?.name || 'friend'} — password set! ✓`, 'ok');
+      refreshPendingDebriefs();
+      loadTwilioStatus();
+      // restore form to normal state
+      resetLoginForm();
+    } catch {
+      err.textContent = 'Network error. Check your connection.';
+      err.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Set password & sign in';
+    }
+  });
+}
+
+function resetLoginForm() {
+  const tabs = $$('.login-tab');
+  tabs.forEach(t => t.style.display = '');
+  $('#login-email').readOnly = false;
+  $('#login-email').value = '';
+  if ($('#login-password')) $('#login-password').value = '';
+  $('#login-name').value = '';
+  // re-bind the normal login form
+  bindLogin();
 }
 
 // ---------- Profile modal ----------
