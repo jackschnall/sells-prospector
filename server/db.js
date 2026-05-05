@@ -291,24 +291,44 @@ async function getNotes(companyId) {
 
 // ─── Stats ───────────────────────────────────────────────────────────────────
 
-async function rollupStats() {
-  const total = (await queryOne('SELECT COUNT(*) AS n FROM companies')).n;
-  const researched = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE status = 'done'")).n;
-  const strongBuy = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE tier = 'strong-buy'")).n;
-  const watchlist = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE tier = 'watchlist'")).n;
-  const pass = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE tier = 'pass'")).n;
-  const inCrm = (await queryOne('SELECT COUNT(*) AS n FROM companies WHERE crm_known = TRUE')).n;
-  const pending = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE status = 'pending'")).n;
-  const outreachNoContact = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE outreach_status = 'no_contact' AND status = 'done'")).n;
-  const outreachContacted = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE outreach_status = 'initial_contact'")).n;
-  const outreachRelationship = (await queryOne("SELECT COUNT(*) AS n FROM companies WHERE outreach_status = 'relationship'")).n;
+async function rollupStats({ restrictToVerticals, restrictToTerritories } = {}) {
+  const conds = ['deleted_at IS NULL'];
+  const params = [];
+  let idx = 1;
+  if (restrictToVerticals && restrictToVerticals.length) {
+    const ph = restrictToVerticals.map((_, i) => `$${idx + i}`).join(', ');
+    conds.push(`COALESCE(industry, 'Plumbing') IN (${ph})`);
+    params.push(...restrictToVerticals);
+    idx += restrictToVerticals.length;
+  }
+  if (restrictToTerritories && restrictToTerritories.length) {
+    const ph = restrictToTerritories.map((_, i) => `$${idx + i}`).join(', ');
+    conds.push(`UPPER(state) IN (${ph})`);
+    params.push(...restrictToTerritories.map(t => t.toUpperCase()));
+    idx += restrictToTerritories.length;
+  }
+  const w = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+  const row = await queryOne(`
+    SELECT
+      COUNT(*) AS total,
+      COUNT(*) FILTER (WHERE status = 'done') AS researched,
+      COUNT(*) FILTER (WHERE tier = 'strong-buy') AS strong_buy,
+      COUNT(*) FILTER (WHERE tier = 'watchlist') AS watchlist,
+      COUNT(*) FILTER (WHERE tier = 'pass') AS pass,
+      COUNT(*) FILTER (WHERE crm_known = TRUE) AS in_crm,
+      COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+      COUNT(*) FILTER (WHERE outreach_status = 'no_contact' AND status = 'done') AS outreach_no_contact,
+      COUNT(*) FILTER (WHERE outreach_status = 'initial_contact') AS outreach_contacted,
+      COUNT(*) FILTER (WHERE outreach_status = 'relationship') AS outreach_relationship
+    FROM companies ${w}
+  `, params);
   return {
-    total: Number(total), researched: Number(researched),
-    strongBuy: Number(strongBuy), watchlist: Number(watchlist), pass: Number(pass),
-    inCrm: Number(inCrm), pending: Number(pending),
-    outreachNoContact: Number(outreachNoContact),
-    outreachContacted: Number(outreachContacted),
-    outreachRelationship: Number(outreachRelationship),
+    total: Number(row.total), researched: Number(row.researched),
+    strongBuy: Number(row.strong_buy), watchlist: Number(row.watchlist), pass: Number(row.pass),
+    inCrm: Number(row.in_crm), pending: Number(row.pending),
+    outreachNoContact: Number(row.outreach_no_contact),
+    outreachContacted: Number(row.outreach_contacted),
+    outreachRelationship: Number(row.outreach_relationship),
   };
 }
 

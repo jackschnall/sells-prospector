@@ -135,10 +135,11 @@ function safeJson(s) {
 
 // ---------- Status ----------
 app.get('/api/status', async (req, res) => {
+  const restrictions = getUserRestrictions(req.currentUser);
   res.json({
     mockMode: process.env.MOCK_MODE === '1',
     apiKeyPresent: !!process.env.ANTHROPIC_API_KEY,
-    stats: await rollupStats(),
+    stats: await rollupStats(restrictions),
     run: getRunState(),
     thesis: await getConfig('thesis', {}),
     crmKnownCount: (await sf.getPastedKnownNames() || []).length,
@@ -199,7 +200,7 @@ app.get('/api/companies', async (req, res) => {
   const restrictions = getUserRestrictions(req.currentUser);
   const rows = await listCompanies({ tier, crmKnown, search, sort, stateFilter, outreachStatus, pipelineStage, industry, ...restrictions });
   const slim = rows.map(({ raw_research, ...rest }) => rest);
-  res.json({ companies: slim, stats: await rollupStats() });
+  res.json({ companies: slim, stats: await rollupStats(restrictions) });
 });
 
 app.get('/api/companies/:id', async (req, res) => {

@@ -90,7 +90,6 @@ function updateStats(stats) {
   $('#stat-total').textContent = stats.total ?? 0;
   $('#stat-done').textContent = stats.researched ?? 0;
   $('#stat-strong').textContent = stats.strongBuy ?? 0;
-  $('#stat-crm').textContent = stats.inCrm ?? 0;
   const mt = $('#method-total');
   if (mt) mt.textContent = stats.researched ?? 0;
 }
@@ -246,7 +245,6 @@ function renderDashboard(stats) {
   const strong = s.strongBuy ?? all.filter((c) => c.tier === 'strong-buy').length;
   const watch = all.filter((c) => c.tier === 'watchlist').length;
   const pass = all.filter((c) => c.tier === 'pass').length;
-  const crm = s.inCrm ?? all.filter((c) => c.crm_known).length;
 
   const setText = (id, val) => { const el = $(id); if (el) el.textContent = val; };
   setText('#dash-total', total);
@@ -254,8 +252,6 @@ function renderDashboard(stats) {
   setText('#dash-strong', strong);
   setText('#dash-watch', watch);
   setText('#dash-pass', pass);
-  setText('#dash-crm', crm);
-
   const pctEl = $('#dash-done-pct');
   if (pctEl) {
     pctEl.textContent = total > 0
