@@ -1000,10 +1000,6 @@ function bindToolbar() {
       renderPipelineBoard();
     });
   });
-  $('#hide-crm').addEventListener('change', (e) => {
-    state.filter.hideCrm = e.target.checked;
-    loadCompanies();
-  });
 }
 
 // ---------- detail actions ----------
