@@ -587,8 +587,8 @@ app.put('/api/admin/users/:id/assignments', requireAdmin, async (req, res) => {
 
 app.put('/api/admin/users/:id/role', requireAdmin, async (req, res) => {
   const { role } = req.body || {};
-  if (!['admin', 'analyst'].includes(role)) {
-    return res.status(400).json({ error: "role must be 'admin' or 'analyst'" });
+  if (!['admin', 'analyst', 'researcher', 'associate'].includes(role)) {
+    return res.status(400).json({ error: "Invalid role" });
   }
   const user = await getUserById(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });

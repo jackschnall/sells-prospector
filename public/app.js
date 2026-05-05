@@ -1,5 +1,7 @@
 // Sells M&A Prospector — frontend
 
+const ROLE_LABELS = { analyst: 'Analyst', researcher: 'Researcher', associate: 'M&A Associate', admin: 'Admin' };
+
 const state = {
   companies: [],
   filter: { tier: '', search: '', sort: 'score_desc', hideCrm: false, stateFilter: '', pipelineStage: '', industries: [] },
@@ -1346,7 +1348,7 @@ function applyAuthUI() {
     const initials = userInitials(state.user.name || state.user.email || '?');
     $('#profile-avatar').textContent = initials;
     $('#profile-name').textContent = state.user.name || state.user.email || 'User';
-    $('#profile-role').textContent = state.user.role || 'analyst';
+    $('#profile-role').textContent = ROLE_LABELS[state.user.role] || state.user.role || 'Analyst';
   } else {
     overlay.hidden = false;
     document.body.classList.add('logged-out');
@@ -1561,7 +1563,7 @@ function openProfileModal() {
   $('#profile-modal-avatar').textContent = userInitials(state.user.name || state.user.email || '?');
   $('#profile-modal-name').textContent = state.user.name || '—';
   $('#profile-modal-email').textContent = state.user.email || '—';
-  $('#profile-modal-role').textContent = state.user.role || 'analyst';
+  $('#profile-modal-role').textContent = ROLE_LABELS[state.user.role] || state.user.role || 'Analyst';
 
   const verticals = state.user.assigned_verticals || [];
   const territories = state.user.assigned_territories || [];
@@ -2955,16 +2957,17 @@ function renderSettingsUsers() {
   const box = $('#settings-users');
   box.innerHTML = state.settingsUsers
     .map((u) => {
+      const roleLabel = ROLE_LABELS[u.role] || u.role;
       const verts = (u.assigned_verticals || []).map((v) => `<span class="settings-user-tag">${escapeHtml(v)}</span>`).join('');
       const terrs = (u.assigned_territories || []).map((v) => `<span class="settings-user-tag">${escapeHtml(v)}</span>`).join('');
       return `
         <div class="settings-user-row" data-user="${escapeHtml(u.id)}">
           <div>
-            <div class="settings-user-name">${escapeHtml(u.name || '—')} <span class="settings-user-role ${u.role}">${escapeHtml(u.role)}</span></div>
+            <div class="settings-user-name">${escapeHtml(u.name || '—')} <span class="settings-user-role ${u.role}">${escapeHtml(roleLabel)}</span></div>
             <div class="settings-user-email">${escapeHtml(u.email || '')}</div>
             <div class="settings-user-tags">
-              ${verts || '<span class="settings-user-tag">no verticals</span>'}
-              ${terrs || '<span class="settings-user-tag">no territories</span>'}
+              ${verts || '<span class="settings-user-tag dim">no industries</span>'}
+              ${terrs || '<span class="settings-user-tag dim">no territories</span>'}
             </div>
           </div>
           <button type="button" class="btn-ghost btn-xs" data-edit-user="${escapeHtml(u.id)}">Edit</button>
@@ -2981,13 +2984,21 @@ const SETTINGS_VERTICALS = [
   'Painting', 'Electrical', 'Septic', 'Cleaning',
 ];
 
+const SETTINGS_TERRITORIES = [
+  'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA',
+  'HI', 'IA', 'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD',
+  'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH',
+  'NJ', 'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+  'SD', 'TN', 'TX', 'UT', 'VA', 'VT', 'WA', 'WI', 'WV', 'WY',
+];
+
 function openSettingsUserModal(userId) {
   const u = state.settingsUsers.find((x) => x.id === userId);
   if (!u) return;
   state.settingsEditingUser = u;
   $('#settings-user-title').textContent = `Edit: ${u.name || u.email}`;
-  $('#settings-user-role').value = u.role;
-  $('#settings-user-territories').value = (u.assigned_territories || []).join(', ');
+  $('#settings-user-role').value = u.role || 'analyst';
+  // Render industry chips
   const vBox = $('#settings-user-verticals');
   vBox.innerHTML = SETTINGS_VERTICALS
     .map((v) => {
@@ -2996,6 +3007,18 @@ function openSettingsUserModal(userId) {
     })
     .join('');
   $$('.settings-chip[data-vert]', vBox).forEach((chip) => {
+    chip.addEventListener('click', () => chip.classList.toggle('active'));
+  });
+  // Render territory chips
+  const tBox = $('#settings-user-territories');
+  const userTerrs = (u.assigned_territories || []).map(t => t.toUpperCase());
+  tBox.innerHTML = SETTINGS_TERRITORIES
+    .map((t) => {
+      const active = userTerrs.includes(t) ? 'active' : '';
+      return `<span class="settings-chip ${active}" data-terr="${escapeHtml(t)}">${escapeHtml(t)}</span>`;
+    })
+    .join('');
+  $$('.settings-chip[data-terr]', tBox).forEach((chip) => {
     chip.addEventListener('click', () => chip.classList.toggle('active'));
   });
   $('#settings-user-modal').hidden = false;
@@ -3011,10 +3034,7 @@ async function saveSettingsUser() {
   if (!u) return;
   const role = $('#settings-user-role').value;
   const verticals = $$('.settings-chip.active[data-vert]').map((c) => c.dataset.vert);
-  const territories = $('#settings-user-territories').value
-    .split(',')
-    .map((s) => s.trim().toUpperCase())
-    .filter(Boolean);
+  const territories = $$('.settings-chip.active[data-terr]').map((c) => c.dataset.terr);
   try {
     if (role !== u.role) {
       const res = await fetch(`/api/admin/users/${u.id}/role`, {
