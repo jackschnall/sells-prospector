@@ -1483,6 +1483,9 @@ function showSetPasswordMode(email) {
   const form = $('#login-form');
   const newForm = form.cloneNode(true);
   form.parentNode.replaceChild(newForm, form);
+  const btn = newForm.querySelector('#login-submit');
+  btn.disabled = false;
+  btn.textContent = 'Set password & sign in';
 
   newForm.addEventListener('submit', async (e) => {
     e.preventDefault();
