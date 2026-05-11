@@ -1569,20 +1569,23 @@ function bindProfile() {
     } catch { toast('Network error', 'error'); }
   });
   $('#profile-email-save')?.addEventListener('click', async () => {
-    const smtp_host = $('#profile-smtp-host')?.value?.trim() || null;
-    const smtp_port = $('#profile-smtp-port')?.value ? Number($('#profile-smtp-port').value) : null;
     const smtp_from_email = $('#profile-smtp-from')?.value?.trim() || null;
     const smtp_pass = $('#profile-smtp-pass')?.value || null;
+    if (!smtp_from_email) { toast('Email is required', 'error'); return; }
+    if (!smtp_pass) { toast('Password is required', 'error'); return; }
     try {
       const res = await fetch('/api/me/email-settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ smtp_host, smtp_port, smtp_user: smtp_from_email, smtp_pass, smtp_from_email }),
+        body: JSON.stringify({
+          smtp_host: 'smtp.office365.com',
+          smtp_port: 587,
+          smtp_user: smtp_from_email,
+          smtp_pass,
+          smtp_from_email,
+        }),
       });
       if (res.ok) {
-        state.user.smtp_host = smtp_host;
-        state.user.smtp_port = smtp_port;
-        state.user.smtp_user = smtp_from_email;
         state.user.smtp_from_email = smtp_from_email;
         toast('Email settings saved', 'ok');
       } else {
@@ -1628,12 +1631,8 @@ function openProfileModal() {
   if (twilioEl) twilioEl.value = state.user.twilio_phone_number || '';
 
   // Email settings
-  const smtpHost = $('#profile-smtp-host');
-  const smtpPort = $('#profile-smtp-port');
   const smtpFrom = $('#profile-smtp-from');
   const smtpPass = $('#profile-smtp-pass');
-  if (smtpHost) smtpHost.value = state.user.smtp_host || '';
-  if (smtpPort) smtpPort.value = state.user.smtp_port || '';
   if (smtpFrom) smtpFrom.value = state.user.smtp_from_email || '';
   if (smtpPass) smtpPass.value = '';  // Never prefill password
 
