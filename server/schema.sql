@@ -201,7 +201,7 @@ CREATE INDEX IF NOT EXISTS idx_markets_score ON markets(score);
 -- ────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS call_logs (
   id            TEXT PRIMARY KEY,
-  company_id    TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  company_id    TEXT REFERENCES companies(id) ON DELETE CASCADE,
   contact_id    TEXT REFERENCES contacts(id) ON DELETE SET NULL,
   user_id       TEXT REFERENCES users(id) ON DELETE SET NULL,
   direction     TEXT DEFAULT 'outbound',
@@ -229,6 +229,9 @@ ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS debrief_status          TEXT DEFA
 ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS debrief_qa              JSONB;
 ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS debrief_questions       JSONB;
 ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS debrief_draft           JSONB;
+ALTER TABLE call_logs ALTER COLUMN company_id DROP NOT NULL;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS from_number             TEXT;
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS voicemail_url           TEXT;
 ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS mock                    BOOLEAN DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_call_logs_user           ON call_logs(user_id);

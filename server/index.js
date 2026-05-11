@@ -684,6 +684,25 @@ app.get('/api/companies/:id/calls', requireUser, async (req, res) => {
   res.json({ calls: rows.map(callPublic) });
 });
 
+app.get('/api/calls/missed', requireUser, async (req, res) => {
+  const userId = req.currentUser.id;
+  const isAdmin = req.currentUser.role === 'admin';
+  const { rows } = await pool.query(
+    `SELECT cl.*, c.name AS company_name, c.city AS company_city, c.state AS company_state,
+            ct.name AS contact_name
+     FROM call_logs cl
+     LEFT JOIN companies c ON cl.company_id = c.id
+     LEFT JOIN contacts ct ON cl.contact_id = ct.id
+     WHERE cl.direction = 'inbound'
+       AND cl.status IN ('missed', 'voicemail', 'no-answer')
+       ${isAdmin ? '' : 'AND (cl.user_id = $1 OR cl.user_id IS NULL)'}
+     ORDER BY cl.called_at DESC
+     LIMIT 50`,
+    isAdmin ? [] : [userId]
+  );
+  res.json({ calls: rows });
+});
+
 app.get('/api/calls/pending-debrief', requireUser, async (req, res) => {
   const rows = await listPendingDebriefs(req.currentUser.id);
   res.json({ calls: rows.map(callPublic) });

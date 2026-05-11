@@ -728,12 +728,12 @@ async function insertCallLog(data) {
   await execute(
     `INSERT INTO call_logs (
        id, company_id, contact_id, user_id, direction, status,
-       call_sid, mock, called_at
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+       call_sid, mock, from_number, called_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
     [
-      id, data.company_id, data.contact_id || null, data.user_id || null,
+      id, data.company_id || null, data.contact_id || null, data.user_id || null,
       data.direction || 'outbound', data.status || 'initiated',
-      data.call_sid || null, !!data.mock,
+      data.call_sid || null, !!data.mock, data.from_number || null,
     ]
   );
   return id;
@@ -750,6 +750,7 @@ async function updateCallLog(id, data) {
     'scheduling_detected', 'scheduled_callback_date',
     'next_action', 'outreach_angle_refined',
     'debrief_status', 'debrief_qa', 'debrief_questions', 'debrief_draft',
+    'from_number', 'voicemail_url',
   ];
   for (const key of assignable) {
     if (data[key] !== undefined) {

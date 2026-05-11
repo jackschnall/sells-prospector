@@ -1911,6 +1911,58 @@ body.detail-fullscreen { overflow: hidden; }
 
 /* ---------- Toast ---------- */
 
+/* Active call floating bar */
+.active-call-bar {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  z-index: 9998;
+  background: var(--head, #0D1B2A);
+  border: 1px solid #4CAF50;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  min-width: 220px;
+}
+.active-call-status {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #4CAF50;
+  font-weight: 700;
+}
+.active-call-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary, #e0e8f0);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.active-call-timer {
+  font-size: 0.85rem;
+  font-family: var(--font-mono, 'DM Mono', monospace);
+  color: var(--text-muted, #8aa4bf);
+  min-width: 40px;
+  text-align: right;
+}
+.active-call-hangup {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: #f44336;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+}
+.active-call-hangup:hover { transform: scale(1.1); }
+
 /* Incoming call popup */
 .incoming-call {
   position: fixed;

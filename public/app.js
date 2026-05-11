@@ -1771,11 +1771,50 @@ async function handleIncomingCall(call) {
 
 function acceptIncomingCall() {
   stopRingtone();
+  const callerName = $('#incoming-call-from')?.textContent || 'Unknown';
   if (state.incomingCall) {
-    try { state.incomingCall.accept(); } catch (e) { console.error('[twilio] accept error:', e); }
-    toast('Call connected', 'ok');
+    try {
+      state.incomingCall.accept();
+      showActiveCallBar(callerName, state.incomingCall);
+    } catch (e) { console.error('[twilio] accept error:', e); }
   }
   $('#incoming-call').style.display = 'none';
+}
+
+// ---------- Active call floating bar ----------
+let _callTimer = null;
+let _callSeconds = 0;
+
+function showActiveCallBar(name, call) {
+  _callSeconds = 0;
+  $('#active-call-name').textContent = name;
+  $('#active-call-timer').textContent = '0:00';
+  $('#active-call-status').textContent = 'On Call';
+  $('#active-call-bar').style.display = 'flex';
+  state.activeCall = call;
+  _callTimer = setInterval(() => {
+    _callSeconds++;
+    const m = Math.floor(_callSeconds / 60);
+    const s = String(_callSeconds % 60).padStart(2, '0');
+    $('#active-call-timer').textContent = `${m}:${s}`;
+  }, 1000);
+  if (call) {
+    call.on('disconnect', hideActiveCallBar);
+    call.on('cancel', hideActiveCallBar);
+  }
+}
+
+function hideActiveCallBar() {
+  if (_callTimer) { clearInterval(_callTimer); _callTimer = null; }
+  $('#active-call-bar').style.display = 'none';
+  state.activeCall = null;
+}
+
+function hangupActiveCall() {
+  if (state.activeCall) {
+    try { state.activeCall.disconnect(); } catch {}
+  }
+  hideActiveCallBar();
 }
 
 function declineIncomingCall() {

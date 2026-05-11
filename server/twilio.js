@@ -120,19 +120,7 @@ function registerRoutes(app) {
       (twilioNumber && toDigits.endsWith(twilioNumber.slice(-10)));
 
     if (isInbound) {
-      // Inbound call — ring all connected browser clients
       console.log(`[twilio/voice] Inbound call from ${rawFrom}, CallSid ${callSid}`);
-
-      // Create a call log for the inbound call
-      insertCallLog({
-        company_id: null,
-        contact_id: null,
-        user_id: null,
-        direction: 'inbound',
-        status: 'ringing',
-        call_sid: callSid,
-        mock: false,
-      }).catch((err) => console.error('[twilio] Failed to create inbound call_log:', err.message));
 
       // Route to the user whose Twilio number matches the called number
       const users = await listUsers();
@@ -140,23 +128,42 @@ function registerRoutes(app) {
       const targetUsers = calledDigits
         ? users.filter(u => u.twilio_phone_number && u.twilio_phone_number.replace(/\D/g, '').slice(-10) === calledDigits)
         : [];
+
+      // Create a call log for the inbound call
+      const targetUserId = targetUsers.length === 1 ? targetUsers[0].id : null;
+      insertCallLog({
+        company_id: null,
+        contact_id: null,
+        user_id: targetUserId,
+        direction: 'inbound',
+        status: 'ringing',
+        call_sid: callSid,
+        from_number: rawFrom,
+        mock: false,
+      }).catch((err) => console.error('[twilio] Failed to create inbound call_log:', err.message));
+
+      const vmCallback = publicUrl ? `${publicUrl}/api/twilio/voicemail-status` : '/api/twilio/voicemail-status';
+
       if (!targetUsers.length) {
-        // No user assigned to this number — send to voicemail
+        // No user assigned to this number — send straight to voicemail
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="alice">Sorry, no one is available to take your call. Please leave a message after the beep.</Say>
-  <Record maxLength="120" transcribe="false" />
+  <Record maxLength="120" recordingStatusCallback="${vmCallback}" recordingStatusCallbackEvent="completed" />
 </Response>`;
         return res.set('Content-Type', 'text/xml').send(twiml);
       }
       const clientTags = targetUsers.map(u => `    <Client><Identity>${u.id}</Identity></Client>`).join('\n');
+      // action URL handles what happens when Dial ends (no answer → voicemail)
+      const dialAction = publicUrl ? `${publicUrl}/api/twilio/dial-complete` : '/api/twilio/dial-complete';
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial record="record-from-answer"
         recordingStatusCallback="${recordingCb}"
         recordingStatusCallbackEvent="completed"
+        action="${dialAction}"
         callerId="${rawFrom}"
-        timeout="30">
+        timeout="25">
 ${clientTags}
   </Dial>
 </Response>`;
@@ -192,6 +199,47 @@ ${clientTags}
   </Dial>
 </Response>`;
     res.set('Content-Type', 'text/xml').send(twiml);
+  });
+
+  // POST /api/twilio/dial-complete — called when inbound Dial ends (no answer, busy, etc.)
+  // If nobody answered, offer voicemail
+  app.post('/api/twilio/dial-complete', express_urlencoded(), async (req, res) => {
+    const dialStatus = req.body?.DialCallStatus || req.body?.DialStatus || '';
+    const callSid = req.body?.CallSid || '';
+    const publicUrl = process.env.PUBLIC_URL || '';
+    const vmCallback = publicUrl ? `${publicUrl}/api/twilio/voicemail-status` : '/api/twilio/voicemail-status';
+
+    // Update call log status
+    if (callSid) {
+      const call = await getCallLogBySid(callSid);
+      if (call && ['no-answer', 'busy', 'failed', 'canceled'].includes(dialStatus)) {
+        await updateCallLog(call.id, { status: 'missed' });
+      }
+    }
+
+    if (['completed', 'answered'].includes(dialStatus)) {
+      // Call was answered — just hang up cleanly
+      return res.set('Content-Type', 'text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+    }
+    // Nobody answered — offer voicemail
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">Sorry, no one is available right now. Please leave a message after the beep.</Say>
+  <Record maxLength="120" recordingStatusCallback="${vmCallback}" recordingStatusCallbackEvent="completed" />
+</Response>`;
+    res.set('Content-Type', 'text/xml').send(twiml);
+  });
+
+  // POST /api/twilio/voicemail-status — voicemail recording is ready
+  app.post('/api/twilio/voicemail-status', express_urlencoded(), async (req, res) => {
+    const callSid = req.body?.CallSid || '';
+    const recordingUrl = req.body?.RecordingUrl || '';
+    if (!callSid || !recordingUrl) return res.status(200).end();
+    const call = await getCallLogBySid(callSid);
+    if (call) {
+      await updateCallLog(call.id, { voicemail_url: recordingUrl, status: 'voicemail' });
+    }
+    res.status(200).end();
   });
 
   // POST /api/twilio/recording-status — recording is ready
