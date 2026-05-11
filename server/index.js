@@ -1457,9 +1457,9 @@ Return ONLY valid JSON: { "subject": "...", "body": "..." }`,
       });
 
       if (parsed?.subject && parsed?.body) {
-        // Convert body to HTML paragraphs and append HTML signature
-        const bodyHtml = parsed.body.split('\n').map(line => line.trim() ? `<p style="margin:0 0 8px 0;">${line}</p>` : '<br>').join('\n');
-        const fullHtml = bodyHtml + (senderSig ? `<br>${senderSig}` : '');
+        // Convert body to HTML — simple line breaks, no extra spacing
+        const bodyHtml = parsed.body.replace(/\n/g, '<br>');
+        const fullHtml = bodyHtml + (senderSig ? `<br><br>${senderSig.replace(/\n/g, '<br>')}` : '');
         await execute(
           `UPDATE campaign_recipients SET merged_subject = $1, merged_body = $2 WHERE campaign_id = $3 AND company_id = $4`,
           [parsed.subject, fullHtml, req.params.id, r.company_id]
