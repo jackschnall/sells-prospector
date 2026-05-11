@@ -29,11 +29,8 @@
 
     <header class="app-header">
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true">S</div>
-        <div class="brand-text">
-          <div class="brand-name">Sells</div>
-          <div class="brand-sub">M&amp;A Prospector</div>
-        </div>
+        <img src="/sells-logo.png" alt="Sells" class="brand-logo" />
+        <div class="brand-sub-standalone">M&amp;A Prospector</div>
       </div>
       <div class="rollups" id="rollups">
         <div class="rollup"><div class="rollup-label">Total</div><div class="rollup-value" id="stat-total">0</div></div>
@@ -58,7 +55,7 @@
             <button type="button" class="tier-chip all active" data-tier=""><span class="dot"></span>All</button>
             <button type="button" class="tier-chip strong-buy" data-tier="strong-buy"><span class="dot"></span>Prime</button>
             <button type="button" class="tier-chip watchlist" data-tier="watchlist"><span class="dot"></span>Possible</button>
-            <button type="button" class="tier-chip pass" data-tier="pass"><span class="dot"></span>Unlikely</button>
+            <button type="button" class="tier-chip pass" data-tier="pass"><span class="dot"></span>Poor</button>
           </div>
         </section>
 
@@ -109,22 +106,48 @@
               <div class="dash-card-value" id="dash-watch">0</div>
             </div>
             <div class="dash-card accent-pass">
-              <div class="dash-card-label">Unlikely</div>
+              <div class="dash-card-label">Poor</div>
               <div class="dash-card-value" id="dash-pass">0</div>
             </div>
           </div>
 
-          <section class="dash-section">
-            <div class="dash-section-title"><span class="diamond">&#9670;</span> Pipeline Summary</div>
-            <div id="dash-pipeline" class="dash-pipeline-bar"></div>
-          </section>
+          <div class="dash-two-col">
+            <div class="dash-col-left">
+              <section class="dash-section">
+                <div class="dash-section-title"><span class="diamond">&#9670;</span> Pipeline Summary</div>
+                <div id="dash-pipeline" class="dash-pipeline-bar"></div>
+              </section>
 
-          <section class="dash-section">
-            <div class="dash-section-title"><span class="diamond">&#9670;</span> Top Sell Candidates</div>
-            <div id="dash-top" class="dash-top-list">
-              <div class="dash-empty">Run research to surface top candidates.</div>
+              <section class="dash-section">
+                <div class="dash-section-title"><span class="diamond">&#9670;</span> Top Sell Candidates</div>
+                <div id="dash-top" class="dash-top-list">
+                  <div class="dash-empty">Run research to surface top candidates.</div>
+                </div>
+              </section>
             </div>
-          </section>
+
+            <div class="dash-col-right">
+              <section class="dash-section">
+                <div class="dash-section-header">
+                  <div class="dash-section-title"><span class="diamond">&#9670;</span> Activity</div>
+                  <a href="#" class="dash-section-link" onclick="$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab==='actlog'));$$('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='tab-actlog'));loadActivityLog();return false;">See all &rarr;</a>
+                </div>
+                <div id="dash-activity" class="dash-activity-list">
+                  <div class="dash-empty">No recent activity.</div>
+                </div>
+              </section>
+
+              <section class="dash-section">
+                <div class="dash-section-header">
+                  <div class="dash-section-title"><span class="diamond">&#9670;</span> Top Metros</div>
+                  <a href="#" class="dash-section-link" onclick="$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab==='markets'));$$('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='tab-markets'));return false;">Markets &rarr;</a>
+                </div>
+                <div id="dash-metros" class="dash-metros-list">
+                  <div class="dash-empty">No market data yet.</div>
+                </div>
+              </section>
+            </div>
+          </div>
         </div>
 
         <!-- PIPELINE TAB -->
@@ -449,7 +472,7 @@
                 <div class="method-step-num">4</div>
                 <div class="method-step-body">
                   <h3>Scoring &amp; Tiering</h3>
-                  <p>7 weighted signals produce a composite score. Hard stops (PE-backed, acquired, too large, out of business) are flagged automatically. Companies are tiered into Prime, Possible, or Unlikely.</p>
+                  <p>7 weighted signals produce a composite score. Hard stops (PE-backed, acquired, too large, out of business) are flagged automatically. Companies are tiered into Prime, Possible, or Poor.</p>
                   <div class="method-rubric">
                     <div class="rubric-row"><span class="rubric-label">Est. Revenue</span><span class="rubric-weight">22%</span></div>
                     <div class="rubric-row"><span class="rubric-label">Operational Quality</span><span class="rubric-weight">18%</span></div>

@@ -310,6 +310,62 @@ function renderDashboard(stats) {
       });
     }
   }
+
+  // Activity feed
+  loadDashActivity();
+  // Top Metros
+  loadDashMetros();
+}
+
+async function loadDashActivity() {
+  const host = $('#dash-activity');
+  if (!host) return;
+  try {
+    const res = await fetch('/api/activity-log?limit=8');
+    if (!res.ok) return;
+    const { activities } = await res.json();
+    if (!activities || !activities.length) {
+      host.innerHTML = '<div class="dash-empty">No recent activity.</div>';
+      return;
+    }
+    host.innerHTML = activities.map(a => {
+      const ago = timeAgo(a.created_at);
+      const user = a.user_name ? `<strong>${escapeHtml(a.user_name.split(' ').map(n => n[0] + '.').join(' '))}</strong>` : '<strong>Agent</strong>';
+      const company = a.company_name ? `<a href="#" onclick="openDetail('${a.company_id}');return false;">${escapeHtml(a.company_name)}</a>` : '';
+      return `<div class="dash-activity-item"><span class="dash-activity-time">${ago}</span><span class="dash-activity-text">${user} ${escapeHtml(a.description || a.type || '')} ${company}</span></div>`;
+    }).join('');
+  } catch {}
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return mins + 'm';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h';
+  const days = Math.floor(hrs / 24);
+  return days + 'd';
+}
+
+async function loadDashMetros() {
+  const host = $('#dash-metros');
+  if (!host) return;
+  try {
+    const res = await fetch('/api/markets');
+    if (!res.ok) return;
+    const { markets } = await res.json();
+    if (!markets || !markets.length) {
+      host.innerHTML = '<div class="dash-empty">No market data yet.</div>';
+      return;
+    }
+    const sorted = markets.sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0)).slice(0, 5);
+    host.innerHTML = sorted.map((m, i) => {
+      const growth = m.population_growth ? `+${(m.population_growth * 100).toFixed(1)}%` : '';
+      return `<div class="dash-metro-item"><span class="dash-metro-rank">0${i + 1}</span><span class="dash-metro-name">${escapeHtml(m.metro || m.name || '—')}</span><span class="dash-metro-growth">${growth}</span><span class="dash-metro-score">${(m.composite_score || 0).toFixed(1)}</span></div>`;
+    }).join('');
+  } catch {}
 }
 
 // ---------- export tab ----------
