@@ -686,7 +686,7 @@ async function createUser(data) {
 }
 
 async function listUsers() {
-  return query('SELECT id, name, email, created_at FROM users ORDER BY created_at ASC');
+  return query('SELECT id, name, email, twilio_phone_number, created_at FROM users ORDER BY created_at ASC');
 }
 
 async function clearInviteToken(userId) {
