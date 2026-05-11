@@ -4220,7 +4220,7 @@ async function openCampaignEditor(id) {
   $('#camp-editor-view').hidden = false;
   $('#camp-name').value = campState.campaign.name || '';
   $('#camp-subject').value = campState.campaign.subject_template || '';
-  $('#camp-body').value = campState.campaign.body_template || '';
+  if ($('#camp-ai-prompt')) $('#camp-ai-prompt').value = campState.campaign.ai_prompt || '';
   const pill = $('#camp-status-pill');
   pill.textContent = campState.campaign.status || 'draft';
   pill.className = 'camp-status-pill ' + (campState.campaign.status || 'draft');
@@ -4239,6 +4239,37 @@ function closeCampaignEditor() {
   loadCampaignsList();
 }
 
+async function generateCampaignEmails() {
+  if (!campState.activeCampaignId) return;
+  const prompt = $('#camp-ai-prompt')?.value?.trim();
+  if (!prompt) { toast('Enter an AI direction first', 'error'); return; }
+  if (!campState.recipients.length) { toast('Add recipients first', 'error'); return; }
+
+  // Save draft first so ai_prompt is persisted
+  await saveCampaignDraft();
+
+  const btn = $('#camp-generate-btn');
+  const status = $('#camp-generate-status');
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  status.hidden = false;
+  status.textContent = `Generating ${campState.recipients.length} personalized emails — this may take a minute...`;
+
+  try {
+    const res = await fetch(`/api/campaigns/${campState.activeCampaignId}/generate`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { toast(data.error || 'Generation failed', 'error'); return; }
+    toast(`Generated ${data.generated}/${data.total} emails`, 'ok');
+    status.textContent = `Done — ${data.generated} emails generated. Click Preview to review.`;
+  } catch (e) {
+    toast('Generation failed: ' + e.message, 'error');
+    status.textContent = 'Generation failed.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generate Emails';
+  }
+}
+
 async function saveCampaignDraft() {
   if (!campState.activeCampaignId) return;
   const name = $('#camp-name').value.trim();
@@ -4250,7 +4281,7 @@ async function saveCampaignDraft() {
       body: JSON.stringify({
         name,
         subject_template: $('#camp-subject').value,
-        body_template: $('#camp-body').value,
+        ai_prompt: $('#camp-ai-prompt')?.value || '',
       }),
     });
     toast('Campaign saved', 'ok');
@@ -4456,6 +4487,7 @@ function initCampaignBindings() {
   $('#camp-save-btn')?.addEventListener('click', saveCampaignDraft);
   $('#camp-delete-btn')?.addEventListener('click', deleteCampaignAction);
   $('#camp-preview-btn')?.addEventListener('click', openCampaignPreview);
+  $('#camp-generate-btn')?.addEventListener('click', generateCampaignEmails);
   $('#camp-close-preview')?.addEventListener('click', () => { $('#camp-preview-modal').hidden = true; });
   $('#camp-prev-preview')?.addEventListener('click', () => campPreviewNav(-1));
   $('#camp-next-preview')?.addEventListener('click', () => campPreviewNav(1));

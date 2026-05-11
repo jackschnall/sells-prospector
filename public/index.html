@@ -569,16 +569,18 @@
             </div>
 
             <div class="camp-editor-body">
-              <!-- Left: template editor -->
+              <!-- Left: AI prompt editor -->
               <div class="camp-template-section">
-                <div class="camp-section-title">Email Template</div>
+                <div class="camp-section-title">AI Email Direction</div>
                 <div class="camp-merge-hint">
-                  Merge fields: <code>{{owner}}</code> <code>{{company}}</code> <code>{{city}}</code> <code>{{state}}</code> <code>{{outreach_angle}}</code> <code>{{summary}}</code> <code>{{score}}</code> <code>{{email}}</code> <code>{{phone}}</code>
+                  Describe the tone, goal, and style. AI will use each company's research data, outreach angle, and call history to write a unique email.
                 </div>
-                <label class="camp-label">Subject</label>
-                <input type="text" id="camp-subject" class="cf-input" placeholder="e.g. Confidential inquiry regarding {{company}}" />
-                <label class="camp-label">Body</label>
-                <textarea id="camp-body" class="cf-input camp-body-textarea" rows="14" placeholder="Dear {{owner}},&#10;&#10;I'm reaching out regarding {{company}} in {{city}}, {{state}}&hellip;"></textarea>
+                <label class="camp-label">Campaign Name</label>
+                <input type="text" id="camp-subject" class="cf-input" placeholder="e.g. Cold outreach — HVAC owners in Texas" />
+                <label class="camp-label">Direction for AI</label>
+                <textarea id="camp-ai-prompt" class="cf-input camp-body-textarea" rows="8" placeholder="Example: Short, casual cold email. Mention something specific about their business to show we did our homework. Goal is to get a phone call. If we've spoken before, reference our previous conversation. Sign off as Jack."></textarea>
+                <button type="button" class="btn-primary" id="camp-generate-btn" style="margin-top:12px;">Generate Emails</button>
+                <div id="camp-generate-status" class="camp-generate-status" hidden></div>
               </div>
 
               <!-- Right: company selection -->

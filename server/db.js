@@ -1049,7 +1049,7 @@ async function updateCampaign(id, data) {
   const fields = [];
   const params = [];
   let idx = 1;
-  for (const key of ['name', 'subject_template', 'body_template', 'status', 'sent_at']) {
+  for (const key of ['name', 'subject_template', 'body_template', 'status', 'sent_at', 'ai_prompt']) {
     if (data[key] !== undefined) {
       fields.push(`${key} = $${idx++}`);
       params.push(data[key]);

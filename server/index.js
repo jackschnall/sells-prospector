@@ -1316,6 +1316,18 @@ app.get('/api/campaigns/:id/preview', requireUser, async (req, res) => {
   const campaign = await getCampaign(req.params.id);
   if (!campaign) return res.status(404).json({ error: 'Not found' });
   const recipients = await listCampaignRecipients(req.params.id);
+  // If AI prompt is set, use AI-generated emails; otherwise fallback to merge templates
+  if (campaign.ai_prompt) {
+    const merged = recipients.map((r) => ({
+      company_id: r.company_id,
+      company_name: r.company_name,
+      to_email: r.to_email,
+      subject: r.merged_subject || '(generating...)',
+      body: r.merged_body || '(generating...)',
+      ai_generated: !!r.merged_body,
+    }));
+    return res.json({ merged, ai_mode: true });
+  }
   const merged = recipients.map((r) => ({
     company_id: r.company_id,
     company_name: r.company_name,
@@ -1324,6 +1336,87 @@ app.get('/api/campaigns/:id/preview', requireUser, async (req, res) => {
     body: mergeCampaignTemplate(campaign.body_template, r),
   }));
   res.json({ merged });
+});
+
+// Generate AI emails for all recipients in a campaign
+app.post('/api/campaigns/:id/generate', requireUser, async (req, res) => {
+  const { callJson: aiCallJson } = require('./claude');
+  const { MODELS } = require('./claude');
+  const campaign = await getCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Not found' });
+  if (!campaign.ai_prompt) return res.status(400).json({ error: 'No AI prompt set for this campaign' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(400).json({ error: 'ANTHROPIC_API_KEY not configured' });
+
+  const recipients = await listCampaignRecipients(req.params.id);
+  const senderName = req.currentUser?.name || 'the analyst';
+  let generated = 0;
+
+  for (const r of recipients) {
+    try {
+      // Get full company data
+      const company = await getCompany(r.company_id);
+      if (!company) continue;
+
+      // Get recent call history for this company
+      const { rows: callLogs } = await pool.query(
+        `SELECT direction, sentiment, transcript, ai_summary, call_intelligence, called_at, duration_sec
+         FROM call_logs WHERE company_id = $1 AND deleted_at IS NULL
+         ORDER BY called_at DESC LIMIT 5`,
+        [r.company_id]
+      );
+
+      const callContext = callLogs.length
+        ? callLogs.map(cl => {
+          const summary = typeof cl.ai_summary === 'string' ? cl.ai_summary : JSON.stringify(cl.ai_summary || {});
+          return `- ${cl.direction} call on ${new Date(cl.called_at).toLocaleDateString()}: sentiment=${cl.sentiment || 'unknown'}, summary: ${summary}`;
+        }).join('\n')
+        : 'No previous calls.';
+
+      const ownerName = (company.owner || '').split(/[(/]/)[0].trim(); // Clean "Chuck McGinty (Wayne McGinty deceased 2016)" → "Chuck McGinty"
+
+      const { parsed } = await aiCallJson({
+        model: MODELS.worker,
+        system: `You write personalized business emails for an M&A advisor. Write naturally — like a real person, not a template. Never include placeholder brackets. Never mention internal scores, data sources, or AI. The email should feel like the sender personally researched this business.`,
+        user: `SENDER: ${senderName}
+SENDER'S FIRM: Sells Group Advisors
+
+RECIPIENT:
+- Owner name: ${ownerName}
+- Company: ${company.name}
+- City: ${company.city || ''}, ${company.state || ''}
+- Industry: ${company.industry || 'Plumbing'}
+- Years in business / founded: ${company.year_founded || 'unknown'}
+- Summary: ${company.summary || 'No summary available'}
+- Outreach angle: ${company.outreach_angle || 'General outreach'}
+- Call intelligence: ${company.call_intelligence || 'None'}
+
+PREVIOUS INTERACTIONS:
+${callContext}
+
+DIRECTION FROM USER:
+${campaign.ai_prompt}
+
+Generate a JSON object with:
+- "subject": a short, natural email subject line (no generic "Opportunity" — make it specific and intriguing)
+- "body": the full email body (no subject line repeated, no "Subject:" prefix). Use the owner's first name. Keep it concise. End with sender's first name only.
+
+Return ONLY valid JSON: { "subject": "...", "body": "..." }`,
+        maxTokens: 1000,
+      });
+
+      if (parsed?.subject && parsed?.body) {
+        await execute(
+          `UPDATE campaign_recipients SET merged_subject = $1, merged_body = $2 WHERE campaign_id = $3 AND company_id = $4`,
+          [parsed.subject, parsed.body, req.params.id, r.company_id]
+        );
+        generated++;
+      }
+    } catch (err) {
+      console.error(`[campaigns] AI generation failed for ${r.company_name}:`, err.message);
+    }
+  }
+
+  res.json({ ok: true, generated, total: recipients.length });
 });
 
 // Search companies for campaign add (lightweight endpoint)
