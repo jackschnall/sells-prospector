@@ -10,7 +10,7 @@
 // + status callbacks complete the loop.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { insertCallLog, getCallLog, updateCallLog, getCallLogBySid, getCompany, insertMessage, listMessages, insertActivity } = require('./db');
+const { insertCallLog, getCallLog, updateCallLog, getCallLogBySid, getCompany, insertMessage, listMessages, insertActivity, pool } = require('./db');
 const { requireUser } = require('./auth');
 const { pickMockTranscript, mockTranscriptById } = require('./mock-transcripts');
 const { attachMockTranscript, transcribeFromRecording } = require('./transcription');
@@ -65,7 +65,7 @@ function registerRoutes(app) {
       );
       token.addGrant(new VoiceGrant({
         outgoingApplicationSid: process.env.TWILIO_TWIML_APP_SID,
-        incomingAllow: false,
+        incomingAllow: true,
       }));
       res.json({ mock: false, token: token.toJwt() });
     } catch (err) {
@@ -168,6 +168,64 @@ function registerRoutes(app) {
       });
     }
     res.status(200).end();
+  });
+
+  // POST /api/twilio/incoming — TwiML webhook for inbound calls to our Twilio number
+  app.post('/api/twilio/incoming', express_urlencoded(), async (req, res) => {
+    const from = req.body?.From || '';
+    const callSid = req.body?.CallSid || '';
+    console.log(`[twilio] Inbound call from ${from}, CallSid ${callSid}`);
+
+    // Connect inbound call to the client browser (all logged-in users will ring)
+    // In future: route to a specific user based on the Twilio number called
+    const publicUrl = process.env.PUBLIC_URL || '';
+    const recordingCb = publicUrl ? `${publicUrl}/api/twilio/recording-status` : '/api/twilio/recording-status';
+    const statusCb = publicUrl ? `${publicUrl}/api/twilio/call-status` : '/api/twilio/call-status';
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial record="record-from-answer"
+        recordingStatusCallback="${recordingCb}"
+        recordingStatusCallbackEvent="completed"
+        action="${statusCb}"
+        callerId="${from}">
+    <Client>
+      <Identity>${req.body?.Called ? req.body.Called.replace(/\D/g, '') : 'default'}</Identity>
+    </Client>
+  </Dial>
+</Response>`;
+    res.set('Content-Type', 'text/xml').send(twiml);
+  });
+
+  // GET /api/twilio/caller-lookup — match a phone number to a company/contact
+  app.get('/api/twilio/caller-lookup', requireUser, async (req, res) => {
+    const from = (req.query.from || '').replace(/\D/g, '');
+    if (from.length < 7) return res.json({ company: null, contact: null });
+    // Normalize: try last 10 digits for matching
+    const last10 = from.slice(-10);
+    const patterns = [`%${last10}%`];
+    try {
+      // Check companies first
+      const { rows: companies } = await pool.query(
+        `SELECT id, name, city, state, phone, owner, score, tier, pipeline_stage
+         FROM companies WHERE REGEXP_REPLACE(phone, '\\D', '', 'g') LIKE $1 AND deleted_at IS NULL LIMIT 1`,
+        patterns
+      );
+      // Check contacts
+      const { rows: contacts } = await pool.query(
+        `SELECT ct.id, ct.name, ct.title, ct.phone, ct.company_id,
+                c.name AS company_name, c.city AS company_city, c.state AS company_state
+         FROM contacts ct LEFT JOIN companies c ON ct.company_id = c.id
+         WHERE REGEXP_REPLACE(ct.phone, '\\D', '', 'g') LIKE $1 AND ct.deleted_at IS NULL LIMIT 1`,
+        patterns
+      );
+      res.json({
+        company: companies[0] || null,
+        contact: contacts[0] || null,
+      });
+    } catch (err) {
+      console.error('[twilio] caller-lookup error:', err.message);
+      res.json({ company: null, contact: null });
+    }
   });
 
   // POST /api/twilio/mock-complete — called by frontend when the mock "call" ends

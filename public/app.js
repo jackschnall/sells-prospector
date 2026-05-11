@@ -1654,11 +1654,101 @@ async function initTwilioDevice() {
         }
       } catch {}
     });
+    device.on('incoming', handleIncomingCall);
     device.register();
     state.twilioDevice = device;
   } catch (err) {
     console.error('[twilio] Device init failed:', err.message);
   }
+}
+
+// Ringtone using Web Audio API
+let _ringtoneInterval = null;
+function startRingtone() {
+  stopRingtone();
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  function ring() {
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc1.frequency.value = 440;
+    osc2.frequency.value = 480;
+    gain.gain.value = 0.15;
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+    osc1.start();
+    osc2.start();
+    osc1.stop(ctx.currentTime + 1);
+    osc2.stop(ctx.currentTime + 1);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1);
+  }
+  ring();
+  _ringtoneInterval = setInterval(ring, 3000);
+  state._ringtoneCtx = ctx;
+}
+function stopRingtone() {
+  if (_ringtoneInterval) { clearInterval(_ringtoneInterval); _ringtoneInterval = null; }
+  if (state._ringtoneCtx) { state._ringtoneCtx.close().catch(() => {}); state._ringtoneCtx = null; }
+}
+
+async function handleIncomingCall(call) {
+  state.incomingCall = call;
+  const from = call.parameters?.From || call.parameters?.from || 'Unknown';
+  const popup = $('#incoming-call');
+  const fromEl = $('#incoming-call-from');
+  const detailEl = $('#incoming-call-detail');
+  fromEl.textContent = from;
+  detailEl.textContent = 'Looking up caller...';
+  popup.hidden = false;
+  startRingtone();
+
+  // Look up caller in DB
+  try {
+    const res = await fetch(`/api/twilio/caller-lookup?from=${encodeURIComponent(from)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.contact) {
+        fromEl.textContent = data.contact.name || from;
+        detailEl.textContent = `${data.contact.title || ''} — ${data.contact.company_name || ''}${data.contact.company_city ? `, ${data.contact.company_city}` : ''}`.replace(/^ — /, '');
+      } else if (data.company) {
+        fromEl.textContent = data.company.owner || data.company.name || from;
+        detailEl.textContent = `${data.company.name}${data.company.city ? `, ${data.company.city}` : ''}${data.company.state ? ` ${data.company.state}` : ''}`;
+      } else {
+        detailEl.textContent = from;
+      }
+    }
+  } catch {}
+
+  // Auto-hide if caller hangs up before answering
+  call.on('cancel', () => {
+    stopRingtone();
+    popup.hidden = true;
+    state.incomingCall = null;
+    toast('Missed call from ' + fromEl.textContent, 'error');
+  });
+  call.on('disconnect', () => {
+    stopRingtone();
+    popup.hidden = true;
+    state.incomingCall = null;
+  });
+}
+
+function acceptIncomingCall() {
+  if (!state.incomingCall) return;
+  stopRingtone();
+  state.incomingCall.accept();
+  $('#incoming-call').hidden = true;
+  toast('Call connected', 'ok');
+}
+
+function declineIncomingCall() {
+  if (!state.incomingCall) return;
+  stopRingtone();
+  state.incomingCall.reject();
+  $('#incoming-call').hidden = true;
+  state.incomingCall = null;
 }
 
 // ---------- Pending debrief banner ----------
@@ -3224,6 +3314,8 @@ function init() {
     }
   }).catch(() => {});
   $('#actlog-load-more')?.addEventListener('click', () => loadActivityLog(true));
+  $('#incoming-accept')?.addEventListener('click', acceptIncomingCall);
+  $('#incoming-decline')?.addEventListener('click', declineIncomingCall);
   loadCurrentUser()
     .then(() => { if (state.user) return refreshPendingDebriefs(); })
     .then(() => loadTwilioStatus());
