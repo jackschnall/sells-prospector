@@ -3081,12 +3081,13 @@ function renderSettingsUsers() {
     .map((u) => {
       const roleLabel = ROLE_LABELS[u.role] || u.role;
       const restrictedBadge = u.restricted ? ' <span class="settings-user-tag restricted">restricted</span>' : '';
+      const disabledBadge = u.disabled ? ' <span class="settings-user-tag restricted">disabled</span>' : '';
       const verts = (u.assigned_verticals || []).map((v) => `<span class="settings-user-tag">${escapeHtml(v)}</span>`).join('');
       const terrs = (u.assigned_territories || []).map((v) => `<span class="settings-user-tag">${escapeHtml(v)}</span>`).join('');
       return `
         <div class="settings-user-row" data-user="${escapeHtml(u.id)}">
           <div>
-            <div class="settings-user-name">${escapeHtml(u.name || '—')} <span class="settings-user-role ${u.role}">${escapeHtml(roleLabel)}</span>${restrictedBadge}</div>
+            <div class="settings-user-name">${escapeHtml(u.name || '—')} <span class="settings-user-role ${u.role}">${escapeHtml(roleLabel)}</span>${restrictedBadge}${disabledBadge}</div>
             <div class="settings-user-email">${escapeHtml(u.email || '')}${u.twilio_phone_number ? ` · <span style="color:var(--gold)">${escapeHtml(u.twilio_phone_number)}</span>` : ''}</div>
             <div class="settings-user-tags">
               ${verts || '<span class="settings-user-tag dim">no industries</span>'}
@@ -3171,6 +3172,11 @@ function openSettingsUserModal(userId) {
   // Restricted toggle
   const restrictCb = $('#settings-user-restricted');
   if (restrictCb) restrictCb.checked = !!u.restricted;
+  // Disabled toggle — hidden for your own account
+  const disabledRow = $('#settings-disabled-row');
+  const disabledCb = $('#settings-user-disabled');
+  if (disabledRow) disabledRow.hidden = (u.id === state.user?.id);
+  if (disabledCb) disabledCb.checked = !!u.disabled;
   // Delete button — hide for your own account
   const delBtn = $('#settings-user-delete');
   if (delBtn) {
@@ -3211,6 +3217,7 @@ async function saveSettingsUser() {
   const territories = $$('.settings-chip.active[data-terr]').map((c) => c.dataset.terr);
   const restricted = !!$('#settings-user-restricted')?.checked;
   const twilio_phone_number = $('#settings-user-twilio')?.value?.trim() || null;
+  const disabled = !!$('#settings-user-disabled')?.checked;
   try {
     if (role !== u.role) {
       const res = await fetch(`/api/admin/users/${u.id}/role`, {
@@ -3227,7 +3234,7 @@ async function saveSettingsUser() {
     const res2 = await fetch(`/api/admin/users/${u.id}/assignments`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ verticals, territories, restricted, twilio_phone_number }),
+      body: JSON.stringify({ verticals, territories, restricted, twilio_phone_number, disabled }),
     });
     if (!res2.ok) {
       const err = await res2.json().catch(() => ({}));

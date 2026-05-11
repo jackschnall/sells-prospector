@@ -697,7 +697,7 @@ async function updateUser(id, data) {
   const fields = [];
   const params = [];
   let idx = 1;
-  for (const key of ['name', 'role', 'assigned_verticals', 'assigned_territories', 'restricted', 'twilio_phone_number']) {
+  for (const key of ['name', 'role', 'assigned_verticals', 'assigned_territories', 'restricted', 'twilio_phone_number', 'disabled']) {
     if (data[key] !== undefined) {
       fields.push(`${key} = $${idx++}`);
       if (key === 'assigned_verticals' || key === 'assigned_territories') {
@@ -715,7 +715,7 @@ async function updateUser(id, data) {
 async function listUsersFull() {
   return query(
     `SELECT id, name, email, role, assigned_verticals, assigned_territories,
-            restricted, twilio_phone_number, invite_token, created_at
+            restricted, twilio_phone_number, disabled, invite_token, created_at
      FROM users ORDER BY created_at ASC`
   );
 }

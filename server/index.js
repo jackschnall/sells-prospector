@@ -121,7 +121,13 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(async (req, res, next) => {
   const userId = req.signedCookies?.userId;
   if (userId) {
-    req.currentUser = await getUserById(userId);
+    const user = await getUserById(userId);
+    if (user?.disabled) {
+      res.clearCookie('userId');
+      req.currentUser = null;
+    } else {
+      req.currentUser = user;
+    }
   }
   next();
 });
@@ -501,6 +507,7 @@ app.post('/api/auth/login', async (req, res) => {
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
   const user = await getUserByEmail(email);
   if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+  if (user.disabled) return res.status(403).json({ error: 'This account has been disabled. Contact your admin.' });
   if (!user.password_hash) return res.status(449).json({ error: 'needs_password', message: 'This account needs a password. Please set one now.' });
   const match = await bcrypt.compare(password, user.password_hash);
   if (!match) return res.status(401).json({ error: 'Invalid email or password' });
@@ -515,6 +522,7 @@ app.post('/api/auth/set-password', async (req, res) => {
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
   const user = await getUserByEmail(email);
   if (!user) return res.status(404).json({ error: 'Account not found' });
+  if (user.disabled) return res.status(403).json({ error: 'This account has been disabled. Contact your admin.' });
   if (user.password_hash) return res.status(409).json({ error: 'Password already set. Use sign in.' });
   const password_hash = await bcrypt.hash(password, 10);
   await execute('UPDATE users SET password_hash = $1 WHERE id = $2', [password_hash, user.id]);
@@ -593,7 +601,7 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 });
 
 app.put('/api/admin/users/:id/assignments', requireAdmin, async (req, res) => {
-  const { verticals, territories, restricted, twilio_phone_number } = req.body || {};
+  const { verticals, territories, restricted, twilio_phone_number, disabled } = req.body || {};
   if (!Array.isArray(verticals) || !Array.isArray(territories)) {
     return res.status(400).json({ error: 'verticals and territories must be arrays' });
   }
@@ -606,6 +614,9 @@ app.put('/api/admin/users/:id/assignments', requireAdmin, async (req, res) => {
   };
   if (twilio_phone_number !== undefined) {
     updates.twilio_phone_number = twilio_phone_number ? String(twilio_phone_number).trim() : null;
+  }
+  if (disabled !== undefined) {
+    updates.disabled = !!disabled;
   }
   await updateUser(user.id, updates);
   res.json({ ok: true });
