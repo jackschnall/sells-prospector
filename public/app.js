@@ -3174,9 +3174,12 @@ function openSettingsUserModal(userId) {
   // Twilio number
   const twilioInput = $('#settings-user-twilio');
   if (twilioInput) twilioInput.value = u.twilio_phone_number || '';
-  // Restricted toggle
-  const restrictCb = $('#settings-user-restricted');
-  if (restrictCb) restrictCb.checked = !!u.restricted;
+  // Access toggle
+  const fullRadio = $('#settings-access-full');
+  const restrictedRadio = $('#settings-access-restricted');
+  if (fullRadio && restrictedRadio) {
+    if (u.restricted) { restrictedRadio.checked = true; } else { fullRadio.checked = true; }
+  }
   // Disabled toggle — hidden for your own account
   const disabledRow = $('#settings-disabled-row');
   const disabledCb = $('#settings-user-disabled');
@@ -3240,7 +3243,7 @@ async function saveSettingsUser() {
   const role = $('#settings-user-role').value;
   const verticals = $$('.settings-chip.active[data-vert]').map((c) => c.dataset.vert);
   const territories = $$('.settings-chip.active[data-terr]').map((c) => c.dataset.terr);
-  const restricted = !!$('#settings-user-restricted')?.checked;
+  const restricted = !!$('#settings-access-restricted')?.checked;
   const twilio_phone_number = $('#settings-user-twilio')?.value?.trim() || null;
   const disabled = !!$('#settings-user-disabled')?.checked;
   try {

@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS users (
   invite_token          TEXT UNIQUE,
   assigned_verticals    JSONB DEFAULT '[]'::JSONB,
   assigned_territories  JSONB DEFAULT '[]'::JSONB,
-  restricted            BOOLEAN DEFAULT FALSE,
+  restricted            BOOLEAN DEFAULT TRUE,
   twilio_phone_number   TEXT,
   disabled              BOOLEAN DEFAULT FALSE,
   created_at            TIMESTAMPTZ DEFAULT NOW()

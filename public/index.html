@@ -971,10 +971,17 @@
           <div id="settings-user-territories" class="settings-chip-row"></div>
           <div class="settings-user-label">Twilio Phone Number</div>
           <input type="tel" id="settings-user-twilio" class="cf-input" placeholder="+15551234567" />
-          <label class="settings-toggle-row" style="margin-top:12px;">
-            <input type="checkbox" id="settings-user-restricted" />
-            <span>Restrict visibility to assigned industries &amp; territories only</span>
-          </label>
+          <div class="settings-user-label" style="margin-top:12px;">Database Access</div>
+          <div class="settings-access-toggle">
+            <label class="settings-toggle-row">
+              <input type="radio" name="settings-access" id="settings-access-full" value="full" />
+              <span>Full access — see all companies</span>
+            </label>
+            <label class="settings-toggle-row">
+              <input type="radio" name="settings-access" id="settings-access-restricted" value="restricted" />
+              <span>Restricted — only assigned industries &amp; territories</span>
+            </label>
+          </div>
           <label class="settings-toggle-row" id="settings-disabled-row" hidden>
             <input type="checkbox" id="settings-user-disabled" />
             <span style="color:#e0a08c;">Disable account (blocks login, keeps records)</span>

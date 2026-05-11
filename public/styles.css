@@ -3511,9 +3511,11 @@ body.detail-fullscreen { overflow: hidden; }
   display: flex; align-items: center; gap: 8px; cursor: pointer;
   font-size: 0.82rem; color: var(--text-secondary);
 }
-.settings-toggle-row input[type="checkbox"] {
+.settings-toggle-row input[type="checkbox"],
+.settings-toggle-row input[type="radio"] {
   accent-color: var(--gold); width: 16px; height: 16px; cursor: pointer;
 }
+.settings-access-toggle { display: flex; flex-direction: column; gap: 6px; }
 .settings-user-label {
   font-size: 0.75rem;
   color: var(--text-dim);
