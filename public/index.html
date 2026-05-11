@@ -76,6 +76,7 @@
           <button type="button" class="tab" data-tab="export" role="tab">Export</button>
           <button type="button" class="tab" data-tab="campaigns" role="tab" data-requires-user="1" hidden>Campaigns</button>
           <button type="button" class="tab" data-tab="queue" role="tab" data-requires-user="1" hidden>Call Queue</button>
+          <button type="button" class="tab" data-tab="inbox" role="tab" data-requires-user="1" hidden>Inbox</button>
           <button type="button" class="tab" data-tab="calendar" role="tab" data-requires-user="1" hidden>Calendar</button>
           <button type="button" class="tab" data-tab="actlog" role="tab" data-requires-user="1" hidden>Activity Log</button>
           <button type="button" class="tab" data-tab="deleted" role="tab" data-requires-user="1" hidden>Deleted</button>
@@ -729,6 +730,22 @@
                 </div>
               </div>
             </aside>
+          </div>
+        </div>
+
+        <!-- INBOX TAB — missed calls & voicemails -->
+        <div id="tab-inbox" class="tab-panel">
+          <div class="inbox-header">
+            <div class="inbox-title">Inbox</div>
+            <div class="inbox-sub">Missed calls &amp; voicemails</div>
+          </div>
+          <div class="inbox-filters">
+            <button type="button" class="inbox-filter active" data-inbox-filter="all">All</button>
+            <button type="button" class="inbox-filter" data-inbox-filter="voicemail">Voicemails</button>
+            <button type="button" class="inbox-filter" data-inbox-filter="missed">Missed Calls</button>
+          </div>
+          <div id="inbox-list" class="inbox-list">
+            <div class="inbox-empty">No missed calls or voicemails.</div>
           </div>
         </div>
 

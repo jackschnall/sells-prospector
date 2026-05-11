@@ -1911,6 +1911,39 @@ body.detail-fullscreen { overflow: hidden; }
 
 /* ---------- Toast ---------- */
 
+/* Inbox tab */
+.inbox-header { margin-bottom: 16px; }
+.inbox-title { font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; }
+.inbox-sub { font-size: 0.85rem; color: var(--text-muted); margin-top: 2px; }
+.inbox-filters { display: flex; gap: 8px; margin-bottom: 16px; }
+.inbox-filter {
+  padding: 6px 14px; border-radius: 8px; border: 1px solid var(--card-border);
+  background: var(--bg-soft); color: var(--text-secondary);
+  cursor: pointer; font-size: 0.82rem; font-weight: 600;
+}
+.inbox-filter.active { background: var(--gold); color: #3a2e0a; border-color: var(--gold); }
+.inbox-list { display: flex; flex-direction: column; gap: 8px; }
+.inbox-empty { text-align: center; padding: 40px; color: var(--text-dim); font-style: italic; }
+.inbox-item {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 14px 16px; background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 10px; gap: 12px;
+}
+.inbox-item-name { font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
+.inbox-item-detail { font-size: 0.82rem; color: var(--text-muted); margin-top: 2px; }
+.inbox-item-time { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
+.inbox-item-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.inbox-badge {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 2px 8px; border-radius: 6px;
+}
+.inbox-badge.vm { background: #1a3a5c; color: #8cb4e0; }
+.inbox-badge.missed { background: #5c1a1a; color: #e0a08c; }
+.inbox-audio {
+  margin-top: 8px; width: 100%; max-width: 320px; height: 32px;
+}
+.inbox-callback { white-space: nowrap; }
+
 /* Active call floating bar */
 .active-call-bar {
   position: fixed;

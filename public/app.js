@@ -566,6 +566,7 @@ function bindTabs() {
       if (target === 'campaigns') loadCampaignsList();
       if (target === 'deleted') loadDeletedItems();
       if (target === 'actlog') loadActivityLog();
+      if (target === 'inbox') loadInbox();
       // Disable tier filter sidebar on tabs where it doesn't apply
       const tierApplies = ['companies', 'dashboard', 'pipeline'].includes(target);
       const sidebar = $('#tier-filters');
@@ -3454,6 +3455,14 @@ function init() {
     }
   }).catch(() => {});
   $('#actlog-load-more')?.addEventListener('click', () => loadActivityLog(true));
+  // Inbox filter buttons
+  $$('.inbox-filter').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.inbox-filter').forEach(b => b.classList.toggle('active', b === btn));
+      inboxFilter = btn.dataset.inboxFilter || 'all';
+      renderInbox();
+    });
+  });
   // Incoming call buttons use inline onclick handlers
   loadCurrentUser()
     .then(() => { if (state.user) return refreshPendingDebriefs(); })
@@ -3918,6 +3927,61 @@ const ACTLOG_ICONS = {
 
 let actlogOffset = 0;
 
+// ---------- Inbox (missed calls & voicemails) ----------
+let inboxCalls = [];
+let inboxFilter = 'all';
+
+async function loadInbox() {
+  try {
+    const res = await fetch('/api/calls/missed');
+    if (!res.ok) return;
+    const data = await res.json();
+    inboxCalls = data.calls || [];
+    renderInbox();
+  } catch {}
+}
+
+function renderInbox() {
+  const list = $('#inbox-list');
+  if (!list) return;
+  const filtered = inboxFilter === 'all' ? inboxCalls
+    : inboxFilter === 'voicemail' ? inboxCalls.filter(c => c.voicemail_url)
+    : inboxCalls.filter(c => !c.voicemail_url);
+  if (!filtered.length) {
+    list.innerHTML = '<div class="inbox-empty">No missed calls or voicemails.</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(c => {
+    const name = c.contact_name || c.company_name || c.from_number || 'Unknown';
+    const detail = c.company_name && c.contact_name ? c.company_name : '';
+    const location = [c.company_city, c.company_state].filter(Boolean).join(', ');
+    const time = c.called_at ? new Date(c.called_at).toLocaleString() : '';
+    const hasVm = !!c.voicemail_url;
+    const badge = hasVm
+      ? '<span class="inbox-badge vm">Voicemail</span>'
+      : '<span class="inbox-badge missed">Missed</span>';
+    const vmPlayer = hasVm
+      ? `<audio controls preload="none" class="inbox-audio" src="${escapeHtml(c.voicemail_url)}.mp3"></audio>`
+      : '';
+    const callbackBtn = c.from_number
+      ? `<button type="button" class="btn-ghost btn-xs inbox-callback" data-number="${escapeHtml(c.from_number)}" data-company="${escapeHtml(c.company_id || '')}">Call back</button>`
+      : '';
+    return `
+      <div class="inbox-item">
+        <div class="inbox-item-left">
+          <div class="inbox-item-name">${escapeHtml(name)} ${badge}</div>
+          <div class="inbox-item-detail">${escapeHtml([detail, location].filter(Boolean).join(' · '))}</div>
+          <div class="inbox-item-time">${escapeHtml(time)}</div>
+          ${vmPlayer}
+        </div>
+        <div class="inbox-item-actions">
+          ${callbackBtn}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ---------- Activity Log ----------
 async function loadActivityLog(append = false) {
   if (!append) actlogOffset = 0;
   try {
