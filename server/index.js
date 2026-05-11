@@ -1346,6 +1346,8 @@ app.get('/api/campaigns/search/companies', requireUser, async (req, res) => {
   if (tier) { sql += ` AND c.tier = $${idx}`; params.push(tier); idx++; }
   if (state) { sql += ` AND c.state = $${idx}`; params.push(state); idx++; }
   if (stage) { sql += ` AND c.pipeline_stage = $${idx}`; params.push(stage); idx++; }
+  const industry = req.query.industry || '';
+  if (industry) { sql += ` AND COALESCE(c.industry, 'Plumbing') = $${idx}`; params.push(industry); idx++; }
   if (excludeCampaign) {
     sql += ` AND c.id NOT IN (SELECT cr.company_id FROM campaign_recipients cr WHERE cr.campaign_id = $${idx})`;
     params.push(excludeCampaign);

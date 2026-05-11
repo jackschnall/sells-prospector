@@ -4308,10 +4308,12 @@ async function campSearchCompanies() {
   const q = $('#camp-search')?.value || '';
   const tier = $('#camp-tier-filter')?.value || '';
   const stateVal = $('#camp-state-filter')?.value || '';
+  const industry = $('#camp-industry-filter')?.value || '';
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (tier) params.set('tier', tier);
   if (stateVal) params.set('state', stateVal);
+  if (industry) params.set('industry', industry);
   if (campState.activeCampaignId) params.set('exclude_campaign', campState.activeCampaignId);
   try {
     const res = await fetch(`/api/campaigns/search/companies?${params}`);
@@ -4466,6 +4468,7 @@ function initCampaignBindings() {
   $('#camp-search')?.addEventListener('input', searchHandler);
   $('#camp-tier-filter')?.addEventListener('change', campSearchCompanies);
   $('#camp-state-filter')?.addEventListener('change', campSearchCompanies);
+  $('#camp-industry-filter')?.addEventListener('change', campSearchCompanies);
 
   bindMergeFieldClicks();
 }
