@@ -1711,7 +1711,7 @@ async function handleIncomingCall(call) {
   const detailEl = $('#incoming-call-detail');
   fromEl.textContent = from;
   detailEl.textContent = 'Looking up caller...';
-  popup.hidden = false;
+  popup.style.display = 'flex';
   startRingtone();
 
   // Look up caller in DB
@@ -1751,7 +1751,7 @@ function acceptIncomingCall() {
     try { state.incomingCall.accept(); } catch (e) { console.error('[twilio] accept error:', e); }
     toast('Call connected', 'ok');
   }
-  $('#incoming-call').hidden = true;
+  $('#incoming-call').style.display = 'none';
 }
 
 function declineIncomingCall() {
@@ -1759,7 +1759,7 @@ function declineIncomingCall() {
   if (state.incomingCall) {
     try { state.incomingCall.reject(); } catch (e) { console.error('[twilio] reject error:', e); }
   }
-  $('#incoming-call').hidden = true;
+  $('#incoming-call').style.display = 'none';
   state.incomingCall = null;
 }
 
@@ -1768,7 +1768,7 @@ function dismissIncomingCall() {
   if (state.incomingCall) {
     try { state.incomingCall.reject(); } catch {}
   }
-  $('#incoming-call').hidden = true;
+  $('#incoming-call').style.display = 'none';
   state.incomingCall = null;
 }
 
@@ -3335,9 +3335,7 @@ function init() {
     }
   }).catch(() => {});
   $('#actlog-load-more')?.addEventListener('click', () => loadActivityLog(true));
-  $('#incoming-accept')?.addEventListener('click', acceptIncomingCall);
-  $('#incoming-decline')?.addEventListener('click', declineIncomingCall);
-  $('#incoming-dismiss')?.addEventListener('click', dismissIncomingCall);
+  // Incoming call buttons use inline onclick handlers
   loadCurrentUser()
     .then(() => { if (state.user) return refreshPendingDebriefs(); })
     .then(() => loadTwilioStatus());
