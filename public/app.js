@@ -3017,12 +3017,36 @@ function openSettingsUserModal(userId) {
   // Restricted toggle
   const restrictCb = $('#settings-user-restricted');
   if (restrictCb) restrictCb.checked = !!u.restricted;
+  // Delete button — hide for your own account
+  const delBtn = $('#settings-user-delete');
+  if (delBtn) {
+    delBtn.hidden = (u.id === state.user?.id);
+  }
   $('#settings-user-modal').hidden = false;
 }
 
 function closeSettingsUserModal() {
   $('#settings-user-modal').hidden = true;
   state.settingsEditingUser = null;
+}
+
+async function deleteSettingsUser() {
+  const u = state.settingsEditingUser;
+  if (!u) return;
+  if (!confirm(`Delete account "${u.name || u.email}"? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(`/api/admin/users/${u.id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) {
+      toast(data.error || 'Delete failed', 'error');
+      return;
+    }
+    toast('Account deleted', 'ok');
+    closeSettingsUserModal();
+    loadSettings();
+  } catch (err) {
+    toast('Delete failed: ' + err.message, 'error');
+  }
 }
 
 async function saveSettingsUser() {
@@ -3143,6 +3167,7 @@ function bindPhase2() {
   $('#settings-cooldown-save')?.addEventListener('click', saveCooldown);
   $('#settings-user-close')?.addEventListener('click', closeSettingsUserModal);
   $('#settings-user-save')?.addEventListener('click', saveSettingsUser);
+  $('#settings-user-delete')?.addEventListener('click', deleteSettingsUser);
 
   // Contacts tab + Add Company / Add Contact
   $('#btn-add-company')?.addEventListener('click', () => openCompanyModal());

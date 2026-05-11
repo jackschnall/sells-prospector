@@ -467,6 +467,16 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   color: var(--head);
 }
 
+.btn-danger {
+  background: #5c1a1a;
+  color: #e0a08c;
+  border: 1px solid #8c3a2a;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.btn-danger:hover { background: #7c2a2a; }
+
 .btn-stop {
   background: var(--red);
   border-color: var(--red);

@@ -618,6 +618,20 @@ app.put('/api/admin/users/:id/role', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
+  const user = await getUserById(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (user.id === req.currentUser.id) return res.status(400).json({ error: 'Cannot delete your own account' });
+  if (user.role === 'admin') {
+    const { rows } = await pool.query("SELECT COUNT(*)::int AS n FROM users WHERE role='admin'");
+    if ((rows[0]?.n ?? 0) <= 1) {
+      return res.status(409).json({ error: 'Cannot delete the last admin' });
+    }
+  }
+  await execute('DELETE FROM users WHERE id = $1', [user.id]);
+  res.json({ ok: true });
+});
+
 // ---------- Telephony (Twilio, mock-first) ----------
 registerTwilioRoutes(app);
 
