@@ -321,7 +321,7 @@ async function loadDashActivity() {
   const host = $('#dash-activity');
   if (!host) return;
   try {
-    const res = await fetch('/api/activity-log?limit=8');
+    const res = await fetch('/api/activity-log?limit=5');
     if (!res.ok) return;
     const { activities } = await res.json();
     if (!activities || !activities.length) {
@@ -360,10 +360,11 @@ async function loadDashMetros() {
       host.innerHTML = '<div class="dash-empty">No market data yet.</div>';
       return;
     }
-    const sorted = markets.sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0)).slice(0, 5);
+    const sorted = markets.sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 5);
     host.innerHTML = sorted.map((m, i) => {
-      const growth = m.population_growth ? `+${(m.population_growth * 100).toFixed(1)}%` : '';
-      return `<div class="dash-metro-item"><span class="dash-metro-rank">0${i + 1}</span><span class="dash-metro-name">${escapeHtml(m.metro || m.name || '—')}</span><span class="dash-metro-growth">${growth}</span><span class="dash-metro-score">${(m.composite_score || 0).toFixed(1)}</span></div>`;
+      const name = [m.city, m.state].filter(Boolean).join(', ') || m.msa_name || m.key || '—';
+      const growth = m.population_growth ? `+${(Number(m.population_growth) * 100).toFixed(1)}%` : '';
+      return `<div class="dash-metro-item"><span class="dash-metro-rank">0${i + 1}</span><span class="dash-metro-name">${escapeHtml(name)}</span><span class="dash-metro-growth">${growth}</span><span class="dash-metro-score">${Number(m.score || 0).toFixed(1)}</span></div>`;
     }).join('');
   } catch {}
 }
