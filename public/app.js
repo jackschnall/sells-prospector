@@ -2623,8 +2623,7 @@ function renderDebriefModal() {
       return `
         <div class="debrief-q">
           <div class="debrief-q-text">${i + 1}. ${escapeHtml(q)}</div>
-          <textarea class="debrief-q-textarea" data-idx="${i}" data-question="${escapeHtml(q)}" placeholder="Your answer (minimum ${d.min_answer_len} characters)">${escapeHtml(drafted)}</textarea>
-          <div class="debrief-q-counter" data-counter="${i}">${drafted.length} / ${d.min_answer_len} min</div>
+          <textarea class="debrief-q-textarea" data-idx="${i}" data-question="${escapeHtml(q)}" placeholder="Optional">${escapeHtml(drafted)}</textarea>
         </div>`;
     })
     .join('');
@@ -2632,13 +2631,6 @@ function renderDebriefModal() {
   // Wire textareas
   $$('.debrief-q-textarea').forEach((ta) => {
     ta.addEventListener('input', () => {
-      const idx = ta.dataset.idx;
-      const counter = $(`.debrief-q-counter[data-counter="${idx}"]`);
-      const n = ta.value.length;
-      const minLen = d.min_answer_len || 10;
-      counter.textContent = `${n} / ${minLen} min`;
-      counter.classList.toggle('valid', n >= minLen);
-      validateDebriefForm();
       scheduleDebriefDraftSave();
     });
   });
@@ -2665,25 +2657,8 @@ function updateDebriefDisposition() {
 }
 
 function validateDebriefForm() {
-  const d = state.debriefCall;
-  if (!d) return;
-  const disp = $('#debrief-disposition')?.value || 'answered';
-  if (disp === 'no_answer_no_vm') {
-    // No requirements — can submit immediately
-    $('#debrief-submit').disabled = false;
-    return;
-  }
-  if (disp === 'no_answer_left_vm') {
-    // Need at least 10 chars describing the VM
-    const vmNote = ($('#debrief-vm-note')?.value || '').trim();
-    $('#debrief-submit').disabled = vmNote.length < 10;
-    return;
-  }
-  // answered — normal Q&A validation
-  const minLen = d.min_answer_len || 10;
-  const tas = $$('.debrief-q-textarea');
-  const allValid = tas.length > 0 && tas.every((ta) => ta.value.trim().length >= minLen);
-  $('#debrief-submit').disabled = !allValid;
+  // All answers are optional — submit is always enabled
+  $('#debrief-submit').disabled = false;
 }
 
 function collectDebriefAnswers() {

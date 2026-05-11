@@ -57,28 +57,15 @@ function buildAnalysisPrompt(company, transcript) {
   };
 }
 
-function buildDebriefQuestionsPrompt(company, transcript, aiSummary) {
-  return {
-    system:
-      'You generate post-call debrief questions for an M&A analyst. The questions MUST be tailored to ' +
-      'what actually happened in THIS call — not generic. Exactly 3 questions maximum, each a single sentence ' +
-      'ending with a question mark, each focused on a specific event, name, topic, or signal from ' +
-      'the transcript. Output ONLY valid JSON.',
-    user:
-      `Company: ${company?.name || 'Unknown'}\nOwner: ${company?.owner || 'Unknown'}\n\n` +
-      `Call summary:\n${JSON.stringify(aiSummary, null, 2)}\n\n` +
-      `Transcript:\n"""\n${transcript}\n"""\n\n` +
-      `Return JSON: { "questions": ["Q1?", "Q2?", "Q3?"] } with exactly 3 items.\n` +
-      `Rules:\n` +
-      `- If scheduling was mentioned, ask about the callback (date, anything to prep).\n` +
-      `- If a spouse/partner/co-owner was named, ask about their role in the decision.\n` +
-      `- If interest or enthusiasm appeared, ask what resonated most.\n` +
-      `- If an objection was raised, ask how hard the objection is and how to address it.\n` +
-      `- If a recent life event (health, retirement, competitor offer) was mentioned, ask about timing implications.\n` +
-      `- If the call was a voicemail/gatekeeper, ask the analyst's recommended next step.\n` +
-      `- If revenue/valuation came up, ask if it changes the deal-size view.\n` +
-      `- Questions must be specific, referencing real phrases or facts.`,
-  };
+// Fixed debrief questions — simple, optional, no AI generation needed
+const DEBRIEF_QUESTIONS = [
+  'Anything important you want to make sure is recorded that the AI may not have picked up?',
+  'Any off-the-record info? (things said after the call, side conversations, gut feelings)',
+  'Any additional notes?',
+];
+
+function buildDebriefQuestionsPrompt() {
+  return null; // No longer using AI-generated questions
 }
 
 // ─── Fallbacks (used when ANTHROPIC_API_KEY missing or Claude fails) ─────────
@@ -279,34 +266,8 @@ async function analyzeCall(callLogId) {
 async function generateDebriefQuestions(callLogId) {
   const call = await getCallLog(callLogId);
   if (!call) return [];
-  const transcript = call.transcript || '';
-  const aiSummary = typeof call.ai_summary === 'string'
-    ? (() => { try { return JSON.parse(call.ai_summary); } catch { return {}; } })()
-    : (call.ai_summary || {});
-  const company = await getCompany(call.company_id);
 
-  let questions;
-  if (process.env.ANTHROPIC_API_KEY && transcript.trim()) {
-    try {
-      const { system, user } = buildDebriefQuestionsPrompt(company, transcript, aiSummary);
-      const { parsed } = await callJson({
-        model: MODELS.worker,
-        system,
-        user,
-        maxTokens: 800,
-      });
-      if (Array.isArray(parsed?.questions)) {
-        questions = parsed.questions
-          .filter((q) => typeof q === 'string' && q.trim().length > 0)
-          .slice(0, 5);
-      }
-    } catch (err) {
-      console.warn('[call-analyzer] Claude debrief-questions failed, using fallback:', err.message);
-    }
-  }
-  if (!questions || questions.length < 3) {
-    questions = fallbackDebriefQuestions({ sentiment: call.sentiment });
-  }
+  const questions = DEBRIEF_QUESTIONS;
 
   await updateCallLog(callLogId, { debrief_questions: questions });
   emit({

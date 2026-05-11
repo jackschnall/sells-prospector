@@ -5,7 +5,7 @@
 const { getCallLog, updateCallLog, getCompany, insertActivity, insertCalendarEvent, addNote } = require('./db');
 const { emit } = require('./agent');
 
-const MIN_ANSWER_LEN = 10;
+const MIN_ANSWER_LEN = 0;
 
 function normalizeAnswers(questions, answersInput) {
   // answers: array of { question, answer } OR { answer } matched by index
@@ -70,23 +70,8 @@ async function submitDebrief(callLogId, userId, answersInput, disposition, callb
     if (!questions.length) throw new Error('No debrief questions — analysis may still be running.');
 
     answers = normalizeAnswers(questions, answersInput);
-    const bad = answers.filter((a) => !a.answer || a.answer.trim().length < MIN_ANSWER_LEN);
-    if (bad.length) {
-      // If incoming answers have enough text but normalization lost them, just use incoming directly
-      const incomingValid = Array.isArray(answersInput) && answersInput.length >= questions.length
-        && answersInput.every((a) => a?.answer && a.answer.trim().length >= MIN_ANSWER_LEN);
-      if (incomingValid) {
-        answers = answersInput.map((a, i) => ({
-          question: questions[i] || a.question || `Question ${i + 1}`,
-          answer: a.answer,
-        }));
-      } else {
-        const err = new Error(`Each answer must be at least ${MIN_ANSWER_LEN} characters. Missing: ${bad.map((a) => a.question).join(', ')}`);
-        err.status = 400;
-        err.details = { missing: bad.map((a) => a.question) };
-        throw err;
-      }
-    }
+    // All answers are optional — fill in empty strings for unanswered
+    answers = answers.map(a => ({ ...a, answer: a.answer || '' }));
   }
 
   // Override sentiment for no-answer dispositions
