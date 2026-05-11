@@ -643,6 +643,18 @@ function renderDetail(data) {
   $('#d-tier').className = `detail-tier ${tierClass(c.tier)}`;
   $('#d-summary').textContent = c.summary || 'No research summary yet.';
 
+  // Outreach Angle
+  const oaSection = $('#d-outreach-angle-section');
+  const oaBody = $('#d-outreach-angle');
+  if (oaSection && oaBody) {
+    if (c.outreach_angle) {
+      oaSection.hidden = false;
+      oaBody.textContent = c.outreach_angle;
+    } else {
+      oaSection.hidden = true;
+    }
+  }
+
   // Call Intelligence summary
   const callIntelSection = $('#d-call-intel-section');
   const callIntelBody = $('#d-call-intel');
