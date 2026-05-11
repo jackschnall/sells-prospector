@@ -2193,6 +2193,9 @@ function selectQueueRow(id) {
   // Load contacts for this company
   loadQueueContacts(id);
 
+  // Load message history
+  loadQueueMessages(id);
+
   // Scheduled task / calendar event (pinned to top of queue for today)
   const eventSec = $('#qp-event-section');
   if (eventSec) {
@@ -2375,6 +2378,32 @@ async function sendCompanySms(companyId) {
   } catch { toast('Send failed', 'error'); }
 }
 
+async function loadQueueMessages(companyId) {
+  const thread = $('#qp-messages-thread');
+  const count = $('#qp-messages-count');
+  if (!thread) return;
+  try {
+    const res = await fetch(`/api/companies/${companyId}/messages`);
+    if (!res.ok) { thread.innerHTML = ''; if (count) count.textContent = '0'; return; }
+    const { messages } = await res.json();
+    if (count) count.textContent = String(messages.length);
+    if (!messages.length) {
+      thread.innerHTML = '<div class="d-notes-empty">No messages yet.</div>';
+      return;
+    }
+    thread.innerHTML = messages.reverse().map((m) => {
+      const isOut = m.direction === 'outbound';
+      const time = m.created_at ? new Date(m.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+      return `
+      <div class="sms-bubble ${isOut ? 'sms-out' : 'sms-in'}">
+        <div class="sms-body">${escapeHtml(m.body)}</div>
+        <div class="sms-meta">${isOut ? (m.user_name || 'You') : m.from_number} · ${time}</div>
+      </div>`;
+    }).join('');
+    thread.scrollTop = thread.scrollHeight;
+  } catch { thread.innerHTML = ''; }
+}
+
 async function sendQueueSms() {
   const companyId = state.queueActiveId;
   if (!companyId) return;
@@ -2394,6 +2423,7 @@ async function sendQueueSms() {
     if (res.ok) {
       ta.value = '';
       toast('Message sent', 'ok');
+      loadQueueMessages(companyId);
     } else {
       const data = await res.json().catch(() => ({}));
       toast(data.error || 'Send failed', 'error');
