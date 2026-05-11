@@ -563,7 +563,7 @@ function bindTabs() {
       if (target === 'calendar') loadCalendar();
       if (target === 'settings') loadSettings();
       if (target === 'contacts') loadAllContacts();
-      if (target === 'campaigns') loadCampaignsList();
+      if (target === 'campaigns') { loadCampaignsList(); populateCampStateDropdown(); }
       if (target === 'deleted') loadDeletedItems();
       if (target === 'actlog') loadActivityLog();
       if (target === 'inbox') loadInbox();
@@ -4382,7 +4382,16 @@ async function removeCampaignRecipientAction(companyId) {
 async function populateCampStateDropdown() {
   const container = $('#camp-state-options');
   if (!container) return;
-  const states = [...new Set((state.companies || []).map(c => c.state).filter(Boolean))].sort();
+  let states = [...new Set((state.companies || []).map(c => c.state).filter(Boolean))].sort();
+  if (!states.length) {
+    try {
+      const res = await fetch('/api/companies?sort=state_asc');
+      if (res.ok) {
+        const data = await res.json();
+        states = [...new Set((data.companies || []).map(c => c.state).filter(Boolean))].sort();
+      }
+    } catch {}
+  }
   container.innerHTML = states.map(s =>
     `<label class="camp-dropdown-item"><input type="checkbox" value="${escapeHtml(s)}" data-group="state" /> ${escapeHtml(s)}</label>`
   ).join('');
