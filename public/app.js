@@ -4669,7 +4669,7 @@ function renderCampaignPreview() {
   $('#camp-preview-counter').textContent = `${campState.previewIdx + 1} / ${total}`;
   $('#camp-preview-to').textContent = `To: ${d.to_email || '(no email)'} — ${d.company_name}`;
   $('#camp-preview-subject').textContent = `Subject: ${d.subject}`;
-  $('#camp-preview-body').textContent = d.body;
+  $('#camp-preview-body').innerHTML = d.body;
 }
 
 function campPreviewNav(dir) {
