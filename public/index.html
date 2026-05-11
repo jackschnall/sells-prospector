@@ -589,33 +589,36 @@
                 <div class="camp-search-row">
                   <input type="text" id="camp-search" class="cf-input" placeholder="Search companies&hellip;" />
                 </div>
-                <div class="camp-filter-chips">
-                  <div class="camp-filter-group">
-                    <span class="camp-filter-label">Tier:</span>
-                    <span class="camp-chip" data-filter="tier" data-value="strong-buy">Prime</span>
-                    <span class="camp-chip" data-filter="tier" data-value="watchlist">Possible</span>
+                <div class="camp-filter-row">
+                  <div class="camp-dropdown" id="camp-state-dropdown">
+                    <button type="button" class="camp-dropdown-btn" id="camp-state-btn">All States</button>
+                    <div class="camp-dropdown-menu" id="camp-state-menu" hidden>
+                      <label class="camp-dropdown-item"><input type="checkbox" class="camp-select-all" data-group="state" /> <strong>Select All</strong></label>
+                      <div class="camp-dropdown-divider"></div>
+                      <div id="camp-state-options"></div>
+                    </div>
                   </div>
-                  <div class="camp-filter-group">
-                    <span class="camp-filter-label">States:</span>
-                    <div id="camp-state-chips" class="camp-chip-row"></div>
-                  </div>
-                  <div class="camp-filter-group">
-                    <span class="camp-filter-label">Industries:</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Plumbing">Plumbing</span>
-                    <span class="camp-chip" data-filter="industry" data-value="HVAC">HVAC</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Pest Control">Pest Control</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Restoration">Restoration</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Painting">Painting</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Electrical">Electrical</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Septic">Septic</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Cleaning">Cleaning</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Landscaping">Landscaping</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Roofing">Roofing</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Fire Protection">Fire Protection</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Pool Service">Pool Service</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Garage Door">Garage Door</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Insulation">Insulation</span>
-                    <span class="camp-chip" data-filter="industry" data-value="Other">Other</span>
+                  <div class="camp-dropdown" id="camp-industry-dropdown">
+                    <button type="button" class="camp-dropdown-btn" id="camp-industry-btn">All Industries</button>
+                    <div class="camp-dropdown-menu" id="camp-industry-menu" hidden>
+                      <label class="camp-dropdown-item"><input type="checkbox" class="camp-select-all" data-group="industry" /> <strong>Select All</strong></label>
+                      <div class="camp-dropdown-divider"></div>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Plumbing" data-group="industry" /> Plumbing</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="HVAC" data-group="industry" /> HVAC</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Pest Control" data-group="industry" /> Pest Control</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Restoration" data-group="industry" /> Restoration</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Painting" data-group="industry" /> Painting</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Electrical" data-group="industry" /> Electrical</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Septic" data-group="industry" /> Septic</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Cleaning" data-group="industry" /> Cleaning</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Landscaping" data-group="industry" /> Landscaping</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Roofing" data-group="industry" /> Roofing</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Fire Protection" data-group="industry" /> Fire Protection</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Pool Service" data-group="industry" /> Pool Service</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Garage Door" data-group="industry" /> Garage Door</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Insulation" data-group="industry" /> Insulation</label>
+                      <label class="camp-dropdown-item"><input type="checkbox" value="Other" data-group="industry" /> Other</label>
+                    </div>
                   </div>
                 </div>
                 <div class="camp-company-list" id="camp-company-list">
@@ -1330,6 +1333,41 @@
             <div class="profile-row-value" style="display:flex;gap:6px;align-items:center;">
               <input type="tel" id="profile-twilio-number" class="cf-input" placeholder="+15551234567" style="width:160px;font-size:0.82rem;" />
               <button type="button" class="btn-ghost btn-xs" id="profile-twilio-save">Save</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="profile-section">
+          <div class="profile-section-title">Email Settings</div>
+          <div class="profile-row">
+            <div class="profile-row-label">SMTP Host</div>
+            <div class="profile-row-value">
+              <input type="text" id="profile-smtp-host" class="cf-input" placeholder="smtp.gmail.com" style="width:200px;font-size:0.82rem;" />
+            </div>
+          </div>
+          <div class="profile-row">
+            <div class="profile-row-label">SMTP Port</div>
+            <div class="profile-row-value">
+              <input type="number" id="profile-smtp-port" class="cf-input" placeholder="587" style="width:80px;font-size:0.82rem;" />
+            </div>
+          </div>
+          <div class="profile-row">
+            <div class="profile-row-label">Email (from)</div>
+            <div class="profile-row-value">
+              <input type="email" id="profile-smtp-from" class="cf-input" placeholder="you@company.com" style="width:200px;font-size:0.82rem;" />
+            </div>
+          </div>
+          <div class="profile-row">
+            <div class="profile-row-label">Password</div>
+            <div class="profile-row-value">
+              <input type="password" id="profile-smtp-pass" class="cf-input" placeholder="App password" style="width:200px;font-size:0.82rem;" />
+            </div>
+          </div>
+          <div class="profile-row">
+            <div class="profile-row-label"></div>
+            <div class="profile-row-value" style="display:flex;gap:6px;align-items:center;">
+              <button type="button" class="btn-primary btn-xs" id="profile-email-save">Save</button>
+              <button type="button" class="btn-ghost btn-xs" id="profile-email-test">Send Test</button>
             </div>
           </div>
         </div>

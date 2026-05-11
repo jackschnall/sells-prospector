@@ -64,6 +64,11 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS call_intelligence TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS restricted BOOLEAN DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS twilio_phone_number TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS disabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS smtp_host TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS smtp_port INTEGER;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS smtp_user TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS smtp_pass TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS smtp_from_email TEXT;
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- SMS Messages

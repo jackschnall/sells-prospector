@@ -1568,6 +1568,40 @@ function bindProfile() {
       }
     } catch { toast('Network error', 'error'); }
   });
+  $('#profile-email-save')?.addEventListener('click', async () => {
+    const smtp_host = $('#profile-smtp-host')?.value?.trim() || null;
+    const smtp_port = $('#profile-smtp-port')?.value ? Number($('#profile-smtp-port').value) : null;
+    const smtp_from_email = $('#profile-smtp-from')?.value?.trim() || null;
+    const smtp_pass = $('#profile-smtp-pass')?.value || null;
+    try {
+      const res = await fetch('/api/me/email-settings', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ smtp_host, smtp_port, smtp_user: smtp_from_email, smtp_pass, smtp_from_email }),
+      });
+      if (res.ok) {
+        state.user.smtp_host = smtp_host;
+        state.user.smtp_port = smtp_port;
+        state.user.smtp_user = smtp_from_email;
+        state.user.smtp_from_email = smtp_from_email;
+        toast('Email settings saved', 'ok');
+      } else {
+        const d = await res.json().catch(() => ({}));
+        toast(d.error || 'Failed to save', 'error');
+      }
+    } catch { toast('Network error', 'error'); }
+  });
+  $('#profile-email-test')?.addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/me/email-test', { method: 'POST' });
+      const d = await res.json();
+      if (res.ok) {
+        toast(d.message || 'Test email sent!', 'ok');
+      } else {
+        toast(d.error || 'Test failed', 'error');
+      }
+    } catch { toast('Network error', 'error'); }
+  });
 }
 
 function openProfileModal() {
@@ -1592,6 +1626,16 @@ function openProfileModal() {
 
   const twilioEl = $('#profile-twilio-number');
   if (twilioEl) twilioEl.value = state.user.twilio_phone_number || '';
+
+  // Email settings
+  const smtpHost = $('#profile-smtp-host');
+  const smtpPort = $('#profile-smtp-port');
+  const smtpFrom = $('#profile-smtp-from');
+  const smtpPass = $('#profile-smtp-pass');
+  if (smtpHost) smtpHost.value = state.user.smtp_host || '';
+  if (smtpPort) smtpPort.value = state.user.smtp_port || '';
+  if (smtpFrom) smtpFrom.value = state.user.smtp_from_email || '';
+  if (smtpPass) smtpPass.value = '';  // Never prefill password
 
   $$('.profile-stats-tab').forEach((x, i) => x.classList.toggle('active', i === 0));
   modal.hidden = false;
@@ -4335,34 +4379,35 @@ async function removeCampaignRecipientAction(companyId) {
   } catch {}
 }
 
-async function populateCampStateChips() {
-  const container = $('#camp-state-chips');
+async function populateCampStateDropdown() {
+  const container = $('#camp-state-options');
   if (!container) return;
-  // Get unique states from companies
   const states = [...new Set((state.companies || []).map(c => c.state).filter(Boolean))].sort();
   container.innerHTML = states.map(s =>
-    `<span class="camp-chip" data-filter="state" data-value="${escapeHtml(s)}">${escapeHtml(s)}</span>`
+    `<label class="camp-dropdown-item"><input type="checkbox" value="${escapeHtml(s)}" data-group="state" /> ${escapeHtml(s)}</label>`
   ).join('');
-  $$('.camp-chip[data-filter="state"]', container).forEach(chip => {
-    chip.addEventListener('click', () => {
-      chip.classList.toggle('active');
-      campSearchCompanies();
-    });
-  });
 }
 
-function getCampChipValues(filterName) {
-  return $$(`.camp-chip.active[data-filter="${filterName}"]`).map(c => c.dataset.value);
+function getCampDropdownValues(group) {
+  return $$(`input[data-group="${group}"]:checked:not(.camp-select-all)`).map(cb => cb.value);
+}
+
+function updateCampDropdownLabel(group) {
+  const selected = getCampDropdownValues(group);
+  const btn = group === 'state' ? $('#camp-state-btn') : $('#camp-industry-btn');
+  if (!btn) return;
+  const allLabel = group === 'state' ? 'All States' : 'All Industries';
+  if (selected.length === 0) btn.textContent = allLabel;
+  else if (selected.length <= 3) btn.textContent = selected.join(', ');
+  else btn.textContent = `${selected.length} selected`;
 }
 
 async function campSearchCompanies() {
   const q = $('#camp-search')?.value || '';
-  const tiers = getCampChipValues('tier');
-  const states = getCampChipValues('state');
-  const industries = getCampChipValues('industry');
+  const states = getCampDropdownValues('state');
+  const industries = getCampDropdownValues('industry');
   const params = new URLSearchParams();
   if (q) params.set('q', q);
-  if (tiers.length) params.set('tier', tiers.join(','));
   if (states.length) params.set('state', states.join(','));
   if (industries.length) params.set('industry', industries.join(','));
   if (campState.activeCampaignId) params.set('exclude_campaign', campState.activeCampaignId);
@@ -4518,15 +4563,45 @@ function initCampaignBindings() {
     campState.searchDebounce = setTimeout(campSearchCompanies, 300);
   };
   $('#camp-search')?.addEventListener('input', searchHandler);
-  // Multi-select chip filters
-  $$('.camp-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      chip.classList.toggle('active');
+  // Dropdown toggle
+  $$('.camp-dropdown-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const menu = btn.nextElementSibling;
+      const wasHidden = menu.hidden;
+      $$('.camp-dropdown-menu').forEach(m => m.hidden = true);
+      menu.hidden = !wasHidden;
+    });
+  });
+  document.addEventListener('click', () => {
+    $$('.camp-dropdown-menu').forEach(m => m.hidden = true);
+  });
+  $$('.camp-dropdown-menu').forEach(menu => {
+    menu.addEventListener('click', e => e.stopPropagation());
+  });
+  // Select-all checkboxes
+  $$('.camp-select-all').forEach(sa => {
+    sa.addEventListener('change', () => {
+      const group = sa.dataset.group;
+      $$(`input[data-group="${group}"]:not(.camp-select-all)`).forEach(cb => cb.checked = sa.checked);
+      updateCampDropdownLabel(group);
       campSearchCompanies();
     });
   });
-  // Populate state chips dynamically
-  populateCampStateChips();
+  // Delegate change events for individual checkboxes
+  document.addEventListener('change', (e) => {
+    if (e.target.dataset?.group && !e.target.classList.contains('camp-select-all')) {
+      const group = e.target.dataset.group;
+      const all = $$(`input[data-group="${group}"]:not(.camp-select-all)`);
+      const allChecked = all.every(cb => cb.checked);
+      const sa = $(`.camp-select-all[data-group="${group}"]`);
+      if (sa) sa.checked = allChecked;
+      updateCampDropdownLabel(group);
+      campSearchCompanies();
+    }
+  });
+  // Populate state dropdown dynamically
+  populateCampStateDropdown();
 
   bindMergeFieldClicks();
 }

@@ -6,6 +6,7 @@ const bcrypt = require('bcrypt');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 
 const {
   initSchema,
@@ -480,6 +481,10 @@ function userPublic(user) {
     assigned_territories: safeJson(user.assigned_territories) || [],
     restricted: !!user.restricted,
     twilio_phone_number: user.twilio_phone_number || null,
+    smtp_from_email: user.smtp_from_email || null,
+    smtp_host: user.smtp_host || null,
+    smtp_port: user.smtp_port || null,
+    smtp_user: user.smtp_user || null,
   };
 }
 
@@ -566,6 +571,43 @@ app.put('/api/me/twilio-number', requireUser, async (req, res) => {
   const num = req.body?.twilio_phone_number;
   await updateUser(req.currentUser.id, { twilio_phone_number: num ? String(num).trim() : null });
   res.json({ ok: true });
+});
+
+app.put('/api/me/email-settings', requireUser, async (req, res) => {
+  const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_email } = req.body || {};
+  await updateUser(req.currentUser.id, {
+    smtp_host: smtp_host || null,
+    smtp_port: smtp_port ? Number(smtp_port) : null,
+    smtp_user: smtp_user || null,
+    smtp_pass: smtp_pass || null,
+    smtp_from_email: smtp_from_email || null,
+  });
+  res.json({ ok: true });
+});
+
+app.post('/api/me/email-test', requireUser, async (req, res) => {
+  const user = await getUserById(req.currentUser.id);
+  if (!user || !user.smtp_host || !user.smtp_user || !user.smtp_pass) {
+    return res.status(400).json({ error: 'SMTP settings not configured. Save your email settings first.' });
+  }
+  try {
+    const transporter = nodemailer.createTransport({
+      host: user.smtp_host,
+      port: user.smtp_port || 587,
+      secure: user.smtp_port === 465,
+      auth: { user: user.smtp_user, pass: user.smtp_pass },
+    });
+    await transporter.sendMail({
+      from: user.smtp_from_email || user.smtp_user,
+      to: user.email,
+      subject: 'Sells Prospector - SMTP Test',
+      text: 'This is a test email from Sells M&A Prospector. Your SMTP settings are working correctly.',
+    });
+    res.json({ ok: true, message: `Test email sent to ${user.email}` });
+  } catch (err) {
+    console.error('[email-test]', err.message);
+    res.status(500).json({ error: `SMTP test failed: ${err.message}` });
+  }
 });
 
 app.put('/api/me/queue-settings', requireUser, async (req, res) => {

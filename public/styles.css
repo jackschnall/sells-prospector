@@ -1911,17 +1911,29 @@ body.detail-fullscreen { overflow: hidden; }
 
 /* ---------- Toast ---------- */
 
-.camp-filter-chips { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-.camp-filter-group { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
-.camp-filter-label { font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; min-width: 60px; }
-.camp-chip-row { display: flex; flex-wrap: wrap; gap: 4px; }
-.camp-chip {
-  padding: 3px 8px; border-radius: 10px; font-size: 0.72rem;
-  background: var(--bg-soft); border: 1px solid var(--card-border);
-  cursor: pointer; user-select: none; color: var(--text-muted);
+.camp-filter-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.camp-dropdown { position: relative; }
+.camp-dropdown-btn {
+  padding: 6px 12px; border-radius: 8px; border: 1px solid var(--card-border);
+  background: var(--bg-soft); color: var(--text-secondary);
+  cursor: pointer; font-size: 0.82rem; font-weight: 600;
+  min-width: 120px; text-align: left;
 }
-.camp-chip:hover { border-color: var(--gold); }
-.camp-chip.active { background: var(--gold); color: #3a2e0a; border-color: var(--gold); }
+.camp-dropdown-btn:hover { border-color: var(--gold); }
+.camp-dropdown-menu {
+  position: absolute; top: 100%; left: 0; z-index: 100;
+  background: var(--card-bg, #152238); border: 1px solid var(--card-border);
+  border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  max-height: 280px; overflow-y: auto; min-width: 180px;
+  padding: 4px 0; margin-top: 4px;
+}
+.camp-dropdown-item {
+  display: flex; align-items: center; gap: 8px; padding: 5px 12px;
+  font-size: 0.82rem; cursor: pointer; color: var(--text-secondary);
+}
+.camp-dropdown-item:hover { background: var(--bg-soft); }
+.camp-dropdown-item input { accent-color: var(--gold); cursor: pointer; }
+.camp-dropdown-divider { height: 1px; background: var(--card-border); margin: 4px 0; }
 
 .camp-generate-status {
   margin-top: 8px; font-size: 0.82rem; color: var(--text-muted); font-style: italic;
