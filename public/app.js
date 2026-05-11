@@ -4335,16 +4335,36 @@ async function removeCampaignRecipientAction(companyId) {
   } catch {}
 }
 
+async function populateCampStateChips() {
+  const container = $('#camp-state-chips');
+  if (!container) return;
+  // Get unique states from companies
+  const states = [...new Set((state.companies || []).map(c => c.state).filter(Boolean))].sort();
+  container.innerHTML = states.map(s =>
+    `<span class="camp-chip" data-filter="state" data-value="${escapeHtml(s)}">${escapeHtml(s)}</span>`
+  ).join('');
+  $$('.camp-chip[data-filter="state"]', container).forEach(chip => {
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('active');
+      campSearchCompanies();
+    });
+  });
+}
+
+function getCampChipValues(filterName) {
+  return $$(`.camp-chip.active[data-filter="${filterName}"]`).map(c => c.dataset.value);
+}
+
 async function campSearchCompanies() {
   const q = $('#camp-search')?.value || '';
-  const tier = $('#camp-tier-filter')?.value || '';
-  const stateVal = $('#camp-state-filter')?.value || '';
-  const industry = $('#camp-industry-filter')?.value || '';
+  const tiers = getCampChipValues('tier');
+  const states = getCampChipValues('state');
+  const industries = getCampChipValues('industry');
   const params = new URLSearchParams();
   if (q) params.set('q', q);
-  if (tier) params.set('tier', tier);
-  if (stateVal) params.set('state', stateVal);
-  if (industry) params.set('industry', industry);
+  if (tiers.length) params.set('tier', tiers.join(','));
+  if (states.length) params.set('state', states.join(','));
+  if (industries.length) params.set('industry', industries.join(','));
   if (campState.activeCampaignId) params.set('exclude_campaign', campState.activeCampaignId);
   try {
     const res = await fetch(`/api/campaigns/search/companies?${params}`);
@@ -4498,9 +4518,15 @@ function initCampaignBindings() {
     campState.searchDebounce = setTimeout(campSearchCompanies, 300);
   };
   $('#camp-search')?.addEventListener('input', searchHandler);
-  $('#camp-tier-filter')?.addEventListener('change', campSearchCompanies);
-  $('#camp-state-filter')?.addEventListener('change', campSearchCompanies);
-  $('#camp-industry-filter')?.addEventListener('change', campSearchCompanies);
+  // Multi-select chip filters
+  $$('.camp-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('active');
+      campSearchCompanies();
+    });
+  });
+  // Populate state chips dynamically
+  populateCampStateChips();
 
   bindMergeFieldClicks();
 }

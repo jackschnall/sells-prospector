@@ -1911,6 +1911,18 @@ body.detail-fullscreen { overflow: hidden; }
 
 /* ---------- Toast ---------- */
 
+.camp-filter-chips { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.camp-filter-group { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.camp-filter-label { font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; min-width: 60px; }
+.camp-chip-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.camp-chip {
+  padding: 3px 8px; border-radius: 10px; font-size: 0.72rem;
+  background: var(--bg-soft); border: 1px solid var(--card-border);
+  cursor: pointer; user-select: none; color: var(--text-muted);
+}
+.camp-chip:hover { border-color: var(--gold); }
+.camp-chip.active { background: var(--gold); color: #3a2e0a; border-color: var(--gold); }
+
 .camp-generate-status {
   margin-top: 8px; font-size: 0.82rem; color: var(--text-muted); font-style: italic;
 }

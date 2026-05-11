@@ -588,32 +588,35 @@
                 <div class="camp-section-title">Recipients <span class="d-section-count" id="camp-recip-count">0</span></div>
                 <div class="camp-search-row">
                   <input type="text" id="camp-search" class="cf-input" placeholder="Search companies&hellip;" />
-                  <select id="camp-tier-filter" class="cf-input camp-filter-select">
-                    <option value="">All tiers</option>
-                    <option value="strong-buy">Strong Buy</option>
-                    <option value="watchlist">Watchlist</option>
-                  </select>
-                  <select id="camp-state-filter" class="cf-input camp-filter-select">
-                    <option value="">All states</option>
-                  </select>
-                  <select id="camp-industry-filter" class="cf-input camp-filter-select">
-                    <option value="">All industries</option>
-                    <option value="Plumbing">Plumbing</option>
-                    <option value="HVAC">HVAC</option>
-                    <option value="Pest Control">Pest Control</option>
-                    <option value="Restoration">Restoration</option>
-                    <option value="Painting">Painting</option>
-                    <option value="Electrical">Electrical</option>
-                    <option value="Septic">Septic</option>
-                    <option value="Cleaning">Cleaning</option>
-                    <option value="Landscaping">Landscaping</option>
-                    <option value="Roofing">Roofing</option>
-                    <option value="Fire Protection">Fire Protection</option>
-                    <option value="Pool Service">Pool Service</option>
-                    <option value="Garage Door">Garage Door</option>
-                    <option value="Insulation">Insulation</option>
-                    <option value="Other">Other</option>
-                  </select>
+                </div>
+                <div class="camp-filter-chips">
+                  <div class="camp-filter-group">
+                    <span class="camp-filter-label">Tier:</span>
+                    <span class="camp-chip" data-filter="tier" data-value="strong-buy">Prime</span>
+                    <span class="camp-chip" data-filter="tier" data-value="watchlist">Possible</span>
+                  </div>
+                  <div class="camp-filter-group">
+                    <span class="camp-filter-label">States:</span>
+                    <div id="camp-state-chips" class="camp-chip-row"></div>
+                  </div>
+                  <div class="camp-filter-group">
+                    <span class="camp-filter-label">Industries:</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Plumbing">Plumbing</span>
+                    <span class="camp-chip" data-filter="industry" data-value="HVAC">HVAC</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Pest Control">Pest Control</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Restoration">Restoration</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Painting">Painting</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Electrical">Electrical</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Septic">Septic</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Cleaning">Cleaning</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Landscaping">Landscaping</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Roofing">Roofing</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Fire Protection">Fire Protection</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Pool Service">Pool Service</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Garage Door">Garage Door</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Insulation">Insulation</span>
+                    <span class="camp-chip" data-filter="industry" data-value="Other">Other</span>
+                  </div>
                 </div>
                 <div class="camp-company-list" id="camp-company-list">
                   <div class="empty-msg">Search for companies to add.</div>

@@ -1436,11 +1436,23 @@ app.get('/api/campaigns/search/companies', requireUser, async (req, res) => {
     params.push(`%${q}%`);
     idx++;
   }
-  if (tier) { sql += ` AND c.tier = $${idx}`; params.push(tier); idx++; }
-  if (state) { sql += ` AND c.state = $${idx}`; params.push(state); idx++; }
+  if (tier) {
+    const tiers = tier.split(',').filter(Boolean);
+    if (tiers.length === 1) { sql += ` AND c.tier = $${idx}`; params.push(tiers[0]); idx++; }
+    else if (tiers.length > 1) { sql += ` AND c.tier = ANY($${idx}::text[])`; params.push(tiers); idx++; }
+  }
+  if (state) {
+    const states = state.split(',').filter(Boolean);
+    if (states.length === 1) { sql += ` AND c.state = $${idx}`; params.push(states[0]); idx++; }
+    else if (states.length > 1) { sql += ` AND c.state = ANY($${idx}::text[])`; params.push(states); idx++; }
+  }
   if (stage) { sql += ` AND c.pipeline_stage = $${idx}`; params.push(stage); idx++; }
   const industry = req.query.industry || '';
-  if (industry) { sql += ` AND COALESCE(c.industry, 'Plumbing') = $${idx}`; params.push(industry); idx++; }
+  if (industry) {
+    const industries = industry.split(',').filter(Boolean);
+    if (industries.length === 1) { sql += ` AND COALESCE(c.industry, 'Plumbing') = $${idx}`; params.push(industries[0]); idx++; }
+    else if (industries.length > 1) { sql += ` AND COALESCE(c.industry, 'Plumbing') = ANY($${idx}::text[])`; params.push(industries); idx++; }
+  }
   if (excludeCampaign) {
     sql += ` AND c.id NOT IN (SELECT cr.company_id FROM campaign_recipients cr WHERE cr.campaign_id = $${idx})`;
     params.push(excludeCampaign);
