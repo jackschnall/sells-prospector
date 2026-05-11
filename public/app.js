@@ -1359,6 +1359,11 @@ function userInitials(s) {
 function bindLogin() {
   const form = $('#login-form');
   if (!form) return;
+  $('#login-forgot')?.addEventListener('click', () => {
+    const err = $('#login-error');
+    err.textContent = 'Contact your admin to reset your password.';
+    err.hidden = false;
+  });
   const tabs = $$('.login-tab');
   tabs.forEach((t) => {
     t.addEventListener('click', () => {
@@ -3177,17 +3182,37 @@ function openSettingsUserModal(userId) {
   const disabledCb = $('#settings-user-disabled');
   if (disabledRow) disabledRow.hidden = (u.id === state.user?.id);
   if (disabledCb) disabledCb.checked = !!u.disabled;
-  // Delete button — hide for your own account
+  // Delete + Reset password buttons — hide for your own account
   const delBtn = $('#settings-user-delete');
-  if (delBtn) {
-    delBtn.hidden = (u.id === state.user?.id);
-  }
+  if (delBtn) delBtn.hidden = (u.id === state.user?.id);
+  const resetPwBtn = $('#settings-user-reset-pw');
+  if (resetPwBtn) resetPwBtn.hidden = (u.id === state.user?.id);
   $('#settings-user-modal').hidden = false;
 }
 
 function closeSettingsUserModal() {
   $('#settings-user-modal').hidden = true;
   state.settingsEditingUser = null;
+}
+
+async function resetSettingsUserPassword() {
+  const u = state.settingsEditingUser;
+  if (!u) return;
+  const password = prompt(`Set a new password for ${u.name || u.email}:\n(min 6 characters)`);
+  if (!password) return;
+  if (password.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
+  try {
+    const res = await fetch(`/api/admin/users/${u.id}/reset-password`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    const data = await res.json();
+    if (!res.ok) { toast(data.error || 'Reset failed', 'error'); return; }
+    toast(`Password reset for ${u.name || u.email}`, 'ok');
+  } catch (err) {
+    toast('Reset failed: ' + err.message, 'error');
+  }
 }
 
 async function deleteSettingsUser() {
@@ -3330,6 +3355,7 @@ function bindPhase2() {
   $('#settings-user-close')?.addEventListener('click', closeSettingsUserModal);
   $('#settings-user-save')?.addEventListener('click', saveSettingsUser);
   $('#settings-user-delete')?.addEventListener('click', deleteSettingsUser);
+  $('#settings-user-reset-pw')?.addEventListener('click', resetSettingsUserPassword);
 
   // Contacts tab + Add Company / Add Contact
   $('#btn-add-company')?.addEventListener('click', () => openCompanyModal());

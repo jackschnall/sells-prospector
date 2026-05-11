@@ -3686,6 +3686,13 @@ body.detail-fullscreen { overflow: hidden; }
   color: var(--text-dim, #6a6a6a);
   font-size: 0.82rem; font-style: italic;
 }
+.login-forgot {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-dim, #6a6a6a);
+  font-size: 0.82rem; font-style: italic;
+  text-decoration: underline;
+}
+.login-forgot:hover { color: var(--gold, #C9A84C); }
 
 /* ─── Profile button in header (Phase 2) ──────────────────────────────── */
 .profile-btn {

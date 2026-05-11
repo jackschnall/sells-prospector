@@ -980,7 +980,10 @@
             <span style="color:#e0a08c;">Disable account (blocks login, keeps records)</span>
           </label>
           <div class="cal-ev-actions" style="justify-content:space-between;">
-            <button type="button" class="btn-danger btn-xs" id="settings-user-delete" hidden>Delete account</button>
+            <div style="display:flex;gap:8px;">
+              <button type="button" class="btn-danger btn-xs" id="settings-user-delete" hidden>Delete account</button>
+              <button type="button" class="btn-ghost btn-xs" id="settings-user-reset-pw" hidden>Reset password</button>
+            </div>
             <button type="button" class="btn-primary" id="settings-user-save">Save</button>
           </div>
         </div>
@@ -1232,7 +1235,7 @@
         </form>
 
         <div class="login-foot">
-          <span class="login-foot-dim">Sign in with your account credentials.</span>
+          <button type="button" class="login-forgot" id="login-forgot">Forgot password?</button>
         </div>
       </div>
     </div>

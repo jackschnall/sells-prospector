@@ -640,6 +640,16 @@ app.put('/api/admin/users/:id/role', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/admin/users/:id/reset-password', requireAdmin, async (req, res) => {
+  const { password } = req.body || {};
+  if (!password || password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  const user = await getUserById(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const password_hash = await bcrypt.hash(password, 10);
+  await execute('UPDATE users SET password_hash = $1 WHERE id = $2', [password_hash, user.id]);
+  res.json({ ok: true });
+});
+
 app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   const user = await getUserById(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
