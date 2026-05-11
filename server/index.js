@@ -1457,10 +1457,12 @@ Return ONLY valid JSON: { "subject": "...", "body": "..." }`,
       });
 
       if (parsed?.subject && parsed?.body) {
-        const sig = senderSig;
+        // Convert body to HTML paragraphs and append HTML signature
+        const bodyHtml = parsed.body.split('\n').map(line => line.trim() ? `<p style="margin:0 0 8px 0;">${line}</p>` : '<br>').join('\n');
+        const fullHtml = bodyHtml + (senderSig ? `<br>${senderSig}` : '');
         await execute(
           `UPDATE campaign_recipients SET merged_subject = $1, merged_body = $2 WHERE campaign_id = $3 AND company_id = $4`,
-          [parsed.subject, parsed.body + sig, req.params.id, r.company_id]
+          [parsed.subject, fullHtml, req.params.id, r.company_id]
         );
         generated++;
       }

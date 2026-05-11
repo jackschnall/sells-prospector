@@ -2007,6 +2007,19 @@ body.detail-fullscreen { overflow: hidden; }
 .camp-dropdown-item input { accent-color: var(--gold); cursor: pointer; }
 .camp-dropdown-divider { height: 1px; background: var(--card-border); margin: 4px 0; }
 
+.sig-tabs { display: flex; gap: 4px; }
+.sig-tab {
+  padding: 3px 10px; font-size: 0.72rem; border: 1px solid var(--card-border);
+  border-radius: 6px; background: var(--bg-soft); color: var(--text-muted);
+  cursor: pointer;
+}
+.sig-tab.active { background: var(--gold); color: #3a2e0a; border-color: var(--gold); }
+.sig-preview {
+  background: #fff; border: 1px solid var(--card-border); border-radius: 6px;
+  padding: 12px; min-height: 60px; font-size: 0.85rem; color: #333;
+  overflow: auto; max-height: 200px;
+}
+
 .camp-generate-status {
   margin-top: 8px; font-size: 0.82rem; color: var(--text-muted); font-style: italic;
 }

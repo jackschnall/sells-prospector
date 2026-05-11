@@ -1682,6 +1682,28 @@ function bindProfile() {
       }
     } catch { toast('Network error', 'error'); }
   });
+  // Signature tab switching
+  $$('.sig-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      $$('.sig-tab').forEach(t => t.classList.toggle('active', t === tab));
+      const view = tab.dataset.sigView;
+      const textarea = $('#profile-email-sig');
+      const preview = $('#profile-sig-preview');
+      if (view === 'html') {
+        textarea.style.display = '';
+        preview.style.display = 'none';
+      } else {
+        textarea.style.display = 'none';
+        preview.style.display = '';
+        preview.innerHTML = textarea.value || '<span style="color:#999">No signature set</span>';
+      }
+    });
+  });
+  // Update preview when HTML changes
+  $('#profile-email-sig')?.addEventListener('input', () => {
+    const preview = $('#profile-sig-preview');
+    if (preview) preview.innerHTML = $('#profile-email-sig').value || '';
+  });
   $('#profile-sig-save')?.addEventListener('click', async () => {
     const sig = $('#profile-email-sig')?.value || '';
     try {
@@ -1727,7 +1749,9 @@ function openProfileModal() {
   if (smtpFrom) smtpFrom.value = state.user.smtp_from_email || '';
   if (smtpPass) smtpPass.value = '';  // Never prefill password
   const sigEl = $('#profile-email-sig');
+  const sigPreview = $('#profile-sig-preview');
   if (sigEl) sigEl.value = state.user.email_signature || '';
+  if (sigPreview) sigPreview.innerHTML = state.user.email_signature || '<span style="color:#999">No signature set</span>';
 
   $$('.profile-stats-tab').forEach((x, i) => x.classList.toggle('active', i === 0));
   modal.hidden = false;

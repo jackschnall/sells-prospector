@@ -1389,8 +1389,13 @@
           </div>
           <div class="profile-row" style="margin-top:8px;">
             <div class="profile-row-label">Email Signature</div>
-            <div class="profile-row-value" style="flex-direction:column;gap:6px;">
-              <textarea id="profile-email-sig" class="cf-input" rows="5" placeholder="Paste your email signature here..." style="font-size:0.82rem;width:100%;"></textarea>
+            <div class="profile-row-value" style="flex-direction:column;gap:6px;width:100%;">
+              <div class="sig-tabs">
+                <button type="button" class="sig-tab active" data-sig-view="preview">Preview</button>
+                <button type="button" class="sig-tab" data-sig-view="html">HTML</button>
+              </div>
+              <div id="profile-sig-preview" class="sig-preview"></div>
+              <textarea id="profile-email-sig" class="cf-input" rows="6" placeholder="Paste your signature HTML here..." style="font-size:0.78rem;width:100%;font-family:monospace;display:none;"></textarea>
               <button type="button" class="btn-ghost btn-xs" id="profile-sig-save">Save Signature</button>
             </div>
           </div>
