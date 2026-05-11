@@ -134,13 +134,20 @@ function registerRoutes(app) {
         mock: false,
       }).catch((err) => console.error('[twilio] Failed to create inbound call_log:', err.message));
 
-      // Route to the user whose Twilio number matches the called number, or ring all
+      // Route to the user whose Twilio number matches the called number
       const users = await listUsers();
       const calledDigits = (req.body?.To || '').replace(/\D/g, '').slice(-10);
-      let targetUsers = users;
-      if (calledDigits) {
-        const matched = users.filter(u => u.twilio_phone_number && u.twilio_phone_number.replace(/\D/g, '').slice(-10) === calledDigits);
-        if (matched.length) targetUsers = matched;
+      const targetUsers = calledDigits
+        ? users.filter(u => u.twilio_phone_number && u.twilio_phone_number.replace(/\D/g, '').slice(-10) === calledDigits)
+        : [];
+      if (!targetUsers.length) {
+        // No user assigned to this number — send to voicemail
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">Sorry, no one is available to take your call. Please leave a message after the beep.</Say>
+  <Record maxLength="120" transcribe="false" />
+</Response>`;
+        return res.set('Content-Type', 'text/xml').send(twiml);
       }
       const clientTags = targetUsers.map(u => `    <Client><Identity>${u.id}</Identity></Client>`).join('\n');
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
