@@ -694,13 +694,35 @@ app.get('/api/calls/missed', requireUser, async (req, res) => {
      LEFT JOIN companies c ON cl.company_id = c.id
      LEFT JOIN contacts ct ON cl.contact_id = ct.id
      WHERE cl.direction = 'inbound'
-       AND cl.status IN ('missed', 'voicemail', 'no-answer')
+       AND cl.status IN ('missed', 'voicemail', 'no-answer', 'ringing')
        ${isAdmin ? '' : 'AND (cl.user_id = $1 OR cl.user_id IS NULL)'}
      ORDER BY cl.called_at DESC
      LIMIT 50`,
     isAdmin ? [] : [userId]
   );
   res.json({ calls: rows });
+});
+
+app.put('/api/calls/:id/link', requireUser, async (req, res) => {
+  const { contact_id, company_id } = req.body || {};
+  const call = await getCallLog(req.params.id);
+  if (!call) return res.status(404).json({ error: 'call_log not found' });
+  const updates = {};
+  if (contact_id) updates.contact_id = contact_id;
+  if (company_id) updates.company_id = company_id;
+  if (Object.keys(updates).length) {
+    const fields = Object.keys(updates).map((k, i) => `${k} = $${i + 1}`).join(', ');
+    const params = [...Object.values(updates), req.params.id];
+    await execute(`UPDATE call_logs SET ${fields} WHERE id = $${params.length}`, params);
+  }
+  res.json({ ok: true });
+});
+
+app.put('/api/calls/:id/dismiss', requireUser, async (req, res) => {
+  const call = await getCallLog(req.params.id);
+  if (!call) return res.status(404).json({ error: 'call_log not found' });
+  await updateCallLog(call.id, { status: 'dismissed' });
+  res.json({ ok: true });
 });
 
 app.get('/api/calls/pending-debrief', requireUser, async (req, res) => {

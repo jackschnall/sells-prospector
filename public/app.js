@@ -3966,8 +3966,13 @@ function renderInbox() {
     const callbackBtn = c.from_number
       ? `<button type="button" class="btn-ghost btn-xs inbox-callback" data-number="${escapeHtml(c.from_number)}" data-company="${escapeHtml(c.company_id || '')}">Call back</button>`
       : '';
+    const isUnmatched = !c.company_id && !c.contact_name;
+    const unmatchedActions = isUnmatched ? `
+      <button type="button" class="btn-ghost btn-xs inbox-add-contact" data-call-id="${escapeHtml(c.id)}" data-number="${escapeHtml(c.from_number || '')}">Add contact</button>
+      <button type="button" class="btn-ghost btn-xs inbox-dismiss" data-call-id="${escapeHtml(c.id)}">Dismiss</button>
+    ` : '';
     return `
-      <div class="inbox-item">
+      <div class="inbox-item" id="inbox-item-${escapeHtml(c.id)}">
         <div class="inbox-item-left">
           <div class="inbox-item-name">${escapeHtml(name)} ${badge}</div>
           <div class="inbox-item-detail">${escapeHtml([detail, location].filter(Boolean).join(' · '))}</div>
@@ -3976,9 +3981,75 @@ function renderInbox() {
         </div>
         <div class="inbox-item-actions">
           ${callbackBtn}
+          ${unmatchedActions}
         </div>
       </div>`;
   }).join('');
+  // Bind add contact buttons
+  $$('.inbox-add-contact', list).forEach(btn => {
+    btn.addEventListener('click', () => inboxAddContact(btn.dataset.callId, btn.dataset.number));
+  });
+  // Bind dismiss buttons
+  $$('.inbox-dismiss', list).forEach(btn => {
+    btn.addEventListener('click', () => inboxDismiss(btn.dataset.callId));
+  });
+}
+
+async function inboxAddContact(callId, phoneNumber) {
+  const companyName = prompt('Link to company — type company name to search:');
+  if (!companyName || !companyName.trim()) return;
+  try {
+    // Search for matching company
+    const res = await fetch(`/api/companies?search=${encodeURIComponent(companyName.trim())}`);
+    if (!res.ok) { toast('Search failed', 'error'); return; }
+    const data = await res.json();
+    const matches = (data.companies || []).slice(0, 5);
+    if (!matches.length) {
+      toast('No companies found matching "' + companyName.trim() + '"', 'error');
+      return;
+    }
+    // Let user pick from matches
+    const options = matches.map((c, i) => `${i + 1}. ${c.name} (${c.city || ''}, ${c.state || ''})`).join('\n');
+    const pick = prompt(`Found ${matches.length} match(es):\n\n${options}\n\nEnter number to select (or cancel):`);
+    if (!pick) return;
+    const idx = parseInt(pick) - 1;
+    if (idx < 0 || idx >= matches.length) { toast('Invalid selection', 'error'); return; }
+    const company = matches[idx];
+
+    // Ask for contact name
+    const contactName = prompt(`Contact name for ${company.name}:`);
+    if (!contactName || !contactName.trim()) return;
+
+    // Create contact on that company
+    const cRes = await fetch('/api/contacts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ company_id: company.id, name: contactName.trim(), phone: phoneNumber }),
+    });
+    if (!cRes.ok) { toast('Failed to create contact', 'error'); return; }
+    const cData = await cRes.json();
+
+    // Link the call log to this company + contact
+    await fetch(`/api/calls/${callId}/link`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ company_id: company.id, contact_id: cData.contact?.id }),
+    });
+    toast(`Linked to ${company.name} — contact "${contactName.trim()}" added`, 'ok');
+    loadInbox();
+  } catch (e) { toast('Failed: ' + e.message, 'error'); }
+}
+
+async function inboxDismiss(callId) {
+  try {
+    await fetch(`/api/calls/${callId}/dismiss`, { method: 'PUT' });
+    const el = $(`#inbox-item-${callId}`);
+    if (el) el.remove();
+    inboxCalls = inboxCalls.filter(c => c.id !== callId);
+    if (!inboxCalls.length) {
+      $('#inbox-list').innerHTML = '<div class="inbox-empty">No missed calls or voicemails.</div>';
+    }
+  } catch {}
 }
 
 // ---------- Activity Log ----------
