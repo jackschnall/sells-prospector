@@ -1390,9 +1390,8 @@
           <div class="profile-row" style="margin-top:8px;">
             <div class="profile-row-label">Email Signature</div>
             <div class="profile-row-value" style="flex-direction:column;gap:6px;width:100%;">
-              <div id="profile-sig-editor" class="sig-editor" contenteditable="true" data-placeholder="Paste your email signature here (Cmd+V from Outlook)"></div>
-              <input type="hidden" id="profile-email-sig" />
-              <button type="button" class="btn-ghost btn-xs" id="profile-sig-save">Save Signature</button>
+              <textarea id="profile-email-sig" class="cf-input" rows="6" placeholder="Paste your email signature here..." style="font-size:0.82rem;width:100%;"></textarea>
+              <button type="button" class="btn-primary btn-xs" id="profile-sig-save">Save Signature</button>
             </div>
           </div>
         </div>
