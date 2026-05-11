@@ -129,11 +129,33 @@ function registerRoutes(app) {
         ? users.filter(u => u.twilio_phone_number && u.twilio_phone_number.replace(/\D/g, '').slice(-10) === calledDigits)
         : [];
 
+      // Look up caller by phone number to link to company/contact
+      const fromDigits = rawFrom.replace(/\D/g, '').slice(-10);
+      let matchedCompanyId = null;
+      let matchedContactId = null;
+      if (fromDigits.length >= 7) {
+        try {
+          const { rows: companies } = await pool.query(
+            `SELECT id FROM companies WHERE REGEXP_REPLACE(phone, '\\D', '', 'g') LIKE $1 AND deleted_at IS NULL LIMIT 1`,
+            [`%${fromDigits}`]
+          );
+          if (companies[0]) matchedCompanyId = companies[0].id;
+          const { rows: contacts } = await pool.query(
+            `SELECT id, company_id FROM contacts WHERE REGEXP_REPLACE(phone, '\\D', '', 'g') LIKE $1 AND deleted_at IS NULL LIMIT 1`,
+            [`%${fromDigits}`]
+          );
+          if (contacts[0]) {
+            matchedContactId = contacts[0].id;
+            if (!matchedCompanyId) matchedCompanyId = contacts[0].company_id;
+          }
+        } catch (err) { console.error('[twilio] caller lookup error:', err.message); }
+      }
+
       // Create a call log for the inbound call
       const targetUserId = targetUsers.length === 1 ? targetUsers[0].id : null;
       insertCallLog({
-        company_id: null,
-        contact_id: null,
+        company_id: matchedCompanyId,
+        contact_id: matchedContactId,
         user_id: targetUserId,
         direction: 'inbound',
         status: 'ringing',
