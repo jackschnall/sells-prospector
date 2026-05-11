@@ -697,7 +697,7 @@ async function updateUser(id, data) {
   const fields = [];
   const params = [];
   let idx = 1;
-  for (const key of ['name', 'role', 'assigned_verticals', 'assigned_territories', 'restricted', 'twilio_phone_number', 'disabled', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from_email']) {
+  for (const key of ['name', 'role', 'assigned_verticals', 'assigned_territories', 'restricted', 'twilio_phone_number', 'disabled', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from_email', 'email_signature']) {
     if (data[key] !== undefined) {
       fields.push(`${key} = $${idx++}`);
       if (key === 'assigned_verticals' || key === 'assigned_territories') {

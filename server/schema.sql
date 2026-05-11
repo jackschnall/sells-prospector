@@ -69,6 +69,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS smtp_port INTEGER;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS smtp_user TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS smtp_pass TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS smtp_from_email TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_signature TEXT;
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- SMS Messages

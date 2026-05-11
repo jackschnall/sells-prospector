@@ -1682,6 +1682,20 @@ function bindProfile() {
       }
     } catch { toast('Network error', 'error'); }
   });
+  $('#profile-sig-save')?.addEventListener('click', async () => {
+    const sig = $('#profile-email-sig')?.value || '';
+    try {
+      const res = await fetch('/api/me/email-signature', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email_signature: sig }),
+      });
+      if (res.ok) {
+        state.user.email_signature = sig;
+        toast('Signature saved', 'ok');
+      } else { toast('Failed to save', 'error'); }
+    } catch { toast('Network error', 'error'); }
+  });
 }
 
 function openProfileModal() {
@@ -1712,6 +1726,8 @@ function openProfileModal() {
   const smtpPass = $('#profile-smtp-pass');
   if (smtpFrom) smtpFrom.value = state.user.smtp_from_email || '';
   if (smtpPass) smtpPass.value = '';  // Never prefill password
+  const sigEl = $('#profile-email-sig');
+  if (sigEl) sigEl.value = state.user.email_signature || '';
 
   $$('.profile-stats-tab').forEach((x, i) => x.classList.toggle('active', i === 0));
   modal.hidden = false;

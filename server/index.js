@@ -485,6 +485,7 @@ function userPublic(user) {
     smtp_host: user.smtp_host || null,
     smtp_port: user.smtp_port || null,
     smtp_user: user.smtp_user || null,
+    email_signature: user.email_signature || null,
   };
 }
 
@@ -570,6 +571,12 @@ app.get('/api/me/assignments', requireUser, async (req, res) => {
 app.put('/api/me/twilio-number', requireUser, async (req, res) => {
   const num = req.body?.twilio_phone_number;
   await updateUser(req.currentUser.id, { twilio_phone_number: num ? String(num).trim() : null });
+  res.json({ ok: true });
+});
+
+app.put('/api/me/email-signature', requireUser, async (req, res) => {
+  const sig = req.body?.email_signature;
+  await updateUser(req.currentUser.id, { email_signature: sig || null });
   res.json({ ok: true });
 });
 
@@ -1390,7 +1397,9 @@ app.post('/api/campaigns/:id/generate', requireUser, async (req, res) => {
   if (!process.env.ANTHROPIC_API_KEY) return res.status(400).json({ error: 'ANTHROPIC_API_KEY not configured' });
 
   const recipients = await listCampaignRecipients(req.params.id);
-  const senderName = req.currentUser?.name || 'the analyst';
+  const sender = await getUserById(req.currentUser.id);
+  const senderName = sender?.name || 'the analyst';
+  const senderSig = sender?.email_signature ? `\n\n${sender.email_signature}` : '';
   let generated = 0;
   let lastError = null;
 
@@ -1448,9 +1457,10 @@ Return ONLY valid JSON: { "subject": "...", "body": "..." }`,
       });
 
       if (parsed?.subject && parsed?.body) {
+        const sig = senderSig;
         await execute(
           `UPDATE campaign_recipients SET merged_subject = $1, merged_body = $2 WHERE campaign_id = $3 AND company_id = $4`,
-          [parsed.subject, parsed.body, req.params.id, r.company_id]
+          [parsed.subject, parsed.body + sig, req.params.id, r.company_id]
         );
         generated++;
       }
