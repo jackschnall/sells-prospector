@@ -134,9 +134,15 @@ function registerRoutes(app) {
         mock: false,
       }).catch((err) => console.error('[twilio] Failed to create inbound call_log:', err.message));
 
-      // Ring all browser clients — list all user IDs as Client identities
+      // Route to the user whose Twilio number matches the called number, or ring all
       const users = await listUsers();
-      const clientTags = users.map(u => `    <Client><Identity>${u.id}</Identity></Client>`).join('\n');
+      const calledDigits = (req.body?.To || '').replace(/\D/g, '').slice(-10);
+      let targetUsers = users;
+      if (calledDigits) {
+        const matched = users.filter(u => u.twilio_phone_number && u.twilio_phone_number.replace(/\D/g, '').slice(-10) === calledDigits);
+        if (matched.length) targetUsers = matched;
+      }
+      const clientTags = targetUsers.map(u => `    <Client><Identity>${u.id}</Identity></Client>`).join('\n');
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial record="record-from-answer"
@@ -160,12 +166,21 @@ ${clientTags}
       });
     }
 
+    // Use the caller's per-user Twilio number if set, otherwise global
+    const fromIdentity = rawFrom.startsWith('client:') ? rawFrom.replace('client:', '') : '';
+    let outboundCallerId = process.env.TWILIO_PHONE_NUMBER || '';
+    if (fromIdentity) {
+      const callingUser = users || await listUsers();
+      const u = (Array.isArray(callingUser) ? callingUser : []).find(x => x.id === fromIdentity);
+      if (u?.twilio_phone_number) outboundCallerId = u.twilio_phone_number;
+    }
+
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial record="record-from-answer"
         recordingStatusCallback="${recordingCb}"
         recordingStatusCallbackEvent="completed"
-        callerId="${process.env.TWILIO_PHONE_NUMBER || ''}">
+        callerId="${outboundCallerId}">
     <Number>${to}</Number>
   </Dial>
 </Response>`;

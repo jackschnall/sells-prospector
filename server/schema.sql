@@ -62,6 +62,7 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS phone_type TEXT DEFAULT 'office';
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS call_intelligence TEXT;
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS restricted BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS twilio_phone_number TEXT;
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- SMS Messages
@@ -121,6 +122,7 @@ CREATE TABLE IF NOT EXISTS users (
   assigned_verticals    JSONB DEFAULT '[]'::JSONB,
   assigned_territories  JSONB DEFAULT '[]'::JSONB,
   restricted            BOOLEAN DEFAULT FALSE,
+  twilio_phone_number   TEXT,
   created_at            TIMESTAMPTZ DEFAULT NOW()
 );
 

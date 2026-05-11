@@ -1546,6 +1546,22 @@ function bindProfile() {
     });
   });
   $('#profile-signout')?.addEventListener('click', handleSignOut);
+  $('#profile-twilio-save')?.addEventListener('click', async () => {
+    const num = $('#profile-twilio-number')?.value?.trim() || null;
+    try {
+      const res = await fetch('/api/me/twilio-number', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ twilio_phone_number: num }),
+      });
+      if (res.ok) {
+        state.user.twilio_phone_number = num;
+        toast('Twilio number saved', 'ok');
+      } else {
+        toast('Failed to save', 'error');
+      }
+    } catch { toast('Network error', 'error'); }
+  });
 }
 
 function openProfileModal() {
@@ -1567,6 +1583,9 @@ function openProfileModal() {
   tEl.innerHTML = territories.length === 0
     ? '<span class="profile-row-value" style="color:#999">None assigned</span>'
     : territories.map((t) => `<span class="profile-tag">${escapeHtml(String(t).toUpperCase())}</span>`).join('');
+
+  const twilioEl = $('#profile-twilio-number');
+  if (twilioEl) twilioEl.value = state.user.twilio_phone_number || '';
 
   $$('.profile-stats-tab').forEach((x, i) => x.classList.toggle('active', i === 0));
   modal.hidden = false;
@@ -3068,7 +3087,7 @@ function renderSettingsUsers() {
         <div class="settings-user-row" data-user="${escapeHtml(u.id)}">
           <div>
             <div class="settings-user-name">${escapeHtml(u.name || '—')} <span class="settings-user-role ${u.role}">${escapeHtml(roleLabel)}</span>${restrictedBadge}</div>
-            <div class="settings-user-email">${escapeHtml(u.email || '')}</div>
+            <div class="settings-user-email">${escapeHtml(u.email || '')}${u.twilio_phone_number ? ` · <span style="color:var(--gold)">${escapeHtml(u.twilio_phone_number)}</span>` : ''}</div>
             <div class="settings-user-tags">
               ${verts || '<span class="settings-user-tag dim">no industries</span>'}
               ${terrs || '<span class="settings-user-tag dim">no territories</span>'}
@@ -3125,6 +3144,9 @@ function openSettingsUserModal(userId) {
   $$('.settings-chip[data-terr]', tBox).forEach((chip) => {
     chip.addEventListener('click', () => chip.classList.toggle('active'));
   });
+  // Twilio number
+  const twilioInput = $('#settings-user-twilio');
+  if (twilioInput) twilioInput.value = u.twilio_phone_number || '';
   // Restricted toggle
   const restrictCb = $('#settings-user-restricted');
   if (restrictCb) restrictCb.checked = !!u.restricted;
@@ -3167,6 +3189,7 @@ async function saveSettingsUser() {
   const verticals = $$('.settings-chip.active[data-vert]').map((c) => c.dataset.vert);
   const territories = $$('.settings-chip.active[data-terr]').map((c) => c.dataset.terr);
   const restricted = !!$('#settings-user-restricted')?.checked;
+  const twilio_phone_number = $('#settings-user-twilio')?.value?.trim() || null;
   try {
     if (role !== u.role) {
       const res = await fetch(`/api/admin/users/${u.id}/role`, {
@@ -3183,7 +3206,7 @@ async function saveSettingsUser() {
     const res2 = await fetch(`/api/admin/users/${u.id}/assignments`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ verticals, territories, restricted }),
+      body: JSON.stringify({ verticals, territories, restricted, twilio_phone_number }),
     });
     if (!res2.ok) {
       const err = await res2.json().catch(() => ({}));

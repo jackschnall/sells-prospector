@@ -473,6 +473,7 @@ function userPublic(user) {
     assigned_verticals: safeJson(user.assigned_verticals) || [],
     assigned_territories: safeJson(user.assigned_territories) || [],
     restricted: !!user.restricted,
+    twilio_phone_number: user.twilio_phone_number || null,
   };
 }
 
@@ -553,6 +554,12 @@ app.get('/api/me/assignments', requireUser, async (req, res) => {
   });
 });
 
+app.put('/api/me/twilio-number', requireUser, async (req, res) => {
+  const num = req.body?.twilio_phone_number;
+  await updateUser(req.currentUser.id, { twilio_phone_number: num ? String(num).trim() : null });
+  res.json({ ok: true });
+});
+
 app.put('/api/me/queue-settings', requireUser, async (req, res) => {
   const days = Number(req.body?.cooldown_days);
   if (!Number.isFinite(days) || days < 1 || days > 30) {
@@ -586,17 +593,21 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 });
 
 app.put('/api/admin/users/:id/assignments', requireAdmin, async (req, res) => {
-  const { verticals, territories, restricted } = req.body || {};
+  const { verticals, territories, restricted, twilio_phone_number } = req.body || {};
   if (!Array.isArray(verticals) || !Array.isArray(territories)) {
     return res.status(400).json({ error: 'verticals and territories must be arrays' });
   }
   const user = await getUserById(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  await updateUser(user.id, {
+  const updates = {
     assigned_verticals: verticals,
     assigned_territories: territories.map((t) => String(t).toUpperCase()),
     restricted: !!restricted,
-  });
+  };
+  if (twilio_phone_number !== undefined) {
+    updates.twilio_phone_number = twilio_phone_number ? String(twilio_phone_number).trim() : null;
+  }
+  await updateUser(user.id, updates);
   res.json({ ok: true });
 });
 
