@@ -363,7 +363,8 @@ async function loadDashMetros() {
     const sorted = markets.sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 5);
     host.innerHTML = sorted.map((m, i) => {
       const name = [m.city, m.state].filter(Boolean).join(', ') || m.msa_name || m.key || '—';
-      const growth = m.population_growth ? `+${(Number(m.population_growth) * 100).toFixed(1)}%` : '';
+      const pg = Number(m.population_growth || 0);
+      const growth = pg ? `+${pg > 1 ? pg.toFixed(1) : (pg * 100).toFixed(1)}%` : '';
       return `<div class="dash-metro-item"><span class="dash-metro-rank">0${i + 1}</span><span class="dash-metro-name">${escapeHtml(name)}</span><span class="dash-metro-growth">${growth}</span><span class="dash-metro-score">${Number(m.score || 0).toFixed(1)}</span></div>`;
     }).join('');
   } catch {}

@@ -969,12 +969,15 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   display: grid;
   grid-template-columns: 1.2fr 1fr;
   gap: 20px;
-  align-items: flex-start;
+  align-items: stretch;
 }
 .dash-col-right {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
+}
+.dash-col-right .dash-section {
+  flex: 1;
 }
 .dash-col-right .dash-section {
   background: #0D1B2A;
