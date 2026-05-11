@@ -3258,12 +3258,20 @@ body.detail-fullscreen { overflow: hidden; }
   gap: 6px;
   padding: 8px 0;
 }
+.sms-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
 .sms-bubble {
-  max-width: 80%;
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 0.88rem;
-  line-height: 1.4;
+  max-width: 75%;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 .sms-out {
   align-self: flex-end;
@@ -3278,9 +3286,9 @@ body.detail-fullscreen { overflow: hidden; }
   border-bottom-left-radius: 4px;
 }
 .sms-meta {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: rgba(0,0,0,0.4);
-  margin-top: 2px;
+  margin-top: 1px;
 }
 .sms-out .sms-meta { color: rgba(13,27,42,0.5); }
 .d-messages-compose { margin-top: 8px; }
