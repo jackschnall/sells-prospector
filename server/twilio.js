@@ -10,7 +10,7 @@
 // + status callbacks complete the loop.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { insertCallLog, getCallLog, updateCallLog, getCallLogBySid, getCompany, insertMessage, listMessages, insertActivity, pool } = require('./db');
+const { insertCallLog, getCallLog, updateCallLog, getCallLogBySid, getCompany, insertMessage, listMessages, insertActivity, pool, listUsers } = require('./db');
 const { requireUser } = require('./auth');
 const { pickMockTranscript, mockTranscriptById } = require('./mock-transcripts');
 const { attachMockTranscript, transcribeFromRecording } = require('./transcription');
@@ -101,25 +101,65 @@ function registerRoutes(app) {
     res.json({ ok: true, call_log_id: callLogId, to: to || company.phone, mock: false });
   });
 
-  // POST /api/twilio/voice — TwiML webhook Twilio hits when browser SDK connects
+  // POST /api/twilio/voice — TwiML webhook for BOTH inbound and outbound calls.
+  // Inbound: To matches our Twilio number → ring all browser clients.
+  // Outbound: To is an external number → dial out.
   app.post('/api/twilio/voice', express_urlencoded(), async (req, res) => {
     const rawTo = req.body?.To || req.query.to || '';
-    // Normalize to E.164
-    const digits = rawTo.replace(/\D/g, '');
-    const to = digits.length === 10 ? '+1' + digits : digits.length === 11 && digits[0] === '1' ? '+' + digits : rawTo;
-    const callLogId = req.body?.callLogId || req.query.callLogId || '';
+    const rawFrom = req.body?.From || '';
     const callSid = req.body?.CallSid || '';
+    const direction = req.body?.Direction || '';
+    const twilioNumber = (process.env.TWILIO_PHONE_NUMBER || '').replace(/\D/g, '');
+    const toDigits = rawTo.replace(/\D/g, '');
 
-    // Link this Twilio CallSid to our internal call_log row
+    const publicUrl = process.env.PUBLIC_URL || '';
+    const recordingCb = publicUrl ? `${publicUrl}/api/twilio/recording-status` : '/api/twilio/recording-status';
+
+    // Detect inbound: Direction is 'inbound' OR the To number matches our Twilio number
+    const isInbound = direction === 'inbound' ||
+      (twilioNumber && toDigits.endsWith(twilioNumber.slice(-10)));
+
+    if (isInbound) {
+      // Inbound call — ring all connected browser clients
+      console.log(`[twilio/voice] Inbound call from ${rawFrom}, CallSid ${callSid}`);
+
+      // Create a call log for the inbound call
+      insertCallLog({
+        company_id: null,
+        contact_id: null,
+        user_id: null,
+        direction: 'inbound',
+        status: 'ringing',
+        call_sid: callSid,
+        mock: false,
+      }).catch((err) => console.error('[twilio] Failed to create inbound call_log:', err.message));
+
+      // Ring all browser clients — list all user IDs as Client identities
+      const users = await listUsers();
+      const clientTags = users.map(u => `    <Client><Identity>${u.id}</Identity></Client>`).join('\n');
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial record="record-from-answer"
+        recordingStatusCallback="${recordingCb}"
+        recordingStatusCallbackEvent="completed"
+        callerId="${rawFrom}"
+        timeout="30">
+${clientTags}
+  </Dial>
+</Response>`;
+      return res.set('Content-Type', 'text/xml').send(twiml);
+    }
+
+    // Outbound call — dial the external number
+    const to = toDigits.length === 10 ? '+1' + toDigits : toDigits.length === 11 && toDigits[0] === '1' ? '+' + toDigits : rawTo;
+    const callLogId = req.body?.callLogId || req.query.callLogId || '';
+
     if (callLogId && callSid) {
       updateCallLog(callLogId, { call_sid: callSid, status: 'ringing' }).catch((err) => {
         console.error('[twilio/voice] Failed to store call_sid:', err.message);
       });
     }
 
-    const publicUrl = process.env.PUBLIC_URL || '';
-    const recordingCb = publicUrl ? `${publicUrl}/api/twilio/recording-status` : '/api/twilio/recording-status';
-    const statusCb = publicUrl ? `${publicUrl}/api/twilio/call-status` : '/api/twilio/call-status';
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial record="record-from-answer"
@@ -168,32 +208,6 @@ function registerRoutes(app) {
       });
     }
     res.status(200).end();
-  });
-
-  // POST /api/twilio/incoming — TwiML webhook for inbound calls to our Twilio number
-  app.post('/api/twilio/incoming', express_urlencoded(), async (req, res) => {
-    const from = req.body?.From || '';
-    const callSid = req.body?.CallSid || '';
-    console.log(`[twilio] Inbound call from ${from}, CallSid ${callSid}`);
-
-    // Connect inbound call to the client browser (all logged-in users will ring)
-    // In future: route to a specific user based on the Twilio number called
-    const publicUrl = process.env.PUBLIC_URL || '';
-    const recordingCb = publicUrl ? `${publicUrl}/api/twilio/recording-status` : '/api/twilio/recording-status';
-    const statusCb = publicUrl ? `${publicUrl}/api/twilio/call-status` : '/api/twilio/call-status';
-    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Dial record="record-from-answer"
-        recordingStatusCallback="${recordingCb}"
-        recordingStatusCallbackEvent="completed"
-        action="${statusCb}"
-        callerId="${from}">
-    <Client>
-      <Identity>${req.body?.Called ? req.body.Called.replace(/\D/g, '') : 'default'}</Identity>
-    </Client>
-  </Dial>
-</Response>`;
-    res.set('Content-Type', 'text/xml').send(twiml);
   });
 
   // GET /api/twilio/caller-lookup — match a phone number to a company/contact
