@@ -1360,7 +1360,7 @@ app.post('/api/campaigns/:id/generate', requireUser, async (req, res) => {
 
       // Get recent call history for this company
       const { rows: callLogs } = await pool.query(
-        `SELECT direction, sentiment, transcript, ai_summary, call_intelligence, called_at, duration_sec
+        `SELECT direction, sentiment, transcript, ai_summary, called_at, duration_sec
          FROM call_logs WHERE company_id = $1
          ORDER BY called_at DESC LIMIT 5`,
         [r.company_id]
