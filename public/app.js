@@ -3960,6 +3960,9 @@ function renderInbox() {
     const badge = hasVm
       ? '<span class="inbox-badge vm">Voicemail</span>'
       : '<span class="inbox-badge missed">Missed</span>';
+    const vmTranscript = hasVm && c.transcript
+      ? `<div class="inbox-transcript">${escapeHtml(c.transcript)}</div>`
+      : hasVm ? `<div class="inbox-transcript dim">Transcribing...</div>` : '';
     const vmPlayer = hasVm
       ? `<audio controls preload="none" class="inbox-audio" src="${escapeHtml(c.voicemail_url)}.mp3"></audio>`
       : '';
@@ -3977,6 +3980,7 @@ function renderInbox() {
           <div class="inbox-item-name">${escapeHtml(name)} ${badge}</div>
           <div class="inbox-item-detail">${escapeHtml([detail, location].filter(Boolean).join(' · '))}</div>
           <div class="inbox-item-time">${escapeHtml(time)}</div>
+          ${vmTranscript}
           ${vmPlayer}
         </div>
         <div class="inbox-item-actions">

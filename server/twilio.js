@@ -259,7 +259,15 @@ ${clientTags}
     if (!callSid || !recordingUrl) return res.status(200).end();
     const call = await getCallLogBySid(callSid);
     if (call) {
-      await updateCallLog(call.id, { voicemail_url: recordingUrl, status: 'voicemail' });
+      await updateCallLog(call.id, {
+        voicemail_url: recordingUrl,
+        recording_url: recordingUrl,
+        status: 'voicemail',
+      });
+      // Transcribe the voicemail async
+      transcribeFromRecording(call.id).catch((err) => {
+        console.error('[twilio] Voicemail transcription failed:', err.message);
+      });
     }
     res.status(200).end();
   });

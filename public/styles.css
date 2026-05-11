@@ -1939,6 +1939,14 @@ body.detail-fullscreen { overflow: hidden; }
 }
 .inbox-badge.vm { background: #1a3a5c; color: #8cb4e0; }
 .inbox-badge.missed { background: #5c1a1a; color: #e0a08c; }
+.inbox-transcript {
+  margin-top: 8px; padding: 8px 10px;
+  background: var(--bg-soft); border-radius: 6px;
+  font-size: 0.82rem; color: var(--text-secondary);
+  line-height: 1.5; max-width: 480px;
+  white-space: pre-wrap;
+}
+.inbox-transcript.dim { color: var(--text-dim); font-style: italic; }
 .inbox-audio {
   margin-top: 8px; width: 100%; max-width: 320px; height: 32px;
 }
