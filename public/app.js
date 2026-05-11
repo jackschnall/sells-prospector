@@ -332,7 +332,13 @@ async function loadDashActivity() {
       const ago = timeAgo(a.created_at);
       const user = a.user_name ? `<strong>${escapeHtml(a.user_name.split(' ').map(n => n[0] + '.').join(' '))}</strong>` : '<strong>Agent</strong>';
       const company = a.company_name ? `<a href="#" onclick="openDetail('${a.company_id}');return false;">${escapeHtml(a.company_name)}</a>` : '';
-      return `<div class="dash-activity-item"><span class="dash-activity-time">${ago}</span><span class="dash-activity-text">${user} ${escapeHtml(a.description || a.type || '')} ${company}</span></div>`;
+      const actionLabels = {
+        sms: 'texted', call: 'called', email: 'emailed', note: 'added a note to',
+        stage_change: 'moved', crm_action: 'updated', research: 'researched',
+        meeting: 'met with', voicemail: 'left voicemail for',
+      };
+      const action = actionLabels[a.type] || a.description || a.type || '';
+      return `<div class="dash-activity-item"><span class="dash-activity-time">${ago}</span><span class="dash-activity-text">${user} ${action} ${company}</span></div>`;
     }).join('');
   } catch {}
 }
@@ -364,7 +370,7 @@ async function loadDashMetros() {
     host.innerHTML = sorted.map((m, i) => {
       const name = [m.city, m.state].filter(Boolean).join(', ') || m.msa_name || m.key || '—';
       const pg = Number(m.population_growth || 0);
-      const growth = pg ? `+${pg > 1 ? pg.toFixed(1) : (pg * 100).toFixed(1)}%` : '';
+      const growth = pg ? `+${pg.toFixed(1)}%` : '';
       return `<div class="dash-metro-item"><span class="dash-metro-rank">0${i + 1}</span><span class="dash-metro-name">${escapeHtml(name)}</span><span class="dash-metro-growth">${growth}</span><span class="dash-metro-score">${Number(m.score || 0).toFixed(1)}</span></div>`;
     }).join('');
   } catch {}
