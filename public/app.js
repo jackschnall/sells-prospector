@@ -3105,6 +3105,8 @@ function renderSettingsUsers() {
 const SETTINGS_VERTICALS = [
   'Plumbing', 'HVAC', 'Pest Control', 'Restoration',
   'Painting', 'Electrical', 'Septic', 'Cleaning',
+  'Landscaping', 'Roofing', 'Fire Protection', 'Pool Service',
+  'Garage Door', 'Insulation', 'Other',
 ];
 
 const SETTINGS_TERRITORIES = [
@@ -3121,16 +3123,35 @@ function openSettingsUserModal(userId) {
   state.settingsEditingUser = u;
   $('#settings-user-title').textContent = `Edit: ${u.name || u.email}`;
   $('#settings-user-role').value = u.role || 'analyst';
-  // Render industry chips
+  // Render industry chips — include presets + any custom ones the user already has
   const vBox = $('#settings-user-verticals');
-  vBox.innerHTML = SETTINGS_VERTICALS
+  const userVerts = u.assigned_verticals || [];
+  const customVerts = userVerts.filter(v => !SETTINGS_VERTICALS.includes(v));
+  const allVerts = [...SETTINGS_VERTICALS, ...customVerts];
+  vBox.innerHTML = allVerts
     .map((v) => {
-      const active = (u.assigned_verticals || []).includes(v) ? 'active' : '';
+      const active = userVerts.includes(v) ? 'active' : '';
       return `<span class="settings-chip ${active}" data-vert="${escapeHtml(v)}">${escapeHtml(v)}</span>`;
     })
-    .join('');
+    .join('') +
+    `<span class="settings-chip-add" id="settings-add-vertical" title="Add custom industry">+</span>`;
   $$('.settings-chip[data-vert]', vBox).forEach((chip) => {
     chip.addEventListener('click', () => chip.classList.toggle('active'));
+  });
+  $('#settings-add-vertical')?.addEventListener('click', () => {
+    const name = prompt('Enter custom industry name:');
+    if (!name || !name.trim()) return;
+    const trimmed = name.trim();
+    if ($$('.settings-chip[data-vert]', vBox).some(c => c.dataset.vert.toLowerCase() === trimmed.toLowerCase())) {
+      toast('Industry already exists', 'error');
+      return;
+    }
+    const chip = document.createElement('span');
+    chip.className = 'settings-chip active';
+    chip.dataset.vert = trimmed;
+    chip.textContent = trimmed;
+    chip.addEventListener('click', () => chip.classList.toggle('active'));
+    vBox.insertBefore(chip, $('#settings-add-vertical'));
   });
   // Render territory chips
   const tBox = $('#settings-user-territories');

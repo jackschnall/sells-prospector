@@ -3536,6 +3536,17 @@ body.detail-fullscreen { overflow: hidden; }
   user-select: none;
 }
 .settings-chip.active { background: var(--gold); color: #3a2e0a; border-color: var(--gold-dark); }
+.settings-chip-add {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px dashed var(--card-border);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  user-select: none;
+}
+.settings-chip-add:hover { border-color: var(--gold); color: var(--gold); }
 
 /* ---------- Call History on company detail ---------- */
 .d-call-history { display: flex; flex-direction: column; gap: 8px; }
