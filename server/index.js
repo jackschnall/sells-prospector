@@ -1350,6 +1350,7 @@ app.post('/api/campaigns/:id/generate', requireUser, async (req, res) => {
   const recipients = await listCampaignRecipients(req.params.id);
   const senderName = req.currentUser?.name || 'the analyst';
   let generated = 0;
+  let lastError = null;
 
   for (const r of recipients) {
     try {
@@ -1360,7 +1361,7 @@ app.post('/api/campaigns/:id/generate', requireUser, async (req, res) => {
       // Get recent call history for this company
       const { rows: callLogs } = await pool.query(
         `SELECT direction, sentiment, transcript, ai_summary, call_intelligence, called_at, duration_sec
-         FROM call_logs WHERE company_id = $1 AND deleted_at IS NULL
+         FROM call_logs WHERE company_id = $1
          ORDER BY called_at DESC LIMIT 5`,
         [r.company_id]
       );
@@ -1413,10 +1414,11 @@ Return ONLY valid JSON: { "subject": "...", "body": "..." }`,
       }
     } catch (err) {
       console.error(`[campaigns] AI generation failed for ${r.company_name}:`, err.message);
+      lastError = err.message;
     }
   }
 
-  res.json({ ok: true, generated, total: recipients.length });
+  res.json({ ok: true, generated, total: recipients.length, lastError: generated < recipients.length ? lastError : undefined });
 });
 
 // Search companies for campaign add (lightweight endpoint)

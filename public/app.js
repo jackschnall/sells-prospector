@@ -4259,8 +4259,8 @@ async function generateCampaignEmails() {
     const res = await fetch(`/api/campaigns/${campState.activeCampaignId}/generate`, { method: 'POST' });
     const data = await res.json();
     if (!res.ok) { toast(data.error || 'Generation failed', 'error'); return; }
-    toast(`Generated ${data.generated}/${data.total} emails`, 'ok');
-    status.textContent = `Done — ${data.generated} emails generated. Click Preview to review.`;
+    toast(`Generated ${data.generated}/${data.total} emails`, data.generated > 0 ? 'ok' : 'error');
+    status.textContent = `Done — ${data.generated}/${data.total} emails generated.${data.lastError ? ' Error: ' + data.lastError : ' Click Preview to review.'}`;
   } catch (e) {
     toast('Generation failed: ' + e.message, 'error');
     status.textContent = 'Generation failed.';
