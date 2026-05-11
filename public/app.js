@@ -1694,8 +1694,18 @@ function stopRingtone() {
 }
 
 async function handleIncomingCall(call) {
+  // Validate this is a real incoming call with accept/reject methods
+  if (!call || typeof call.accept !== 'function' || typeof call.reject !== 'function') {
+    console.warn('[twilio] Ignoring invalid incoming call event:', call);
+    return;
+  }
   state.incomingCall = call;
-  const from = call.parameters?.From || call.parameters?.from || 'Unknown';
+  const from = call.parameters?.From || call.parameters?.from || '';
+  if (!from || from === 'client:anonymous') {
+    console.warn('[twilio] Ignoring incoming call with no caller ID');
+    call.reject();
+    return;
+  }
   const popup = $('#incoming-call');
   const fromEl = $('#incoming-call-from');
   const detailEl = $('#incoming-call-detail');
@@ -1736,17 +1746,28 @@ async function handleIncomingCall(call) {
 }
 
 function acceptIncomingCall() {
-  if (!state.incomingCall) return;
   stopRingtone();
-  state.incomingCall.accept();
+  if (state.incomingCall) {
+    try { state.incomingCall.accept(); } catch (e) { console.error('[twilio] accept error:', e); }
+    toast('Call connected', 'ok');
+  }
   $('#incoming-call').hidden = true;
-  toast('Call connected', 'ok');
 }
 
 function declineIncomingCall() {
-  if (!state.incomingCall) return;
   stopRingtone();
-  state.incomingCall.reject();
+  if (state.incomingCall) {
+    try { state.incomingCall.reject(); } catch (e) { console.error('[twilio] reject error:', e); }
+  }
+  $('#incoming-call').hidden = true;
+  state.incomingCall = null;
+}
+
+function dismissIncomingCall() {
+  stopRingtone();
+  if (state.incomingCall) {
+    try { state.incomingCall.reject(); } catch {}
+  }
   $('#incoming-call').hidden = true;
   state.incomingCall = null;
 }
@@ -3316,6 +3337,7 @@ function init() {
   $('#actlog-load-more')?.addEventListener('click', () => loadActivityLog(true));
   $('#incoming-accept')?.addEventListener('click', acceptIncomingCall);
   $('#incoming-decline')?.addEventListener('click', declineIncomingCall);
+  $('#incoming-dismiss')?.addEventListener('click', dismissIncomingCall);
   loadCurrentUser()
     .then(() => { if (state.user) return refreshPendingDebriefs(); })
     .then(() => loadTwilioStatus());

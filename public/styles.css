@@ -1936,7 +1936,18 @@ body.detail-fullscreen { overflow: hidden; }
   text-align: center;
   min-width: 320px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  position: relative;
 }
+.incoming-dismiss {
+  position: absolute;
+  top: 8px; right: 12px;
+  background: none; border: none;
+  color: var(--text-dim, #6a8caf);
+  font-size: 1.4rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.incoming-dismiss:hover { color: var(--text-primary, #e0e8f0); }
 .incoming-call-ring {
   width: 64px; height: 64px;
   margin: 0 auto 16px;
