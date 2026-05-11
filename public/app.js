@@ -359,19 +359,20 @@ async function loadDashMetros() {
   const host = $('#dash-metros');
   if (!host) return;
   try {
-    const res = await fetch('/api/markets');
+    const res = await fetch('/api/market-intel');
     if (!res.ok) return;
     const { markets } = await res.json();
     if (!markets || !markets.length) {
       host.innerHTML = '<div class="dash-empty">No market data yet.</div>';
       return;
     }
-    const sorted = markets.sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 5);
+    const sorted = markets.sort((a, b) => (b.composite || b.score || 0) - (a.composite || a.score || 0)).slice(0, 5);
     host.innerHTML = sorted.map((m, i) => {
-      const name = [m.city, m.state].filter(Boolean).join(', ') || m.msa_name || m.key || '—';
-      const pg = Number(m.population_growth || 0);
+      const name = [m.city, m.state].filter(Boolean).join(', ') || m.metro || '—';
+      const pg = Number(m.growth || m.population_growth || 0);
       const growth = pg ? `+${pg.toFixed(1)}%` : '';
-      return `<div class="dash-metro-item"><span class="dash-metro-rank">0${i + 1}</span><span class="dash-metro-name">${escapeHtml(name)}</span><span class="dash-metro-growth">${growth}</span><span class="dash-metro-score">${Number(m.score || 0).toFixed(1)}</span></div>`;
+      const score = Number(m.composite || m.score || 0).toFixed(1);
+      return `<div class="dash-metro-item"><span class="dash-metro-rank">0${i + 1}</span><span class="dash-metro-name">${escapeHtml(name)}</span><span class="dash-metro-growth">${growth}</span><span class="dash-metro-score">${score}</span></div>`;
     }).join('');
   } catch {}
 }
