@@ -563,13 +563,14 @@ async function insertContact(data) {
     await execute('UPDATE contacts SET is_primary = FALSE WHERE company_id = $1 AND is_primary = TRUE', [data.company_id]);
   }
   await execute(
-    `INSERT INTO contacts (id, company_id, name, title, phone, email, linkedin, is_primary, source, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    `INSERT INTO contacts (id, company_id, name, title, phone, email, linkedin, is_primary, source, notes, phones, emails)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     [
       id, data.company_id, data.name,
       data.title || null, data.phone || null, data.email || null,
       data.linkedin || null, data.is_primary ? true : false,
       data.source || 'manual', data.notes || null,
+      JSON.stringify(data.phones || []), JSON.stringify(data.emails || []),
     ]
   );
   return { id, ...data };
@@ -587,10 +588,12 @@ async function updateContact(id, data) {
   const fields = [];
   const params = [];
   let idx = 1;
-  for (const key of ['company_id', 'name', 'title', 'phone', 'email', 'linkedin', 'is_primary', 'notes']) {
+  for (const key of ['company_id', 'name', 'title', 'phone', 'email', 'linkedin', 'is_primary', 'notes', 'phones', 'emails']) {
     if (data[key] !== undefined) {
       fields.push(`${key} = $${idx++}`);
-      params.push(key === 'is_primary' ? !!data[key] : data[key]);
+      if (key === 'is_primary') params.push(!!data[key]);
+      else if (key === 'phones' || key === 'emails') params.push(JSON.stringify(data[key] || []));
+      else params.push(data[key]);
     }
   }
   if (fields.length === 0) return;

@@ -554,7 +554,9 @@ function renderContacts(contacts) {
       ${ct.title ? `<div class="ct-detail">${escapeHtml(ct.title)}</div>` : ''}
       <div class="ct-row">
         ${ct.phone ? `<span>${escapeHtml(ct.phone)}</span>` : ''}
+        ${(() => { const extra = ct.phones ? (typeof ct.phones === 'string' ? JSON.parse(ct.phones || '[]') : ct.phones) : []; return extra.map(p => `<span class="ct-extra">${escapeHtml(p)}</span>`).join(''); })()}
         ${ct.email ? `<span>${escapeHtml(ct.email)}${ct.is_primary ? ' <span class="ct-badge ct-badge-email">Campaign Email</span>' : ''}</span>` : ct.is_primary ? '<span class="ct-no-email">No email set — needed for campaigns</span>' : ''}
+        ${(() => { const extra = ct.emails ? (typeof ct.emails === 'string' ? JSON.parse(ct.emails || '[]') : ct.emails) : []; return extra.map(e => `<span class="ct-extra">${escapeHtml(e)}</span>`).join(''); })()}
         ${ct.linkedin ? `<a href="${escapeHtml(ct.linkedin)}" target="_blank" rel="noopener">LinkedIn</a>` : ''}
       </div>
       <div class="ct-actions">
@@ -3550,6 +3552,18 @@ function bindPhase2() {
   $('#btn-add-contact')?.addEventListener('click', () => openContactModal());
   $('#contact-modal-close')?.addEventListener('click', closeContactModal);
   $('#ctm-cancel')?.addEventListener('click', closeContactModal);
+  $('#ctm-add-phone')?.addEventListener('click', () => {
+    const row = document.createElement('div');
+    row.className = 'ctm-multi-row';
+    row.innerHTML = '<input type="text" class="cf-input ctm-phone-input" placeholder="Phone" /><button type="button" class="ctm-remove-btn" onclick="this.parentElement.remove()">&times;</button>';
+    $('#ctm-phones').appendChild(row);
+  });
+  $('#ctm-add-email')?.addEventListener('click', () => {
+    const row = document.createElement('div');
+    row.className = 'ctm-multi-row';
+    row.innerHTML = '<input type="email" class="cf-input ctm-email-input" placeholder="Email" /><button type="button" class="ctm-remove-btn" onclick="this.parentElement.remove()">&times;</button>';
+    $('#ctm-emails').appendChild(row);
+  });
   $('#ctm-save')?.addEventListener('click', saveContactModal);
   $('#ctm-new-company')?.addEventListener('click', createCompanyFromContactModal);
   $('#ctm-company')?.addEventListener('input', updateContactCompanyMatches);
@@ -3876,8 +3890,26 @@ function openContactModal(contact = null, stash = null) {
   const s = stash || {};
   $('#ctm-name').value = s.name ?? contact?.name ?? '';
   $('#ctm-title').value = s.title ?? contact?.title ?? '';
-  $('#ctm-phone').value = s.phone ?? contact?.phone ?? '';
-  $('#ctm-email').value = s.email ?? contact?.email ?? '';
+  // Populate phone fields
+  const phonesContainer = $('#ctm-phones');
+  if (phonesContainer) {
+    const mainPhone = s.phone ?? contact?.phone ?? '';
+    const extraPhones = contact?.phones ? (typeof contact.phones === 'string' ? JSON.parse(contact.phones || '[]') : contact.phones) : [];
+    phonesContainer.innerHTML = `<input type="text" class="cf-input ctm-phone-input" placeholder="Phone" value="${escapeHtml(mainPhone)}" />`;
+    extraPhones.forEach(p => {
+      phonesContainer.innerHTML += `<div class="ctm-multi-row"><input type="text" class="cf-input ctm-phone-input" placeholder="Phone" value="${escapeHtml(p)}" /><button type="button" class="ctm-remove-btn" onclick="this.parentElement.remove()">&times;</button></div>`;
+    });
+  }
+  // Populate email fields
+  const emailsContainer = $('#ctm-emails');
+  if (emailsContainer) {
+    const mainEmail = s.email ?? contact?.email ?? '';
+    const extraEmails = contact?.emails ? (typeof contact.emails === 'string' ? JSON.parse(contact.emails || '[]') : contact.emails) : [];
+    emailsContainer.innerHTML = `<input type="email" class="cf-input ctm-email-input" placeholder="Email" value="${escapeHtml(mainEmail)}" />`;
+    extraEmails.forEach(e => {
+      emailsContainer.innerHTML += `<div class="ctm-multi-row"><input type="email" class="cf-input ctm-email-input" placeholder="Email" value="${escapeHtml(e)}" /><button type="button" class="ctm-remove-btn" onclick="this.parentElement.remove()">&times;</button></div>`;
+    });
+  }
   $('#ctm-linkedin').value = s.linkedin ?? contact?.linkedin ?? '';
   $('#ctm-notes').value = s.notes ?? contact?.notes ?? '';
   $('#ctm-primary').checked = s.is_primary ?? !!contact?.is_primary;
@@ -3973,12 +4005,16 @@ async function saveContactModal() {
       return;
     }
   }
+  const allPhones = $$('.ctm-phone-input').map(el => el.value.trim()).filter(Boolean);
+  const allEmails = $$('.ctm-email-input').map(el => el.value.trim()).filter(Boolean);
   const body = {
     company_id,
     name,
     title: $('#ctm-title').value.trim() || null,
-    phone: $('#ctm-phone').value.trim() || null,
-    email: $('#ctm-email').value.trim() || null,
+    phone: allPhones[0] || null,
+    email: allEmails[0] || null,
+    phones: allPhones.slice(1),
+    emails: allEmails.slice(1),
     linkedin: $('#ctm-linkedin').value.trim() || null,
     is_primary: isPrimary,
     notes: $('#ctm-notes').value.trim() || null,

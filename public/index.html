@@ -1001,8 +1001,14 @@
           <div id="ctm-company-picked" class="ctm-company-picked" hidden></div>
           <input type="text" id="ctm-name" class="cf-input" placeholder="Contact name *" />
           <input type="text" id="ctm-title" class="cf-input" placeholder="Title (e.g. Owner, CFO)" />
-          <input type="text" id="ctm-phone" class="cf-input" placeholder="Phone" />
-          <input type="email" id="ctm-email" class="cf-input" placeholder="Email" />
+          <div class="ctm-multi-field" id="ctm-phones">
+            <input type="text" class="cf-input ctm-phone-input" placeholder="Phone" />
+          </div>
+          <button type="button" class="ctm-add-btn" id="ctm-add-phone">+ Add phone</button>
+          <div class="ctm-multi-field" id="ctm-emails">
+            <input type="email" class="cf-input ctm-email-input" placeholder="Email" />
+          </div>
+          <button type="button" class="ctm-add-btn" id="ctm-add-email">+ Add email</button>
           <input type="text" id="ctm-linkedin" class="cf-input" placeholder="LinkedIn URL" />
           <label class="ctm-check">
             <input type="checkbox" id="ctm-primary" />

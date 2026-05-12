@@ -2752,6 +2752,20 @@ body.detail-fullscreen { overflow: hidden; }
   color: #e07040;
   font-style: italic;
 }
+.ct-extra { font-size: 0.78rem; color: var(--text-muted); }
+.ctm-multi-field { display: flex; flex-direction: column; gap: 6px; }
+.ctm-multi-row { display: flex; gap: 6px; align-items: center; }
+.ctm-multi-row .cf-input { flex: 1; }
+.ctm-remove-btn {
+  background: none; border: none; color: var(--red, #e04040);
+  font-size: 1.2rem; cursor: pointer; padding: 0 4px; line-height: 1;
+}
+.ctm-add-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--gold); font-size: 0.78rem; padding: 2px 0;
+  text-align: left;
+}
+.ctm-add-btn:hover { text-decoration: underline; }
 .ct-detail {
   font-size: 0.78rem;
   color: var(--text-muted);
