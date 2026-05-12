@@ -3763,10 +3763,12 @@ function renderContactRow(c) {
   const name = escapeHtml(c.name || 'Unnamed');
   const title = c.title ? escapeHtml(c.title) : '';
   const primary = c.is_primary ? '<span class="contact-row-primary-pill">Primary</span>' : '';
-  const phoneLink = c.phone ? `<a href="tel:${escapeHtml(c.phone)}">${escapeHtml(c.phone)}</a>` : '';
-  const emailLink = c.email ? `<a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>` : '';
-  const linkedinLink = c.linkedin ? `<a href="${escapeHtml(c.linkedin)}" target="_blank" rel="noopener">LinkedIn</a>` : '';
-  const contactInfo = [phoneLink, emailLink, linkedinLink].filter(Boolean).join('') ||
+  const allPhones = [c.phone, ...((c.phones ? (typeof c.phones === 'string' ? JSON.parse(c.phones || '[]') : c.phones) : []))].filter(Boolean);
+  const allEmails = [c.email, ...((c.emails ? (typeof c.emails === 'string' ? JSON.parse(c.emails || '[]') : c.emails) : []))].filter(Boolean);
+  const phoneLines = allPhones.map(p => `<span>${escapeHtml(p)}</span>`).join('');
+  const emailLines = allEmails.map(e => `<span>${escapeHtml(e)}</span>`).join('');
+  const linkedinLink = c.linkedin ? `<span><a href="${escapeHtml(c.linkedin)}" target="_blank" rel="noopener">LinkedIn</a></span>` : '';
+  const contactInfo = [phoneLines, emailLines, linkedinLink].filter(Boolean).join('') ||
     '<span style="color: rgba(13,27,42,0.35)">No contact info</span>';
   const companyName = escapeHtml(c.company_name || 'No company linked');
   const companyMeta = [c.company_city, c.company_state].filter(Boolean).map(escapeHtml).join(', ');
