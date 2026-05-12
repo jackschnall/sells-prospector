@@ -552,12 +552,12 @@ function renderContacts(contacts) {
         ${ct.source === 'research' ? '<span class="ct-badge ct-badge-ai">AI</span>' : ''}
       </div>
       ${ct.title ? `<div class="ct-detail">${escapeHtml(ct.title)}</div>` : ''}
-      <div class="ct-row">
-        ${ct.phone ? `<span>${escapeHtml(ct.phone)}</span>` : ''}
-        ${(() => { const extra = ct.phones ? (typeof ct.phones === 'string' ? JSON.parse(ct.phones || '[]') : ct.phones) : []; return extra.map(p => `<span class="ct-extra">${escapeHtml(p)}</span>`).join(''); })()}
-        ${ct.email ? `<span>${escapeHtml(ct.email)}${ct.is_primary ? ' <span class="ct-badge ct-badge-email">Campaign Email</span>' : ''}</span>` : ct.is_primary ? '<span class="ct-no-email">No email set — needed for campaigns</span>' : ''}
-        ${(() => { const extra = ct.emails ? (typeof ct.emails === 'string' ? JSON.parse(ct.emails || '[]') : ct.emails) : []; return extra.map(e => `<span class="ct-extra">${escapeHtml(e)}</span>`).join(''); })()}
-        ${ct.linkedin ? `<a href="${escapeHtml(ct.linkedin)}" target="_blank" rel="noopener">LinkedIn</a>` : ''}
+      <div class="ct-contact-info">
+        ${ct.phone ? `<div class="ct-info-row"><span class="ct-info-label">Phone:</span> ${escapeHtml(ct.phone)}</div>` : ''}
+        ${(() => { const extra = ct.phones ? (typeof ct.phones === 'string' ? JSON.parse(ct.phones || '[]') : ct.phones) : []; return extra.map(p => `<div class="ct-info-row ct-extra"><span class="ct-info-label">Phone:</span> ${escapeHtml(p)}</div>`).join(''); })()}
+        ${ct.email ? `<div class="ct-info-row"><span class="ct-info-label">Email:</span> ${escapeHtml(ct.email)}${ct.is_primary ? ' <span class="ct-badge ct-badge-email">Campaign Email</span>' : ''}</div>` : ct.is_primary ? '<div class="ct-info-row"><span class="ct-no-email">No email set — needed for campaigns</span></div>' : ''}
+        ${(() => { const extra = ct.emails ? (typeof ct.emails === 'string' ? JSON.parse(ct.emails || '[]') : ct.emails) : []; return extra.map(e => `<div class="ct-info-row ct-extra"><span class="ct-info-label">Email:</span> ${escapeHtml(e)}</div>`).join(''); })()}
+        ${ct.linkedin ? `<div class="ct-info-row"><span class="ct-info-label">LinkedIn:</span> <a href="${escapeHtml(ct.linkedin)}" target="_blank" rel="noopener">${escapeHtml(ct.linkedin)}</a></div>` : ''}
       </div>
       <div class="ct-actions">
         <button type="button" class="btn-ghost btn-xs ct-edit" data-id="${ct.id}">Edit</button>

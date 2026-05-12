@@ -2752,7 +2752,11 @@ body.detail-fullscreen { overflow: hidden; }
   color: #e07040;
   font-style: italic;
 }
-.ct-extra { font-size: 0.78rem; color: var(--text-muted); }
+.ct-contact-info { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.ct-info-row { font-size: 0.78rem; color: var(--text); }
+.ct-info-row.ct-extra { color: var(--text-muted); }
+.ct-info-row a { color: var(--gold-dark); }
+.ct-info-label { color: var(--text-dim); font-size: 0.72rem; }
 .ctm-multi-field { display: flex; flex-direction: column; gap: 6px; }
 .ctm-multi-row { display: flex; gap: 6px; align-items: center; }
 .ctm-multi-row .cf-input { flex: 1; }
