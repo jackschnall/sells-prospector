@@ -2742,6 +2742,16 @@ body.detail-fullscreen { overflow: hidden; }
   border-color: rgba(59,130,246,0.3);
   color: #2563EB;
 }
+.ct-badge-email {
+  background: rgba(76,175,80,0.1);
+  border-color: rgba(76,175,80,0.3);
+  color: #2E7D32;
+}
+.ct-no-email {
+  font-size: 0.72rem;
+  color: #e07040;
+  font-style: italic;
+}
 .ct-detail {
   font-size: 0.78rem;
   color: var(--text-muted);

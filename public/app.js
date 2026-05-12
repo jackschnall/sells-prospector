@@ -554,7 +554,7 @@ function renderContacts(contacts) {
       ${ct.title ? `<div class="ct-detail">${escapeHtml(ct.title)}</div>` : ''}
       <div class="ct-row">
         ${ct.phone ? `<span>${escapeHtml(ct.phone)}</span>` : ''}
-        ${ct.email ? `<span>${escapeHtml(ct.email)}</span>` : ''}
+        ${ct.email ? `<span>${escapeHtml(ct.email)}${ct.is_primary ? ' <span class="ct-badge ct-badge-email">Campaign Email</span>' : ''}</span>` : ct.is_primary ? '<span class="ct-no-email">No email set — needed for campaigns</span>' : ''}
         ${ct.linkedin ? `<a href="${escapeHtml(ct.linkedin)}" target="_blank" rel="noopener">LinkedIn</a>` : ''}
       </div>
       <div class="ct-actions">
