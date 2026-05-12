@@ -4845,4 +4845,46 @@ async function globalSearch(q) {
   } catch { results.hidden = true; }
 }
 
-document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); });
+// ---------- Grata CSV Import ----------
+function initGrataImport() {
+  const btn = document.getElementById('grata-upload-btn');
+  const fileInput = document.getElementById('grata-file-input');
+  const status = document.getElementById('grata-upload-status');
+  if (!btn || !fileInput) return;
+
+  btn.addEventListener('click', async () => {
+    const file = fileInput.files[0];
+    if (!file) { status.textContent = 'Please select a CSV file first.'; return; }
+    if (!file.name.toLowerCase().endsWith('.csv')) { status.textContent = 'File must be a .csv'; return; }
+
+    btn.disabled = true;
+    status.textContent = 'Uploading...';
+    status.style.color = 'var(--muted,#888)';
+
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/import/grata', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { status.textContent = data.error || 'Upload failed.'; status.style.color = '#e55'; return; }
+      status.style.color = 'var(--gold,#c9a84c)';
+      const parts = [];
+      if (data.companies_created) parts.push(data.companies_created + ' companies created');
+      if (data.companies_updated) parts.push(data.companies_updated + ' updated');
+      if (data.contacts_created) parts.push(data.contacts_created + ' contacts added');
+      if (data.skipped) parts.push(data.skipped + ' skipped');
+      if (data.errors && data.errors.length) parts.push(data.errors.length + ' errors');
+      status.textContent = parts.join(', ') || 'Done (no changes).';
+      fileInput.value = '';
+      // Refresh company list if currently on companies tab
+      if (typeof loadCompanies === 'function') loadCompanies();
+    } catch (err) {
+      status.textContent = 'Network error: ' + err.message;
+      status.style.color = '#e55';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); initGrataImport(); });

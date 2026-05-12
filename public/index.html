@@ -415,6 +415,17 @@
             </div>
           </div>
 
+          <!-- Grata CSV Import -->
+          <div class="grata-import-section" style="margin:1.5rem 0; padding:1.25rem 1.5rem; background:var(--surface,#1a1a2e); border:1px solid var(--border,#2a2a4a); border-radius:10px;">
+            <h3 style="margin:0 0 0.5rem; font-size:1rem; color:var(--gold,#c9a84c);">Import from Grata</h3>
+            <p style="margin:0 0 1rem; font-size:0.85rem; color:var(--muted,#888);">Upload a Grata CSV export to import companies and contacts. Existing companies will be updated with any missing fields; new companies are created with status "pending" for research.</p>
+            <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+              <input type="file" id="grata-file-input" accept=".csv" style="font-size:0.85rem; color:var(--text,#ccc);" />
+              <button type="button" class="btn-primary btn-xs" id="grata-upload-btn">Upload Grata CSV</button>
+              <span id="grata-upload-status" style="font-size:0.85rem; color:var(--muted,#888);"></span>
+            </div>
+          </div>
+
           <!-- Methodology detail (existing) -->
           <div class="method-page">
 
@@ -514,6 +525,71 @@
                     <span class="method-tag">Tearsheets</span>
                     <span class="method-tag">Excel Export</span>
                     <span class="method-tag">Outreach Angles</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- End-to-End Pipeline -->
+            <div class="method-header" style="margin-top:2.5rem;">
+              <div class="method-icon">&#9670;</div>
+              <h2 class="method-title">End-to-End Pipeline</h2>
+              <p class="method-subtitle">From discovery through outreach &mdash; the full deal-sourcing workflow</p>
+            </div>
+
+            <div class="method-flow">
+              <div class="method-step">
+                <div class="method-step-num">1</div>
+                <div class="method-step-body">
+                  <h3>Discovery</h3>
+                  <p>Grata UI search by sector, geography, revenue, and ownership filters. Export target list as CSV, then upload to CRM via the Grata import tool above. Companies are deduped against the existing database by normalized name.</p>
+                  <div class="method-tags">
+                    <span class="method-tag">Grata Search</span>
+                    <span class="method-tag">CSV Export</span>
+                    <span class="method-tag">CRM Upload</span>
+                    <span class="method-tag">Name Dedup</span>
+                  </div>
+                </div>
+              </div>
+              <div class="method-connector"></div>
+              <div class="method-step">
+                <div class="method-step-num">2</div>
+                <div class="method-step-body">
+                  <h3>Research</h3>
+                  <p>Claude web search scores each imported company on the 7-signal rubric. Identifies succession signals, revenue indicators, operational quality, and generates a tailored outreach angle for each target.</p>
+                  <div class="method-tags">
+                    <span class="method-tag">Claude Web Search</span>
+                    <span class="method-tag">7-Signal Scoring</span>
+                    <span class="method-tag">Succession Analysis</span>
+                    <span class="method-tag">Outreach Angles</span>
+                  </div>
+                </div>
+              </div>
+              <div class="method-connector"></div>
+              <div class="method-step">
+                <div class="method-step-num">3</div>
+                <div class="method-step-body">
+                  <h3>Contact Enrichment</h3>
+                  <p>ZoomInfo via Claude connector provides owner cell phone numbers and personal email addresses. Supplements Grata contact data with direct-dial numbers critical for cold outreach success.</p>
+                  <div class="method-tags">
+                    <span class="method-tag">ZoomInfo</span>
+                    <span class="method-tag">Claude Connector</span>
+                    <span class="method-tag">Owner Cell/Email</span>
+                    <span class="method-tag">Direct Dial</span>
+                  </div>
+                </div>
+              </div>
+              <div class="method-connector"></div>
+              <div class="method-step">
+                <div class="method-step-num">4</div>
+                <div class="method-step-body">
+                  <h3>Outreach</h3>
+                  <p>Prioritized call queue ranks targets by score and pipeline stage. AI voicemail drops personalized messages. Email campaigns deliver multi-touch sequences with tailored outreach angles from the research phase.</p>
+                  <div class="method-tags">
+                    <span class="method-tag">Call Queue</span>
+                    <span class="method-tag">AI Voicemail</span>
+                    <span class="method-tag">Email Campaigns</span>
+                    <span class="method-tag">Multi-Touch Sequences</span>
                   </div>
                 </div>
               </div>

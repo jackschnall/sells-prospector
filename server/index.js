@@ -190,6 +190,214 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   });
 });
 
+// ---------- Import Grata CSV ----------
+const GRATA_FIELD_MAP = {
+  company_name: ['company_name', 'company name', 'name', 'company', 'business', 'business name'],
+  domain: ['domain', 'website', 'url', 'site', 'web'],
+  city: ['city', 'town', 'hq_city', 'hq city', 'headquarters_city'],
+  state: ['state', 'st', 'hq_state', 'hq state', 'headquarters_state', 'province'],
+  employee_count: ['employee_count', 'employee count', 'employees', 'headcount', 'num_employees'],
+  revenue: ['revenue', 'est_revenue', 'estimated_revenue', 'annual_revenue', 'revenue_estimate'],
+  year_founded: ['year_founded', 'year founded', 'founded', 'founded_year'],
+  ownership: ['ownership', 'ownership_type', 'ownership type', 'owner_type'],
+  description: ['description', 'company_description', 'about', 'summary'],
+  contact_name: ['contact_name', 'contact name', 'contact', 'person', 'full_name', 'full name', 'owner', 'owner name', 'principal'],
+  contact_title: ['contact_title', 'contact title', 'title', 'job_title', 'job title', 'role', 'position'],
+  contact_email: ['contact_email', 'contact email', 'email', 'e-mail', 'email_address'],
+  contact_phone: ['contact_phone', 'contact phone', 'phone', 'telephone', 'phone_number', 'direct_phone'],
+  linkedin_url: ['linkedin_url', 'linkedin url', 'linkedin', 'linkedin_profile'],
+  naics_codes: ['naics_codes', 'naics codes', 'naics', 'naics_code', 'industry_codes'],
+};
+
+function buildGrataHeaderMap(headers) {
+  const norm = headers.map(h => String(h || '').trim().toLowerCase());
+  const map = {};
+  for (const [field, aliases] of Object.entries(GRATA_FIELD_MAP)) {
+    for (let i = 0; i < norm.length; i++) {
+      if (aliases.includes(norm[i])) { map[field] = i; break; }
+    }
+  }
+  return map;
+}
+
+app.post('/api/import/grata', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+  const { parse } = require('csv-parse/sync');
+  const { nanoid } = require('nanoid');
+
+  let records;
+  try {
+    records = parse(req.file.buffer, {
+      columns: false,
+      skip_empty_lines: true,
+      trim: true,
+      relax_column_count: true,
+    });
+  } catch (err) {
+    return res.status(400).json({ error: 'CSV parse error: ' + err.message });
+  }
+  if (records.length < 2) {
+    return res.status(400).json({ error: 'CSV must have a header row and at least one data row.' });
+  }
+
+  const hmap = buildGrataHeaderMap(records[0]);
+  if (hmap.company_name === undefined) {
+    return res.status(400).json({ error: 'CSV must include a company name column (accepted: company_name, name, company, business).' });
+  }
+
+  const get = (record, field) =>
+    hmap[field] !== undefined ? String(record[hmap[field]] || '').trim() : '';
+
+  let companiesCreated = 0;
+  let companiesUpdated = 0;
+  let contactsCreated = 0;
+  let skipped = 0;
+  const errors = [];
+
+  for (let i = 1; i < records.length; i++) {
+    const rec = records[i];
+    const companyName = get(rec, 'company_name');
+    if (!companyName) { skipped++; continue; }
+
+    const nameKey = normalizeName(companyName);
+    if (!nameKey) { skipped++; continue; }
+
+    try {
+      // Check if company exists by name_key
+      const existing = await pool.query('SELECT id, name FROM companies WHERE name_key = $1 LIMIT 1', [nameKey]);
+      let companyId;
+
+      const domain = get(rec, 'domain');
+      const city = get(rec, 'city') || null;
+      const state = get(rec, 'state') || null;
+      const employeeCount = get(rec, 'employee_count') || null;
+      const revenue = get(rec, 'revenue') || null;
+      const yearFounded = get(rec, 'year_founded') || null;
+      const ownership = get(rec, 'ownership') || null;
+      const description = get(rec, 'description') || null;
+      const naicsCodes = get(rec, 'naics_codes') || null;
+
+      // Build summary snippet from Grata data
+      const summaryParts = [];
+      if (employeeCount) summaryParts.push(employeeCount + ' employees');
+      if (revenue) summaryParts.push('Revenue: ' + revenue);
+      if (yearFounded) summaryParts.push('Founded: ' + yearFounded);
+      if (ownership) summaryParts.push('Ownership: ' + ownership);
+      if (naicsCodes) summaryParts.push('NAICS: ' + naicsCodes);
+      if (description) summaryParts.push(description);
+      const grataSummary = summaryParts.length ? summaryParts.join(' | ') : null;
+
+      if (existing.rows.length > 0) {
+        // Company exists — update missing fields
+        companyId = existing.rows[0].id;
+        const updates = [];
+        const params = [];
+        let idx = 1;
+        if (domain) { updates.push(`website = COALESCE(companies.website, $${idx++})`); params.push(domain); }
+        if (city) { updates.push(`city = COALESCE(companies.city, $${idx++})`); params.push(city); }
+        if (state) { updates.push(`state = COALESCE(companies.state, $${idx++})`); params.push(state); }
+        if (grataSummary) {
+          updates.push(`summary = COALESCE(companies.summary, $${idx++})`);
+          params.push(grataSummary);
+        }
+        if (updates.length) {
+          updates.push('updated_at = NOW()');
+          params.push(companyId);
+          await pool.query(`UPDATE companies SET ${updates.join(', ')} WHERE id = $${idx}`, params);
+        }
+        companiesUpdated++;
+      } else {
+        // New company — insert with status 'pending'
+        companyId = nanoid();
+        await insertCompany({
+          id: companyId,
+          name: companyName,
+          name_key: nameKey,
+          city,
+          state,
+          phone: null,
+          website: domain || null,
+          owner: null,
+          email: null,
+          address: null,
+          crm_known: false,
+        });
+        // Update summary if we have Grata metadata
+        if (grataSummary) {
+          await pool.query('UPDATE companies SET summary = $1 WHERE id = $2', [grataSummary, companyId]);
+        }
+        companiesCreated++;
+      }
+
+      // Add contact if contact_name is present
+      const contactName = get(rec, 'contact_name');
+      if (contactName) {
+        const contactEmail = get(rec, 'contact_email') || null;
+        const contactPhone = get(rec, 'contact_phone') || null;
+        const contactTitle = get(rec, 'contact_title') || null;
+        const linkedinUrl = get(rec, 'linkedin_url') || null;
+
+        // Check if this contact already exists for this company (by name)
+        const existingContact = await pool.query(
+          'SELECT id FROM contacts WHERE company_id = $1 AND LOWER(name) = LOWER($2) AND deleted_at IS NULL LIMIT 1',
+          [companyId, contactName]
+        );
+
+        if (existingContact.rows.length === 0) {
+          // Check if company has any contacts — if not, make this one primary
+          const contactCount = await pool.query(
+            'SELECT COUNT(*) AS cnt FROM contacts WHERE company_id = $1 AND deleted_at IS NULL',
+            [companyId]
+          );
+          const isPrimary = parseInt(contactCount.rows[0].cnt, 10) === 0;
+
+          const phones = contactPhone ? [contactPhone] : [];
+          const emails = contactEmail ? [contactEmail] : [];
+
+          await insertContact({
+            company_id: companyId,
+            name: contactName,
+            title: contactTitle,
+            phone: contactPhone,
+            email: contactEmail,
+            linkedin: linkedinUrl,
+            is_primary: isPrimary,
+            source: 'grata',
+            notes: null,
+            phones,
+            emails,
+          });
+          contactsCreated++;
+
+          // Also update company owner field if it's the primary contact
+          if (isPrimary) {
+            await pool.query(
+              'UPDATE companies SET owner = COALESCE(companies.owner, $1), email = COALESCE(companies.email, $2), phone = COALESCE(companies.phone, $3) WHERE id = $4',
+              [contactName, contactEmail, contactPhone, companyId]
+            );
+          }
+        }
+      }
+    } catch (err) {
+      errors.push({ row: i + 1, company: companyName, error: err.message });
+    }
+  }
+
+  // Mark CRM known names if applicable
+  const known = await sf.getPastedKnownNames();
+  if (known && known.length) await markCrmKnown(known);
+
+  res.json({
+    ok: true,
+    companies_created: companiesCreated,
+    companies_updated: companiesUpdated,
+    contacts_created: contactsCreated,
+    skipped,
+    errors: errors.slice(0, 20),
+    stats: await rollupStats(),
+  });
+});
+
 // ---------- User visibility restrictions ----------
 function getUserRestrictions(user) {
   if (!user || !user.restricted) return {};
