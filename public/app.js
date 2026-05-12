@@ -4775,4 +4775,74 @@ function initCampaignBindings() {
   bindMergeFieldClicks();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// ---------- Global search ----------
+let _gsDebounce = null;
+function initGlobalSearch() {
+  const input = $('#global-search');
+  const results = $('#global-search-results');
+  if (!input || !results) return;
+  input.addEventListener('input', () => {
+    clearTimeout(_gsDebounce);
+    const q = input.value.trim();
+    if (q.length < 2) { results.hidden = true; return; }
+    _gsDebounce = setTimeout(() => globalSearch(q), 250);
+  });
+  input.addEventListener('focus', () => {
+    if (input.value.trim().length >= 2) globalSearch(input.value.trim());
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.global-search-wrap')) results.hidden = true;
+  });
+}
+
+async function globalSearch(q) {
+  const results = $('#global-search-results');
+  try {
+    const [compRes, ctRes] = await Promise.all([
+      fetch(`/api/companies?search=${encodeURIComponent(q)}&sort=score_desc`),
+      fetch(`/api/contacts?q=${encodeURIComponent(q)}&limit=5`),
+    ]);
+    const companies = compRes.ok ? (await compRes.json()).companies?.slice(0, 5) || [] : [];
+    const contacts = ctRes.ok ? (await ctRes.json()).contacts?.slice(0, 5) || [] : [];
+    if (!companies.length && !contacts.length) {
+      results.innerHTML = '<div class="gs-empty">No results found.</div>';
+      results.hidden = false;
+      return;
+    }
+    let html = '';
+    if (companies.length) {
+      html += '<div class="gs-section-label">Companies</div>';
+      html += companies.map(c => {
+        const loc = [c.city, c.state].filter(Boolean).join(', ');
+        return `<div class="gs-item" data-type="company" data-id="${c.id}">
+          <div><div class="gs-item-name">${escapeHtml(c.name)}</div><div class="gs-item-sub">${escapeHtml(loc)}${c.owner ? ' · ' + escapeHtml(c.owner) : ''}</div></div>
+          <div class="gs-item-right">${c.score ? `<div class="gs-item-score">${Number(c.score).toFixed(1)}</div>` : ''}<div class="gs-item-meta">${escapeHtml(c.tier || '')}</div></div>
+        </div>`;
+      }).join('');
+    }
+    if (contacts.length) {
+      html += '<div class="gs-section-label">Contacts</div>';
+      html += contacts.map(c => `<div class="gs-item" data-type="contact" data-company-id="${c.company_id || ''}">
+        <div><div class="gs-item-name">${escapeHtml(c.name)}</div><div class="gs-item-sub">${escapeHtml(c.title || '')}${c.company_name ? ' · ' + escapeHtml(c.company_name) : ''}</div></div>
+        <div class="gs-item-right"><div class="gs-item-meta">${escapeHtml(c.phone || c.email || '')}</div></div>
+      </div>`).join('');
+    }
+    results.innerHTML = html;
+    results.hidden = false;
+    $$('.gs-item', results).forEach(item => {
+      item.addEventListener('click', () => {
+        const type = item.dataset.type;
+        const id = type === 'company' ? item.dataset.id : item.dataset.companyId;
+        if (id) {
+          const companiesTab = document.querySelector('.tab[data-tab="companies"]');
+          if (companiesTab) companiesTab.click();
+          setTimeout(() => openDetail(id), 50);
+        }
+        results.hidden = true;
+        input.value = '';
+      });
+    });
+  } catch { results.hidden = true; }
+}
+
+document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); });
