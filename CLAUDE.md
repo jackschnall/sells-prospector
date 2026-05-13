@@ -68,9 +68,14 @@ When asked to research companies:
    - `"<Company> revenue employees ZoomInfo"`
    - `"<Company> BBB"`
    - `"<Company> lawsuit litigation"`
-3. Score using the rubric above, compute weighted average
-4. Inject via `cc-inject.js inject <id>`
-5. No sync needed — Postgres writes are immediately available
+3. **CRITICAL — Check Google News for acquisitions/deals:**
+   - Search: `"<Company>" acquired OR acquisition OR sold OR "private equity" OR merger`
+   - This catches recent deals that only appear in news results, not general search
+   - If acquired by PE or another company, mark as PASS with hard_stop
+   - Also check the P3 Services Universe exclusion list (`data/p3-universe-names.json`)
+4. Score using the rubric above, compute weighted average
+5. Inject via `cc-inject.js inject <id>`
+6. No sync needed — Postgres writes are immediately available
 
 ## Discovery Workflow
 
