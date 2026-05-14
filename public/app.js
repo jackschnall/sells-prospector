@@ -421,6 +421,20 @@ async function loadPipelineBoard() {
   const res = await fetch('/api/pipeline/board');
   const data = await res.json();
   state.pipelineBoard = data.board || {};
+
+  // Enriched: batch-fetch milestones + users
+  const allIds = [];
+  for (const stage of Object.keys(state.pipelineBoard)) {
+    for (const c of state.pipelineBoard[stage]) allIds.push(c.id);
+  }
+  const [msRes, usersRes] = await Promise.all([
+    allIds.length ? fetch(`/api/milestones/batch?ids=${allIds.join(',')}`).then(r => r.json()).catch(() => ({ milestones: {} })) : { milestones: {} },
+    fetch('/api/auth/users').then(r => r.json()).catch(() => ({ users: [] })),
+  ]);
+  window._pipelineMilestones = msRes.milestones || {};
+  window._pipelineUsersMap = {};
+  for (const u of (usersRes.users || [])) window._pipelineUsersMap[u.id] = u;
+
   renderPipelineBoard();
 }
 
@@ -431,10 +445,17 @@ function renderPipelineBoard() {
   if (!stages.length) { host.innerHTML = '<div class="dash-empty">Loading pipeline stages...</div>'; return; }
 
   const tierFilter = state.filter.tier || '';
+  const staleOnly = !!($('#stale-filter-toggle') && $('#stale-filter-toggle').checked);
   let totalCount = 0;
   host.innerHTML = stages.map((s) => {
     const all = state.pipelineBoard[s.key] || [];
-    const companies = tierFilter ? all.filter((c) => c.tier === tierFilter) : all;
+    let companies = tierFilter ? all.filter((c) => c.tier === tierFilter) : all;
+    if (staleOnly) {
+      companies = companies.filter(c => {
+        const d = c.updated_at ? Math.floor((Date.now() - new Date(c.updated_at).getTime()) / 86400000) : null;
+        return d != null && d > 7;
+      });
+    }
     totalCount += companies.length;
     return `
       <div class="kanban-col" data-stage="${s.key}">
@@ -456,7 +477,31 @@ function renderPipelineBoard() {
 
   // Click handlers on kanban cards
   $$('.kanban-card', host).forEach((el) => {
-    el.addEventListener('click', () => openDetail(el.dataset.id));
+    el.addEventListener('click', (e) => {
+      if (e.target.classList.contains('kc-dot')) return;
+      openDetail(el.dataset.id);
+    });
+  });
+
+  // Milestone dot click handlers
+  $$('.kc-dot', host).forEach(dot => {
+    dot.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const companyId = dot.dataset.company;
+      const key = dot.dataset.key;
+      const res = await fetch(`/api/companies/${companyId}/milestones/${key}`, { method: 'PUT' });
+      if (res.ok) {
+        const data = await res.json();
+        const color = data.state === 'complete' ? 'var(--green)' : data.state === 'in_progress' ? 'var(--gold)' : '#ccc';
+        dot.style.background = color;
+        dot.dataset.state = data.state;
+        dot.title = `${key.replace(/_/g, ' ')} (${data.state})`;
+        if (window._pipelineMilestones) {
+          if (!window._pipelineMilestones[companyId]) window._pipelineMilestones[companyId] = {};
+          window._pipelineMilestones[companyId][key] = data.state;
+        }
+      }
+    });
   });
 
   // Drag and drop
@@ -495,16 +540,47 @@ function renderKanbanCard(c) {
   const daysInStage = c.pipeline_stage_changed_at
     ? Math.max(0, Math.floor((Date.now() - new Date(c.pipeline_stage_changed_at).getTime()) / 86400000))
     : null;
+  const daysStale = c.updated_at
+    ? Math.floor((Date.now() - new Date(c.updated_at).getTime()) / 86400000)
+    : null;
+  const isStale = daysStale != null && daysStale > 7;
+
+  // Enrichment: valuation, probability, est_close_date, deal_owner
+  const valStr = c.valuation ? `$${(c.valuation / 1000000).toFixed(1)}M` : '';
+  const prob = c.probability;
+  const probBar = prob != null ? `<div class="kc-prob"><div class="kc-prob-bar" style="width:${Math.min(100, prob)}%;background:${prob >= 70 ? 'var(--green)' : prob >= 40 ? 'var(--gold)' : 'var(--red)'}"></div><span class="kc-prob-label">${prob}%</span></div>` : '';
+  let closeBadge = '';
+  if (c.est_close_date) {
+    const daysToClose = Math.floor((new Date(c.est_close_date) - Date.now()) / 86400000);
+    const cls = daysToClose < 0 ? 'kc-close-overdue' : daysToClose <= 30 ? 'kc-close-soon' : 'kc-close-ok';
+    closeBadge = `<span class="kc-close-badge ${cls}">${new Date(c.est_close_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>`;
+  }
+  const ownerUser = c.deal_owner_id && window._pipelineUsersMap && window._pipelineUsersMap[c.deal_owner_id];
+  const ownerCircle = ownerUser ? `<span class="kc-owner-circle" title="${escapeHtml(ownerUser.name)}">${userInitials(ownerUser.name)}</span>` : '';
+
+  // Milestone dots
+  const MS_KEYS = ['buyer_list','qoe','teaser','cim','network_intros','buyer_outreach','iois_received','mgmt_meetings','lois_received','loi_signed','diligence','closing'];
+  const ms = (window._pipelineMilestones && window._pipelineMilestones[c.id]) || {};
+  const dots = MS_KEYS.map(k => {
+    const s = ms[k] || 'not_started';
+    const color = s === 'complete' ? 'var(--green)' : s === 'in_progress' ? 'var(--gold)' : '#ccc';
+    return `<span class="kc-dot" data-company="${c.id}" data-key="${k}" data-state="${s}" style="background:${color}" title="${k.replace(/_/g, ' ')} (${s})"></span>`;
+  }).join('');
+
   return `
-    <div class="kanban-card ${tierClass(c.tier)}" data-id="${c.id}" draggable="true">
+    <div class="kanban-card ${tierClass(c.tier)} ${isStale ? 'kc-stale' : ''}" data-id="${c.id}" draggable="true" data-stale="${isStale ? '1' : '0'}">
+      ${isStale ? '<span class="kc-stale-dot" title="Stale - not updated in 7+ days"></span>' : ''}
       <div class="kc-top">
         <span class="kc-score ${tierClass(c.tier)}">${fmtScore(c.score)}</span>
         <span class="kc-name">${escapeHtml(c.name)}</span>
+        ${ownerCircle}
       </div>
       <div class="kc-meta">
         ${c.owner ? escapeHtml(c.owner) : ''}
         ${c.city ? ' · ' + escapeHtml(c.city) + (c.state ? ', ' + escapeHtml(c.state) : '') : ''}
       </div>
+      ${valStr || probBar || closeBadge ? `<div class="kc-enrichment">${valStr ? `<span class="kc-val">${valStr}</span>` : ''}${probBar}${closeBadge}</div>` : ''}
+      <div class="kc-milestones">${dots}</div>
       ${daysInStage != null ? `<div class="kc-days">${daysInStage}d in stage</div>` : ''}
       ${c.closed_lost_reason ? `<span class="kc-reason">${escapeHtml(formatClosedReason(c.closed_lost_reason))}</span>` : ''}
     </div>
@@ -665,6 +741,7 @@ async function openDetail(id) {
   renderDetail(data);
   renderCallHistory(id);
   loadCompanyMandates(id);
+  loadDealContacts(id);
   $('#detail-panel').hidden = false;
   document.body.classList.add('detail-open');
 }
@@ -2993,7 +3070,12 @@ async function loadCalendar() {
   } catch {
     state.calendarEvents = [];
   }
+  // Also fetch call logs for this month
+  await loadCalendarCallLogs();
   renderCalendar();
+  // Inject call log chips after render
+  renderCalendarWithCalls();
+  loadOutlookStatus();
 }
 
 function renderCalendar() {
@@ -5478,4 +5560,651 @@ function renderQueueWithMandateFilter() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); initMandateBindings(); });
+// ═══════════════════════════════════════════════════════════════════
+// FEATURE 1: Pipeline Tab Enrichment
+// ═══════════════════════════════════════════════════════════════════
+
+// Note: Enriched pipeline rendering is now handled inline in renderKanbanCard + renderPipelineBoard
+
+// 1C: Stale filter toggle
+function initStaleFilter() {
+  const toggle = $('#stale-filter-toggle');
+  if (toggle) toggle.addEventListener('change', () => {
+    _staleFilter = toggle.checked;
+    renderPipelineBoardEnriched();
+  });
+}
+
+// 1D: Pre-Engagement Watchlist
+let _peEditingId = null;
+
+async function loadPreEngagement() {
+  const res = await fetch('/api/pre-engagement');
+  const data = await res.json();
+  const items = data.items || [];
+  renderPreEngagementTable(items);
+}
+
+function renderPreEngagementTable(items) {
+  const tbody = $('#pe-tbody');
+  if (!tbody) return;
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-msg">No pre-engagement accounts yet.</td></tr>';
+    return;
+  }
+  const groups = { High: [], Medium: [], Low: [] };
+  for (const item of items) {
+    const g = groups[item.priority] || groups.Medium;
+    g.push(item);
+  }
+  let html = '';
+  for (const [priority, group] of Object.entries(groups)) {
+    if (!group.length) continue;
+    html += `<tr class="pe-group-header"><td colspan="11">${escapeHtml(priority)} Priority (${group.length})</td></tr>`;
+    for (const item of group) {
+      const promoted = item.promoted_company_id;
+      html += `<tr class="pe-row ${promoted ? 'pe-promoted' : ''}" data-pe-id="${item.id}">
+        <td><strong>${escapeHtml(item.account_name)}</strong></td>
+        <td>${escapeHtml(item.primary_contact || '')}</td>
+        <td>${item.website ? `<a href="${escapeHtml(item.website)}" target="_blank" rel="noopener">${escapeHtml(item.website.replace(/^https?:\/\//, ''))}</a>` : ''}</td>
+        <td><span class="pe-priority-pill pe-priority-${item.priority.toLowerCase()}">${escapeHtml(item.priority)}</span></td>
+        <td>${escapeHtml(item.status || 'New')}</td>
+        <td>${escapeHtml(item.next_action || '')}</td>
+        <td>${item.first_contact_date || ''}</td>
+        <td><input type="checkbox" class="pe-check" data-field="initial_docs_sent" ${item.initial_docs_sent ? 'checked' : ''} /></td>
+        <td><input type="checkbox" class="pe-check" data-field="initial_data_received" ${item.initial_data_received ? 'checked' : ''} /></td>
+        <td><input type="checkbox" class="pe-check" data-field="initial_model_created" ${item.initial_model_created ? 'checked' : ''} /></td>
+        <td>
+          ${promoted ? `<span class="pe-promoted-badge">Promoted</span>` : `<button class="btn-ghost btn-xs pe-promote-btn" data-id="${item.id}">Promote</button>`}
+          <button class="btn-ghost btn-xs pe-edit-btn" data-id="${item.id}">Edit</button>
+        </td>
+      </tr>`;
+    }
+  }
+  tbody.innerHTML = html;
+
+  // Bind actions
+  $$('.pe-check', tbody).forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const row = cb.closest('.pe-row');
+      const peId = row?.dataset.peId;
+      if (!peId) return;
+      await fetch(`/api/pre-engagement/${peId}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ [cb.dataset.field]: cb.checked }),
+      });
+    });
+  });
+  $$('.pe-promote-btn', tbody).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Promote this account to the pipeline?')) return;
+      const res = await fetch(`/api/pre-engagement/${btn.dataset.id}/promote`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        toast(`Promoted to pipeline${data.existed ? ' (company already existed)' : ''}`, 'ok');
+        loadPreEngagement();
+        loadPipelineBoard();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast(err.error || 'Failed', 'error');
+      }
+    });
+  });
+  $$('.pe-edit-btn', tbody).forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = items.find(i => i.id === btn.dataset.id);
+      if (item) openPeModal(item);
+    });
+  });
+}
+
+function openPeModal(item) {
+  _peEditingId = item ? item.id : null;
+  $('#pe-modal-title').textContent = item ? 'Edit Pre-Engagement Account' : 'Add Pre-Engagement Account';
+  $('#pe-account-name').value = item?.account_name || '';
+  $('#pe-primary-contact').value = item?.primary_contact || '';
+  $('#pe-website').value = item?.website || '';
+  $('#pe-priority').value = item?.priority || 'Medium';
+  $('#pe-status').value = item?.status || 'New';
+  $('#pe-next-action').value = item?.next_action || '';
+  $('#pe-first-contact').value = item?.first_contact_date || '';
+  $('#pe-notes').value = item?.notes || '';
+  $('#pe-modal').hidden = false;
+}
+
+async function savePeItem() {
+  const body = {
+    account_name: $('#pe-account-name').value.trim(),
+    primary_contact: $('#pe-primary-contact').value.trim() || null,
+    website: $('#pe-website').value.trim() || null,
+    priority: $('#pe-priority').value,
+    status: $('#pe-status').value,
+    next_action: $('#pe-next-action').value.trim() || null,
+    first_contact_date: $('#pe-first-contact').value || null,
+    notes: $('#pe-notes').value.trim() || null,
+  };
+  if (!body.account_name) { toast('Account name required', 'error'); return; }
+  const url = _peEditingId ? `/api/pre-engagement/${_peEditingId}` : '/api/pre-engagement';
+  const method = _peEditingId ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (res.ok) {
+    toast(_peEditingId ? 'Updated' : 'Added', 'ok');
+    $('#pe-modal').hidden = true;
+    loadPreEngagement();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    toast(err.error || 'Failed', 'error');
+  }
+}
+
+// 1E: Deal Contacts in detail panel
+async function loadDealContacts(companyId) {
+  const [dcRes, ctRes] = await Promise.all([
+    fetch(`/api/companies/${companyId}/deal-contacts`).then(r => r.json()),
+    fetch(`/api/companies/${companyId}/contacts`).then(r => r.json()),
+  ]);
+  const dealContacts = dcRes.deal_contacts || [];
+  const contacts = ctRes.contacts || [];
+
+  $('#d-deal-contacts-count').textContent = dealContacts.length;
+  const host = $('#d-deal-contacts');
+  if (!dealContacts.length) {
+    host.innerHTML = '<div class="sb-hint">No deal contacts linked.</div>';
+  } else {
+    host.innerHTML = dealContacts.map(dc => `
+      <div class="dc-card">
+        <div class="dc-info">
+          <strong>${escapeHtml(dc.contact_name)}</strong>
+          ${dc.role ? `<span class="dc-role-badge">${escapeHtml(dc.role)}</span>` : ''}
+          ${dc.contact_title ? `<div class="dc-detail">${escapeHtml(dc.contact_title)}</div>` : ''}
+          ${dc.contact_phone ? `<div class="dc-detail">${escapeHtml(dc.contact_phone)}</div>` : ''}
+          ${dc.contact_email ? `<div class="dc-detail">${escapeHtml(dc.contact_email)}</div>` : ''}
+        </div>
+        <button class="btn-ghost btn-xs dc-remove" data-dc-id="${dc.id}">Remove</button>
+      </div>
+    `).join('');
+    $$('.dc-remove', host).forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await fetch(`/api/companies/${companyId}/deal-contacts/${btn.dataset.dcId}`, { method: 'DELETE' });
+        toast('Removed', 'ok');
+        loadDealContacts(companyId);
+      });
+    });
+  }
+
+  // Populate contact dropdown (exclude already linked)
+  const linkedIds = new Set(dealContacts.map(dc => dc.contact_id));
+  const sel = $('#d-dc-contact-select');
+  sel.innerHTML = '<option value="">Link a contact...</option>' +
+    contacts.filter(c => !linkedIds.has(c.id)).map(c =>
+      `<option value="${c.id}">${escapeHtml(c.name)}${c.title ? ' — ' + escapeHtml(c.title) : ''}</option>`
+    ).join('');
+}
+
+// Mark Reviewed in detail
+async function markCompanyReviewed() {
+  if (!state.activeId) return;
+  const res = await fetch(`/api/companies/${state.activeId}/mark-reviewed`, { method: 'POST' });
+  if (res.ok) { toast('Marked as reviewed', 'ok'); openDetail(state.activeId); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FEATURE 2: Invite Tab
+// ═══════════════════════════════════════════════════════════════════
+
+const inviteState = {
+  platform: 'teams',
+  teamMembers: [],
+  externalAttendees: [],
+  teamsJoinUrl: '',
+};
+
+function initInviteTab() {
+  // Platform buttons
+  $$('.invite-plat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.invite-plat-btn').forEach(b => b.classList.toggle('active', b === btn));
+      inviteState.platform = btn.dataset.platform;
+      $('#invite-teams-paste').hidden = btn.dataset.platform !== 'teams';
+    });
+  });
+
+  // Teams paste parser
+  $('#invite-teams-parse')?.addEventListener('click', () => {
+    const text = $('#invite-teams-text').value || '';
+    const urlMatch = text.match(/https:\/\/teams\.microsoft\.com\/[^\s)]+/);
+    if (urlMatch) {
+      inviteState.teamsJoinUrl = urlMatch[0];
+      toast('Teams join URL parsed', 'ok');
+    }
+    const idMatch = text.match(/Meeting ID:\s*(\S+)/i);
+    if (idMatch) inviteState.teamsMeetingId = idMatch[1];
+    const pcMatch = text.match(/Passcode:\s*(\S+)/i);
+    if (pcMatch) inviteState.teamsPasscode = pcMatch[1];
+  });
+
+  // Load team members
+  fetch('/api/auth/users').then(r => r.json()).then(data => {
+    const users = data.users || [];
+    const host = $('#invite-team-members');
+    if (!host) return;
+    host.innerHTML = users.map(u => `
+      <label class="invite-team-check">
+        <input type="checkbox" value="${u.id}" data-name="${escapeHtml(u.name)}" data-email="${escapeHtml(u.email)}" />
+        <span>${escapeHtml(u.name)}</span>
+        <span class="invite-team-email">${escapeHtml(u.email)}</span>
+      </label>
+    `).join('');
+  });
+
+  // External contact search
+  let extSearchTimer;
+  $('#invite-ext-search')?.addEventListener('input', () => {
+    clearTimeout(extSearchTimer);
+    const q = $('#invite-ext-search').value.trim();
+    if (q.length < 2) { $('#invite-ext-results').hidden = true; return; }
+    extSearchTimer = setTimeout(async () => {
+      const res = await fetch(`/api/contacts?q=${encodeURIComponent(q)}&limit=10`);
+      const data = await res.json();
+      const contacts = data.contacts || [];
+      const host = $('#invite-ext-results');
+      if (!contacts.length) { host.hidden = true; return; }
+      host.innerHTML = contacts.map(c => `
+        <div class="invite-ext-result" data-name="${escapeHtml(c.name)}" data-email="${escapeHtml(c.email || '')}">
+          ${escapeHtml(c.name)}${c.email ? ' — ' + escapeHtml(c.email) : ''}
+          <span class="invite-ext-company">${escapeHtml(c.company_name || '')}</span>
+        </div>
+      `).join('');
+      host.hidden = false;
+      $$('.invite-ext-result', host).forEach(el => {
+        el.addEventListener('click', () => {
+          inviteState.externalAttendees.push({ name: el.dataset.name, email: el.dataset.email });
+          renderInviteExternals();
+          host.hidden = true;
+          $('#invite-ext-search').value = '';
+        });
+      });
+    }, 300);
+  });
+
+  // Manual external add
+  $('#invite-ext-add')?.addEventListener('click', () => {
+    const name = $('#invite-ext-name').value.trim();
+    const email = $('#invite-ext-email').value.trim();
+    if (!name && !email) return;
+    inviteState.externalAttendees.push({ name: name || email, email });
+    renderInviteExternals();
+    $('#invite-ext-name').value = '';
+    $('#invite-ext-email').value = '';
+  });
+
+  // Generate
+  $('#invite-generate')?.addEventListener('click', generateInvite);
+  $('#invite-copy')?.addEventListener('click', () => {
+    navigator.clipboard.writeText($('#invite-text').textContent);
+    toast('Invite copied', 'ok');
+  });
+  $('#invite-copy-emails')?.addEventListener('click', () => {
+    const emails = [];
+    $$('input[type="checkbox"]:checked', $('#invite-team-members')).forEach(cb => {
+      if (cb.dataset.email) emails.push(cb.dataset.email);
+    });
+    inviteState.externalAttendees.forEach(a => { if (a.email) emails.push(a.email); });
+    navigator.clipboard.writeText(emails.join('; '));
+    toast(`${emails.length} emails copied`, 'ok');
+  });
+
+  // Timezone display
+  updateInviteTimezones();
+  $('#invite-time')?.addEventListener('change', updateInviteTimezones);
+}
+
+function renderInviteExternals() {
+  const host = $('#invite-ext-list');
+  if (!host) return;
+  host.innerHTML = inviteState.externalAttendees.map((a, i) => `
+    <div class="invite-ext-item">
+      <span>${escapeHtml(a.name)}${a.email ? ' (' + escapeHtml(a.email) + ')' : ''}</span>
+      <button class="btn-ghost btn-xs invite-ext-remove" data-idx="${i}">x</button>
+    </div>
+  `).join('');
+  $$('.invite-ext-remove', host).forEach(btn => {
+    btn.addEventListener('click', () => {
+      inviteState.externalAttendees.splice(Number(btn.dataset.idx), 1);
+      renderInviteExternals();
+    });
+  });
+}
+
+function updateInviteTimezones() {
+  const time = $('#invite-time')?.value || '10:00';
+  const [h, m] = time.split(':').map(Number);
+  const ct = `${((h % 12) || 12)}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'} CT`;
+  const et = `${(((h + 1) % 12) || 12)}:${String(m).padStart(2, '0')} ${(h + 1) >= 12 ? 'PM' : 'AM'} ET`;
+  const pt = `${(((h - 2 + 24) % 12) || 12)}:${String(m).padStart(2, '0')} ${(h - 2 + 24) >= 12 && (h - 2 + 24) < 24 ? 'PM' : 'AM'} PT`;
+  const mt = `${(((h - 1 + 24) % 12) || 12)}:${String(m).padStart(2, '0')} ${(h - 1 + 24) >= 12 && (h - 1 + 24) < 24 ? 'PM' : 'AM'} MT`;
+  const display = $('#invite-tz-display');
+  if (display) display.textContent = `${ct} | ${et} | ${mt} | ${pt}`;
+}
+
+function generateInvite() {
+  const title = $('#invite-title').value.trim() || 'Meeting';
+  const date = $('#invite-date').value;
+  const time = $('#invite-time').value || '10:00';
+  if (!date) { toast('Date required', 'error'); return; }
+
+  const [h, m] = time.split(':').map(Number);
+  const ct = `${((h % 12) || 12)}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'} CT`;
+  const dateStr = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  const team = [];
+  $$('input[type="checkbox"]:checked', $('#invite-team-members')).forEach(cb => {
+    team.push(cb.dataset.name);
+  });
+  const externals = inviteState.externalAttendees.map(a => a.name);
+
+  let text = `${title}\n`;
+  text += `${dateStr} at ${ct}\n\n`;
+
+  if (inviteState.platform === 'teams') {
+    text += `Microsoft Teams Meeting\n`;
+    if (inviteState.teamsJoinUrl) text += `Join: ${inviteState.teamsJoinUrl}\n`;
+    if (inviteState.teamsMeetingId) text += `Meeting ID: ${inviteState.teamsMeetingId}\n`;
+    if (inviteState.teamsPasscode) text += `Passcode: ${inviteState.teamsPasscode}\n`;
+  } else if (inviteState.platform === 'zoom') {
+    text += `Zoom Meeting\n`;
+  } else if (inviteState.platform === 'in-person') {
+    text += `In-Person Meeting\n`;
+  } else {
+    text += `Phone Call\n`;
+  }
+
+  if (team.length) text += `\nTeam: ${team.join(', ')}\n`;
+  if (externals.length) text += `External: ${externals.join(', ')}\n`;
+
+  $('#invite-text').textContent = text;
+  $('#invite-output').hidden = false;
+
+  // Save to API
+  const attendees = [
+    ...team.map(n => ({ name: n, type: 'team' })),
+    ...inviteState.externalAttendees.map(a => ({ ...a, type: 'external' })),
+  ];
+  fetch('/api/calendar-invites', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title, platform: inviteState.platform, meeting_date: date, time_ct: ct, attendees, invite_text: text }),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FEATURE 3: Documents Tab
+// ═══════════════════════════════════════════════════════════════════
+
+const LEGAL_FIELDS = {
+  mnda: [
+    { key: 'DATE', label: 'Date', type: 'date' },
+    { key: 'COUNTERPARTY LEGAL NAME', label: 'Counterparty Legal Name' },
+    { key: 'JURISDICTION', label: 'Jurisdiction' },
+    { key: 'ENTITY TYPE', label: 'Entity Type' },
+    { key: 'SIGNATORY NAME', label: 'Signatory Name' },
+    { key: 'SIGNATORY TITLE', label: 'Signatory Title' },
+    { key: 'SIGNATORY EMAIL', label: 'Signatory Email', type: 'email' },
+  ],
+  sellside_buyer_nda: [
+    { key: 'DATE', label: 'Date', type: 'date' },
+    { key: 'TARGET COMPANY LEGAL NAME', label: 'Target Company Legal Name' },
+    { key: 'JURISDICTION', label: 'Jurisdiction' },
+    { key: 'ENTITY TYPE', label: 'Entity Type' },
+    { key: 'RECIPIENT LEGAL NAME', label: 'Recipient Legal Name' },
+    { key: 'SIGNATORY NAME', label: 'Signatory Name' },
+    { key: 'SIGNATORY TITLE', label: 'Signatory Title' },
+    { key: 'SIGNATORY EMAIL', label: 'Signatory Email', type: 'email' },
+  ],
+  engagement_letter: [],
+};
+
+function initDocumentsTab() {
+  // Sub-tabs
+  $$('.docs-subtab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.docs-subtab').forEach(b => b.classList.toggle('active', b === btn));
+      const sub = btn.dataset.docsSub;
+      $('#docs-branded-view').hidden = sub !== 'branded';
+      $('#docs-legal-view').hidden = sub !== 'legal';
+    });
+  });
+
+  // Branded generate
+  $('#doc-branded-generate')?.addEventListener('click', async () => {
+    const title = $('#doc-branded-title').value.trim();
+    const subtitle = $('#doc-branded-subtitle').value.trim();
+    const content = $('#doc-branded-content').value.trim();
+    if (!title || !content) { toast('Title and content required', 'error'); return; }
+    const status = $('#doc-branded-status');
+    status.textContent = 'Generating...';
+    status.hidden = false;
+    try {
+      const res = await fetch('/api/generate-document', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'branded', data: { title, subtitle, content } }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        status.innerHTML = `Document ready: <a href="${data.download_url}" download class="btn-primary btn-xs" style="text-decoration:none">Download</a>`;
+      } else {
+        status.textContent = data.error || 'Failed';
+      }
+    } catch (err) {
+      status.textContent = 'Error: ' + err.message;
+    }
+  });
+
+  // Legal type change — show fields
+  $('#doc-legal-type')?.addEventListener('change', () => {
+    const type = $('#doc-legal-type').value;
+    const fields = LEGAL_FIELDS[type] || [];
+    const host = $('#doc-legal-fields');
+    if (!fields.length) {
+      host.innerHTML = type === 'engagement_letter' ? '<p style="color:var(--text-muted)">Engagement letter template not available as fillable docx. Reference PDF available for download.</p>' : '';
+      return;
+    }
+    host.innerHTML = fields.map(f => `
+      <div class="doc-field-row">
+        <label class="camp-label">${escapeHtml(f.label)}</label>
+        <input type="${f.type || 'text'}" class="cf-input doc-legal-input" data-key="${escapeHtml(f.key)}" />
+      </div>
+    `).join('');
+  });
+
+  // Auto-fill from deal dropdown
+  loadLegalDealDropdown();
+  $('#doc-legal-deal')?.addEventListener('change', () => {
+    const companyId = $('#doc-legal-deal').value;
+    if (!companyId) return;
+    const company = state.companies.find(c => c.id === companyId);
+    if (!company) return;
+    // Try to fill common fields
+    const setField = (key, val) => {
+      const input = $(`.doc-legal-input[data-key="${key}"]`);
+      if (input && val) input.value = val;
+    };
+    setField('COUNTERPARTY LEGAL NAME', company.name);
+    setField('TARGET COMPANY LEGAL NAME', company.name);
+    setField('DATE', new Date().toISOString().slice(0, 10));
+    setField('JURISDICTION', company.state || '');
+  });
+
+  // Legal generate
+  $('#doc-legal-generate')?.addEventListener('click', async () => {
+    const type = $('#doc-legal-type').value;
+    if (!type) { toast('Select document type', 'error'); return; }
+    const data = {};
+    $$('.doc-legal-input').forEach(inp => {
+      data[inp.dataset.key] = inp.value.trim();
+    });
+    const status = $('#doc-legal-status');
+    status.textContent = 'Generating...';
+    status.hidden = false;
+    try {
+      const res = await fetch('/api/generate-document', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type, data }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        status.innerHTML = `Document ready: <a href="${result.download_url}" download class="btn-primary btn-xs" style="text-decoration:none">Download .docx</a>`;
+      } else {
+        status.textContent = result.error || 'Failed';
+      }
+    } catch (err) {
+      status.textContent = 'Error: ' + err.message;
+    }
+  });
+}
+
+function loadLegalDealDropdown() {
+  const sel = $('#doc-legal-deal');
+  if (!sel) return;
+  // Populate from pipeline board data
+  const options = ['<option value="">Select deal (optional)...</option>'];
+  for (const stage of (state.pipelineStages || [])) {
+    const companies = (state.pipelineBoard || {})[stage.key] || [];
+    for (const c of companies) {
+      if (stage.key !== 'no_contact' && stage.key !== 'closed_lost') {
+        options.push(`<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(stage.label)})</option>`);
+      }
+    }
+  }
+  sel.innerHTML = options.join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FEATURE 4: Calendar Enhancement + Outlook Stub
+// ═══════════════════════════════════════════════════════════════════
+
+let _calendarCallLogs = [];
+
+async function loadCalendarCallLogs() {
+  if (!state.calendarCursor) return;
+  const { year, month } = state.calendarCursor;
+  try {
+    const res = await fetch(`/api/calendar/call-logs?year=${year}&month=${month}`);
+    if (res.ok) {
+      const data = await res.json();
+      _calendarCallLogs = data.call_logs || [];
+    }
+  } catch {
+    _calendarCallLogs = [];
+  }
+}
+
+// Calendar call logs are loaded inline in loadCalendar()
+
+function renderCalendarWithCalls() {
+  // After original render, inject call log chips
+  const grid = $('#cal-grid');
+  if (!grid || !_calendarCallLogs.length) return;
+  for (const cl of _calendarCallLogs) {
+    const dkey = (cl.called_at || '').slice(0, 10);
+    const cell = grid.querySelector(`[data-date="${dkey}"]`);
+    if (!cell) continue;
+    const eventsDiv = cell.querySelector('.cal-cell-events');
+    if (!eventsDiv) continue;
+    const dur = cl.duration_sec ? `${Math.floor(cl.duration_sec / 60)}m` : '';
+    const chip = document.createElement('div');
+    chip.className = 'cal-event-chip cal-call-chip';
+    chip.title = `Call: ${cl.company_name || 'Unknown'} ${dur}`;
+    chip.textContent = `\u260E ${cl.company_name || 'Call'} ${dur}`;
+    eventsDiv.appendChild(chip);
+  }
+}
+
+async function loadOutlookStatus() {
+  const badge = $('#cal-outlook-badge');
+  if (!badge) return;
+  try {
+    const res = await fetch('/api/outlook/status');
+    const data = await res.json();
+    badge.textContent = data.connected ? 'Outlook: Connected' : 'Outlook: Not connected';
+    badge.className = 'cal-outlook-badge' + (data.connected ? ' cal-outlook-connected' : '');
+  } catch {
+    badge.textContent = 'Outlook: Not connected';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Initialization for new features
+// ═══════════════════════════════════════════════════════════════════
+
+function initNewFeatures() {
+  // Pipeline sub-tabs
+  $$('.pipeline-subtab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.pipeline-subtab').forEach(b => b.classList.toggle('active', b === btn));
+      const sub = btn.dataset.pipelineSub;
+      $('#pipeline-board-view').hidden = sub !== 'board';
+      $('#pipeline-pre-engagement-view').hidden = sub !== 'pre-engagement';
+      if (sub === 'pre-engagement') loadPreEngagement();
+    });
+  });
+
+  // Pre-engagement modal
+  $('#pe-add-btn')?.addEventListener('click', () => openPeModal(null));
+  $('#pe-modal-close')?.addEventListener('click', () => { $('#pe-modal').hidden = true; });
+  $('#pe-modal-cancel')?.addEventListener('click', () => { $('#pe-modal').hidden = true; });
+  $('#pe-modal-save')?.addEventListener('click', savePeItem);
+
+  // Stale filter
+  initStaleFilter();
+
+  // Deal contacts in detail — add button
+  $('#d-dc-add-btn')?.addEventListener('click', async () => {
+    const contactId = $('#d-dc-contact-select').value;
+    const role = $('#d-dc-role').value.trim();
+    if (!contactId || !state.activeId) return;
+    const res = await fetch(`/api/companies/${state.activeId}/deal-contacts`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ contact_id: contactId, role: role || null }),
+    });
+    if (res.ok) { toast('Contact linked', 'ok'); $('#d-dc-role').value = ''; loadDealContacts(state.activeId); }
+    else { const err = await res.json().catch(() => ({})); toast(err.error || 'Failed', 'error'); }
+  });
+
+  // Draft Invite button in detail
+  $('#d-draft-invite-btn')?.addEventListener('click', () => {
+    if (!state.activeId) return;
+    const company = state.companies.find(c => c.id === state.activeId);
+    // Switch to Invite tab
+    $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'invite'));
+    $$('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-invite'));
+    // Pre-fill title
+    if (company) {
+      $('#invite-title').value = `Call - ${company.name}`;
+    }
+  });
+
+  // Invite tab
+  initInviteTab();
+
+  // Documents tab
+  initDocumentsTab();
+
+  // Tab switch hooks for new tabs
+  const origTabHandlers = {};
+  $$('.tab', $('#main-tabs')).forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.tab;
+      if (target === 'invite') { /* already loaded via initInviteTab */ }
+      if (target === 'documents') { loadLegalDealDropdown(); }
+    });
+  });
+}
+
+// Deal contacts loaded inline in openDetail()
+
+document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); initMandateBindings(); initNewFeatures(); });

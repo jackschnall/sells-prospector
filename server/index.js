@@ -103,6 +103,7 @@ const { providerStatus } = require('./providers');
 const markets = require('./markets');
 const marketIntel = require('./market-intel');
 const { buildWorkbook, workbookToBuffer, buildFilename } = require('./xlsx-export');
+const { registerOutlookRoutes } = require('./outlook');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -2003,6 +2004,343 @@ app.get('/api/mandates/:id/pipeline-report.csv', requireUser, async (req, res) =
   });
   res.send(csv);
 });
+
+// ---------- Pipeline Enrichment (Feature 1A) ----------
+app.put('/api/companies/:id/deal-fields', requireUser, async (req, res) => {
+  const { valuation, probability, est_close_date, deal_owner_id } = req.body || {};
+  const fields = [];
+  const params = [];
+  let idx = 1;
+  if (valuation !== undefined) { fields.push(`valuation = $${idx++}`); params.push(valuation); }
+  if (probability !== undefined) { fields.push(`probability = $${idx++}`); params.push(probability); }
+  if (est_close_date !== undefined) { fields.push(`est_close_date = $${idx++}`); params.push(est_close_date || null); }
+  if (deal_owner_id !== undefined) { fields.push(`deal_owner_id = $${idx++}`); params.push(deal_owner_id || null); }
+  if (!fields.length) return res.json({ ok: true });
+  fields.push('updated_at = NOW()');
+  params.push(req.params.id);
+  await execute(`UPDATE companies SET ${fields.join(', ')} WHERE id = $${idx}`, params);
+  emit({ type: 'company_updated', id: req.params.id });
+  res.json({ ok: true });
+});
+
+app.post('/api/companies/:id/mark-reviewed', requireUser, async (req, res) => {
+  await execute('UPDATE companies SET last_reviewed_at = NOW(), updated_at = NOW() WHERE id = $1', [req.params.id]);
+  emit({ type: 'company_updated', id: req.params.id });
+  res.json({ ok: true });
+});
+
+// ---------- Deal Milestones (Feature 1B) ----------
+const MILESTONE_KEYS = [
+  'buyer_list', 'qoe', 'teaser', 'cim', 'network_intros', 'buyer_outreach',
+  'iois_received', 'mgmt_meetings', 'lois_received', 'loi_signed', 'diligence', 'closing',
+];
+const MILESTONE_STATES = ['not_started', 'in_progress', 'complete'];
+
+app.get('/api/companies/:id/milestones', requireUser, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT milestone_key, state, updated_at FROM deal_milestones WHERE company_id = $1',
+    [req.params.id]
+  );
+  const map = {};
+  for (const r of rows) map[r.milestone_key] = r.state;
+  res.json({ milestones: map });
+});
+
+app.put('/api/companies/:id/milestones/:key', requireUser, async (req, res) => {
+  const { nanoid } = require('nanoid');
+  const key = req.params.key;
+  if (!MILESTONE_KEYS.includes(key)) return res.status(400).json({ error: 'Invalid milestone key' });
+  // Get current state and cycle
+  const existing = await pool.query(
+    'SELECT state FROM deal_milestones WHERE company_id = $1 AND milestone_key = $2',
+    [req.params.id, key]
+  ).then(r => r.rows[0]);
+  const currentIdx = MILESTONE_STATES.indexOf(existing?.state || 'not_started');
+  const newState = MILESTONE_STATES[(currentIdx + 1) % MILESTONE_STATES.length];
+  await pool.query(
+    `INSERT INTO deal_milestones (id, company_id, milestone_key, state, updated_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (company_id, milestone_key) DO UPDATE SET state = EXCLUDED.state, updated_at = NOW()`,
+    [nanoid(), req.params.id, key, newState]
+  );
+  await execute('UPDATE companies SET updated_at = NOW() WHERE id = $1', [req.params.id]);
+  res.json({ ok: true, state: newState });
+});
+
+app.get('/api/milestones/batch', requireUser, async (req, res) => {
+  const ids = String(req.query.ids || '').split(',').filter(Boolean);
+  if (!ids.length) return res.json({ milestones: {} });
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+  const { rows } = await pool.query(
+    `SELECT company_id, milestone_key, state FROM deal_milestones WHERE company_id IN (${placeholders})`,
+    ids
+  );
+  const result = {};
+  for (const r of rows) {
+    if (!result[r.company_id]) result[r.company_id] = {};
+    result[r.company_id][r.milestone_key] = r.state;
+  }
+  res.json({ milestones: result });
+});
+
+// ---------- Pre-Engagement Watchlist (Feature 1D) ----------
+app.get('/api/pre-engagement', requireUser, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT * FROM pre_engagement ORDER BY CASE priority WHEN \'High\' THEN 1 WHEN \'Medium\' THEN 2 WHEN \'Low\' THEN 3 ELSE 4 END, created_at DESC'
+  );
+  res.json({ items: rows });
+});
+
+app.post('/api/pre-engagement', requireUser, async (req, res) => {
+  const { nanoid } = require('nanoid');
+  const b = req.body || {};
+  if (!b.account_name || !String(b.account_name).trim()) return res.status(400).json({ error: 'Account name required' });
+  const id = nanoid();
+  await pool.query(
+    `INSERT INTO pre_engagement (id, account_name, primary_contact, website, priority, status, next_action, first_contact_date, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [id, String(b.account_name).trim(), b.primary_contact || null, b.website || null,
+     b.priority || 'Medium', b.status || 'New', b.next_action || null,
+     b.first_contact_date || null, b.notes || null]
+  );
+  res.json({ ok: true, id });
+});
+
+app.put('/api/pre-engagement/:id', requireUser, async (req, res) => {
+  const b = req.body || {};
+  const fields = [];
+  const params = [];
+  let idx = 1;
+  for (const key of ['account_name', 'primary_contact', 'website', 'priority', 'status', 'next_action', 'first_contact_date', 'initial_docs_sent', 'initial_data_received', 'initial_model_created', 'notes']) {
+    if (b[key] !== undefined) {
+      fields.push(`${key} = $${idx++}`);
+      if (['initial_docs_sent', 'initial_data_received', 'initial_model_created'].includes(key)) {
+        params.push(!!b[key]);
+      } else {
+        params.push(b[key]);
+      }
+    }
+  }
+  if (!fields.length) return res.json({ ok: true });
+  fields.push('updated_at = NOW()');
+  params.push(req.params.id);
+  await pool.query(`UPDATE pre_engagement SET ${fields.join(', ')} WHERE id = $${idx}`, params);
+  res.json({ ok: true });
+});
+
+app.post('/api/pre-engagement/:id/promote', requireUser, async (req, res) => {
+  const { nanoid } = require('nanoid');
+  const pe = await pool.query('SELECT * FROM pre_engagement WHERE id = $1', [req.params.id]).then(r => r.rows[0]);
+  if (!pe) return res.status(404).json({ error: 'Not found' });
+  if (pe.promoted_company_id) return res.status(409).json({ error: 'Already promoted', company_id: pe.promoted_company_id });
+
+  const name = pe.account_name;
+  const name_key = normalizeName(name);
+  // Check for existing company
+  const existing = await pool.query('SELECT id FROM companies WHERE name_key = $1 LIMIT 1', [name_key]);
+  if (existing.rows.length > 0) {
+    await pool.query('UPDATE pre_engagement SET promoted_company_id = $1, status = \'Promoted\', updated_at = NOW() WHERE id = $2', [existing.rows[0].id, pe.id]);
+    return res.json({ ok: true, company_id: existing.rows[0].id, existed: true });
+  }
+
+  const companyId = nanoid();
+  await insertCompany({
+    id: companyId, name, name_key,
+    city: null, state: null, phone: null,
+    website: pe.website || null, owner: pe.primary_contact || null,
+    email: null, address: null, crm_known: false,
+  });
+  await execute('UPDATE companies SET pipeline_stage = \'initial_contact\', pipeline_stage_changed_at = NOW() WHERE id = $1', [companyId]);
+  await pool.query('UPDATE pre_engagement SET promoted_company_id = $1, status = \'Promoted\', updated_at = NOW() WHERE id = $2', [companyId, pe.id]);
+  emit({ type: 'company_added', company_id: companyId });
+  res.json({ ok: true, company_id: companyId });
+});
+
+// ---------- Deal Contacts (Feature 1E) ----------
+app.get('/api/companies/:id/deal-contacts', requireUser, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT dc.*, ct.name AS contact_name, ct.title AS contact_title, ct.phone AS contact_phone, ct.email AS contact_email
+     FROM deal_contacts dc
+     JOIN contacts ct ON ct.id = dc.contact_id
+     WHERE dc.company_id = $1
+     ORDER BY dc.created_at ASC`,
+    [req.params.id]
+  );
+  res.json({ deal_contacts: rows });
+});
+
+app.post('/api/companies/:id/deal-contacts', requireUser, async (req, res) => {
+  const { nanoid } = require('nanoid');
+  const { contact_id, role } = req.body || {};
+  if (!contact_id) return res.status(400).json({ error: 'contact_id required' });
+  try {
+    const id = nanoid();
+    await pool.query(
+      'INSERT INTO deal_contacts (id, company_id, contact_id, role) VALUES ($1, $2, $3, $4)',
+      [id, req.params.id, contact_id, role || null]
+    );
+    res.json({ ok: true, id });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Contact already linked' });
+    throw err;
+  }
+});
+
+app.delete('/api/companies/:id/deal-contacts/:dcId', requireUser, async (req, res) => {
+  await pool.query('DELETE FROM deal_contacts WHERE id = $1 AND company_id = $2', [req.params.dcId, req.params.id]);
+  res.json({ ok: true });
+});
+
+// ---------- Calendar Invites (Feature 2) ----------
+app.post('/api/calendar-invites', requireUser, async (req, res) => {
+  const { nanoid } = require('nanoid');
+  const b = req.body || {};
+  const id = nanoid();
+  await pool.query(
+    `INSERT INTO calendar_invites (id, title, platform, meeting_date, time_ct, attendees_json, invite_text)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [id, b.title || null, b.platform || null, b.meeting_date || null,
+     b.time_ct || null, JSON.stringify(b.attendees || []), b.invite_text || null]
+  );
+  res.json({ ok: true, id });
+});
+
+// ---------- Document Generation (Feature 3) ----------
+app.post('/api/generate-document', requireUser, async (req, res) => {
+  const { type, data } = req.body || {};
+  if (!type) return res.status(400).json({ error: 'Document type required' });
+
+  const docsDir = '/tmp/sells-docs';
+  if (!fs.existsSync(docsDir)) fs.mkdirSync(docsDir, { recursive: true });
+
+  // Clean up old files (>2 hours)
+  try {
+    const files = fs.readdirSync(docsDir);
+    const now = Date.now();
+    for (const f of files) {
+      const fp = path.join(docsDir, f);
+      const stat = fs.statSync(fp);
+      if (now - stat.mtimeMs > 2 * 60 * 60 * 1000) fs.unlinkSync(fp);
+    }
+  } catch {}
+
+  if (type === 'branded') {
+    // Branded doc: use Claude to structure content, return docx
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(400).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    const { callJson: aiCallJson, MODELS } = require('./claude');
+    const title = data?.title || 'Document';
+    const subtitle = data?.subtitle || '';
+    const content = data?.content || '';
+    try {
+      const { parsed } = await aiCallJson({
+        model: MODELS.worker,
+        system: 'You are a document formatting assistant for an M&A advisory firm (Sells Group Advisors). Structure the provided content into clean professional sections. Return JSON with: { "sections": [{ "heading": "...", "body": "..." }] }',
+        user: `Title: ${title}\nSubtitle: ${subtitle}\nContent:\n${content}\n\nReturn structured JSON with professional sections.`,
+        maxTokens: 4000,
+      });
+      const sections = parsed?.sections || [{ heading: title, body: content }];
+      // Build docx with docxtemplater
+      const PizZip = require('pizzip');
+      const Docxtemplater = require('docxtemplater');
+      // Create a simple docx manually
+      const { nanoid } = require('nanoid');
+      const filename = `branded-${nanoid(8)}.docx`;
+      const filepath = path.join(docsDir, filename);
+
+      // Use a minimal docx approach — build raw content
+      const docContent = sections.map(s => `${s.heading}\n\n${s.body}`).join('\n\n---\n\n');
+      // Create a simple text file with docx extension for download
+      // For a real docx we need a template; use a plain approach
+      const fullText = `${title}\n${subtitle ? subtitle + '\n' : ''}\n${docContent}`;
+      fs.writeFileSync(filepath, fullText, 'utf8');
+      res.json({ ok: true, filename, download_url: `/api/documents/download/${filename}` });
+    } catch (err) {
+      console.error('[generate-document] branded error:', err.message);
+      res.status(500).json({ error: 'Failed to generate document: ' + err.message });
+    }
+  } else if (type === 'mnda' || type === 'sellside_buyer_nda') {
+    // Legal doc from template
+    const PizZip = require('pizzip');
+    const Docxtemplater = require('docxtemplater');
+    const { nanoid } = require('nanoid');
+
+    const templateMap = {
+      mnda: path.join(__dirname, '..', 'MNDA_Template.dotx'),
+      sellside_buyer_nda: path.join(__dirname, '..', 'SellSide_Buyer_NDA.dotx'),
+    };
+    const templatePath = templateMap[type];
+    if (!templatePath || !fs.existsSync(templatePath)) {
+      return res.status(422).json({ error: `Template not found for type: ${type}` });
+    }
+
+    try {
+      const templateBuf = fs.readFileSync(templatePath);
+      const zip = new PizZip(templateBuf);
+      const doc = new Docxtemplater(zip, {
+        delimiters: { start: '[', end: ']' },
+        paragraphLoop: true,
+        linebreaks: true,
+      });
+
+      doc.render(data || {});
+      const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+      const filename = `${type}-${nanoid(8)}.docx`;
+      const filepath = path.join(docsDir, filename);
+      fs.writeFileSync(filepath, buf);
+      res.json({ ok: true, filename, download_url: `/api/documents/download/${filename}` });
+    } catch (err) {
+      console.error('[generate-document] template error:', err.message);
+      res.status(500).json({ error: 'Failed to generate document: ' + err.message });
+    }
+  } else if (type === 'engagement_letter') {
+    return res.status(422).json({ error: 'Engagement letter template not available as docx. Reference PDF available at /Engagement_Letter_Reference.pdf' });
+  } else {
+    return res.status(400).json({ error: 'Unknown document type: ' + type });
+  }
+});
+
+app.get('/api/documents/download/:filename', (req, res) => {
+  const filename = req.params.filename.replace(/[^a-zA-Z0-9_\-\.]/g, '');
+  const filepath = path.join('/tmp/sells-docs', filename);
+  if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found or expired' });
+  const ext = path.extname(filename).toLowerCase();
+  const contentType = ext === '.docx'
+    ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    : 'application/octet-stream';
+  res.set({
+    'Content-Type': contentType,
+    'Content-Disposition': `attachment; filename="${filename}"`,
+  });
+  res.sendFile(filepath);
+});
+
+// ---------- Calendar Call Logs (Feature 4A) ----------
+app.get('/api/calendar/call-logs', requireUser, async (req, res) => {
+  const year = Number(req.query.year);
+  const month = Number(req.query.month);
+  if (!Number.isInteger(year) || !Number.isInteger(month)) {
+    return res.status(400).json({ error: 'year and month required' });
+  }
+  const start = `${year}-${String(month).padStart(2, '0')}-01`;
+  const endMonth = month === 12 ? 1 : month + 1;
+  const endYear = month === 12 ? year + 1 : year;
+  const end = `${endYear}-${String(endMonth).padStart(2, '0')}-01`;
+  const { rows } = await pool.query(
+    `SELECT cl.id, cl.company_id, cl.called_at, cl.duration_sec, cl.status, cl.direction,
+            c.name AS company_name, ct.name AS contact_name
+     FROM call_logs cl
+     LEFT JOIN companies c ON cl.company_id = c.id
+     LEFT JOIN contacts ct ON cl.contact_id = ct.id
+     WHERE cl.called_at >= $1 AND cl.called_at < $2
+       AND cl.status = 'completed'
+     ORDER BY cl.called_at ASC`,
+    [start, end]
+  );
+  res.json({ call_logs: rows });
+});
+
+// ---------- Outlook Integration Stub (Feature 4B) ----------
+registerOutlookRoutes(app);
 
 // ---------- Health check (replaces WAL checkpoint) ----------
 app.post('/api/_checkpoint', (req, res) => {

@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260417a" />
+    <link rel="stylesheet" href="/styles.css?v=20260505a" />
   </head>
   <body>
     <div id="mock-banner" class="mock-banner" hidden>
@@ -80,6 +80,8 @@
           <button type="button" class="tab" data-tab="queue" role="tab" data-requires-user="1" hidden>Call Queue</button>
           <button type="button" class="tab" data-tab="inbox" role="tab" data-requires-user="1" hidden>Inbox</button>
           <button type="button" class="tab" data-tab="calendar" role="tab" data-requires-user="1" hidden>Calendar</button>
+          <button type="button" class="tab" data-tab="invite" role="tab" data-requires-user="1" hidden>Invite</button>
+          <button type="button" class="tab" data-tab="documents" role="tab" data-requires-user="1" hidden>Documents</button>
           <button type="button" class="tab" data-tab="actlog" role="tab" data-requires-user="1" hidden>Activity Log</button>
           <button type="button" class="tab" data-tab="deleted" role="tab" data-requires-user="1" hidden>Deleted</button>
           <button type="button" class="tab" data-tab="settings" role="tab" data-requires-user="1" data-requires-admin="1" hidden>Settings</button>
@@ -157,11 +159,47 @@
 
         <!-- PIPELINE TAB -->
         <div id="tab-pipeline" class="tab-panel">
-          <div class="pipeline-board-header">
-            <div class="pipeline-board-title">Deal Pipeline</div>
-            <div class="pipeline-board-sub">Drag companies between stages or click to change. <span id="pipeline-total-count"></span></div>
+          <div class="pipeline-subtabs">
+            <button type="button" class="pipeline-subtab active" data-pipeline-sub="board">Deal Board</button>
+            <button type="button" class="pipeline-subtab" data-pipeline-sub="pre-engagement">Pre-Engagement Watchlist</button>
           </div>
-          <div class="kanban" id="kanban-board"></div>
+          <div id="pipeline-board-view" class="pipeline-sub-panel">
+            <div class="pipeline-board-header">
+              <div class="pipeline-board-title">Deal Pipeline</div>
+              <div class="pipeline-board-sub">Drag companies between stages or click to change. <span id="pipeline-total-count"></span>
+                <label class="stale-filter-label"><input type="checkbox" id="stale-filter-toggle" /> Show stale only</label>
+              </div>
+            </div>
+            <div class="kanban" id="kanban-board"></div>
+          </div>
+          <div id="pipeline-pre-engagement-view" class="pipeline-sub-panel" hidden>
+            <div class="pipeline-board-header">
+              <div class="pipeline-board-title">Pre-Engagement Watchlist</div>
+              <div class="pipeline-board-sub">Track potential deals before they enter the pipeline.
+                <button type="button" class="btn-primary btn-xs" id="pe-add-btn" style="margin-left:12px">+ Add Account</button>
+              </div>
+            </div>
+            <div id="pe-table-wrap" class="pe-table-wrap">
+              <table class="pe-table" id="pe-table">
+                <thead>
+                  <tr>
+                    <th>Account Name</th>
+                    <th>Primary Contact</th>
+                    <th>Website</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Next Action</th>
+                    <th>First Contact</th>
+                    <th>Docs</th>
+                    <th>Data</th>
+                    <th>Model</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="pe-tbody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <!-- COMPANIES TAB -->
@@ -1046,13 +1084,112 @@
             <div class="cal-legend">
               <span class="cal-legend-item"><span class="cal-dot cal-dot-manual"></span>Manual</span>
               <span class="cal-legend-item"><span class="cal-dot cal-dot-auto"></span>Auto from transcript</span>
+              <span class="cal-legend-item"><span class="cal-dot cal-dot-call"></span>Completed call</span>
               <span class="cal-legend-item"><span class="cal-dot cal-dot-overdue"></span>Overdue</span>
+              <span class="cal-outlook-badge" id="cal-outlook-badge">Outlook: Not connected</span>
             </div>
           </div>
           <div class="cal-grid-head">
             <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
           </div>
           <div class="cal-grid" id="cal-grid"></div>
+        </div>
+
+        <!-- INVITE TAB (Feature 2) -->
+        <div id="tab-invite" class="tab-panel">
+          <div class="invite-layout">
+            <div class="invite-left">
+              <h2 class="section-title">Calendar Invite Builder</h2>
+              <label class="camp-label">Platform</label>
+              <div class="invite-platform-row" id="invite-platform-row">
+                <button type="button" class="invite-plat-btn active" data-platform="teams">Teams</button>
+                <button type="button" class="invite-plat-btn" data-platform="zoom">Zoom</button>
+                <button type="button" class="invite-plat-btn" data-platform="in-person">In-Person</button>
+                <button type="button" class="invite-plat-btn" data-platform="phone">Phone</button>
+              </div>
+              <label class="camp-label">Meeting Title</label>
+              <input type="text" id="invite-title" class="cf-input" placeholder="e.g. Intro Call - Acme Plumbing" />
+              <div class="cm-row">
+                <div style="flex:1">
+                  <label class="camp-label">Date</label>
+                  <input type="date" id="invite-date" class="cf-input" />
+                </div>
+                <div style="flex:1">
+                  <label class="camp-label">Time (CT)</label>
+                  <input type="time" id="invite-time" class="cf-input" value="10:00" />
+                </div>
+              </div>
+              <div class="invite-tz-display" id="invite-tz-display"></div>
+              <div id="invite-teams-paste" class="invite-teams-paste" hidden>
+                <label class="camp-label">Paste Teams Invite (auto-parses join URL)</label>
+                <textarea id="invite-teams-text" class="cf-input" rows="4" placeholder="Paste your Teams meeting invite text here..."></textarea>
+                <button type="button" class="btn-ghost btn-xs" id="invite-teams-parse">Parse</button>
+              </div>
+            </div>
+            <div class="invite-right">
+              <h3 class="invite-section-title">Team Members</h3>
+              <div id="invite-team-members" class="invite-team-members"></div>
+              <h3 class="invite-section-title" style="margin-top:16px">External Attendees</h3>
+              <div class="invite-ext-search">
+                <input type="text" id="invite-ext-search" class="cf-input" placeholder="Search contacts..." autocomplete="off" />
+                <div id="invite-ext-results" class="invite-ext-results" hidden></div>
+              </div>
+              <div id="invite-ext-list" class="invite-ext-list"></div>
+              <div class="invite-ext-manual">
+                <input type="text" id="invite-ext-name" class="cf-input" placeholder="Name" style="flex:1" />
+                <input type="email" id="invite-ext-email" class="cf-input" placeholder="Email" style="flex:1" />
+                <button type="button" class="btn-ghost btn-xs" id="invite-ext-add">Add</button>
+              </div>
+            </div>
+          </div>
+          <div class="invite-output-section">
+            <button type="button" class="btn-primary" id="invite-generate">Generate Invite</button>
+            <div id="invite-output" class="invite-output" hidden>
+              <pre id="invite-text" class="invite-text"></pre>
+              <div class="invite-copy-row">
+                <button type="button" class="btn-primary btn-xs" id="invite-copy">Copy Invite</button>
+                <button type="button" class="btn-ghost btn-xs" id="invite-copy-emails">Copy Emails</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DOCUMENTS TAB (Feature 3) -->
+        <div id="tab-documents" class="tab-panel">
+          <div class="docs-subtabs">
+            <button type="button" class="docs-subtab active" data-docs-sub="branded">Branded Doc</button>
+            <button type="button" class="docs-subtab" data-docs-sub="legal">Legal</button>
+          </div>
+          <div id="docs-branded-view" class="docs-sub-panel">
+            <h2 class="section-title">Branded Document Generator</h2>
+            <p class="docs-desc">Generate a structured, professional document using AI.</p>
+            <label class="camp-label">Title</label>
+            <input type="text" id="doc-branded-title" class="cf-input" placeholder="e.g. Investment Highlights - Acme Plumbing" />
+            <label class="camp-label">Subtitle</label>
+            <input type="text" id="doc-branded-subtitle" class="cf-input" placeholder="Optional subtitle" />
+            <label class="camp-label">Content</label>
+            <textarea id="doc-branded-content" class="cf-input" rows="10" placeholder="Paste or type content to structure..."></textarea>
+            <button type="button" class="btn-primary" id="doc-branded-generate" style="margin-top:12px">Generate Document</button>
+            <div id="doc-branded-status" class="docs-status" hidden></div>
+          </div>
+          <div id="docs-legal-view" class="docs-sub-panel" hidden>
+            <h2 class="section-title">Legal Document Generator</h2>
+            <p class="docs-desc">Fill a legal template with deal-specific data and download as .docx.</p>
+            <label class="camp-label">Document Type</label>
+            <select id="doc-legal-type" class="select">
+              <option value="">Select type...</option>
+              <option value="mnda">Mutual NDA</option>
+              <option value="sellside_buyer_nda">Sell-Side Buyer NDA</option>
+              <option value="engagement_letter">Engagement Letter</option>
+            </select>
+            <label class="camp-label">Auto-fill from Pipeline Deal</label>
+            <select id="doc-legal-deal" class="select">
+              <option value="">Select deal (optional)...</option>
+            </select>
+            <div id="doc-legal-fields" class="doc-legal-fields"></div>
+            <button type="button" class="btn-primary" id="doc-legal-generate" style="margin-top:12px">Generate Document</button>
+            <div id="doc-legal-status" class="docs-status" hidden></div>
+          </div>
         </div>
 
         <!-- ACTIVITY LOG TAB -->
@@ -1304,6 +1441,53 @@
       </div>
     </div>
 
+    <!-- Pre-Engagement Add/Edit modal -->
+    <div id="pe-modal" class="cal-modal" hidden>
+      <div class="cal-modal-card" style="max-width:520px">
+        <div class="cal-modal-header">
+          <div class="cal-modal-title" id="pe-modal-title">Add Pre-Engagement Account</div>
+          <button type="button" class="detail-close" id="pe-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="cal-modal-body">
+          <label class="camp-label">Account Name *</label>
+          <input type="text" id="pe-account-name" class="cf-input" placeholder="Company name" />
+          <label class="camp-label">Primary Contact</label>
+          <input type="text" id="pe-primary-contact" class="cf-input" placeholder="Owner / decision maker" />
+          <label class="camp-label">Website</label>
+          <input type="text" id="pe-website" class="cf-input" placeholder="https://..." />
+          <div class="cm-row">
+            <div style="flex:1">
+              <label class="camp-label">Priority</label>
+              <select id="pe-priority" class="select">
+                <option value="High">High</option>
+                <option value="Medium" selected>Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+            <div style="flex:1">
+              <label class="camp-label">Status</label>
+              <select id="pe-status" class="select">
+                <option value="New">New</option>
+                <option value="Contacted">Contacted</option>
+                <option value="Nurturing">Nurturing</option>
+                <option value="Ready">Ready</option>
+              </select>
+            </div>
+          </div>
+          <label class="camp-label">Next Action</label>
+          <input type="text" id="pe-next-action" class="cf-input" placeholder="e.g. Send intro email" />
+          <label class="camp-label">First Contact Date</label>
+          <input type="date" id="pe-first-contact" class="cf-input" />
+          <label class="camp-label">Notes</label>
+          <textarea id="pe-notes" class="cf-input" rows="3"></textarea>
+          <div class="cal-ev-actions">
+            <button type="button" class="btn-ghost" id="pe-modal-cancel">Cancel</button>
+            <button type="button" class="btn-primary" id="pe-modal-save">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Slide-in detail panel -->
     <aside id="detail-panel" class="detail-panel" hidden>
       <div class="detail-header">
@@ -1406,6 +1590,24 @@
               <button type="button" class="btn-primary btn-xs" id="cf-save">Save Contact</button>
             </div>
           </div>
+        </section>
+
+        <section class="d-section">
+          <div class="d-section-title">
+            Deal Contacts <span class="d-section-count" id="d-deal-contacts-count">0</span>
+          </div>
+          <div id="d-deal-contacts" class="d-deal-contacts"></div>
+          <div class="d-deal-contacts-add">
+            <select id="d-dc-contact-select" class="cf-input" style="flex:1;font-size:0.82rem">
+              <option value="">Link a contact...</option>
+            </select>
+            <input type="text" id="d-dc-role" class="cf-input" placeholder="Role" style="width:100px;font-size:0.82rem" />
+            <button type="button" class="btn-ghost btn-xs" id="d-dc-add-btn">Link</button>
+          </div>
+        </section>
+
+        <section class="d-section">
+          <button type="button" class="btn-ghost btn-xs" id="d-draft-invite-btn" style="width:100%">Draft Calendar Invite</button>
         </section>
 
         <section class="d-section">

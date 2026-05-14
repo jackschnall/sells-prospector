@@ -5092,3 +5092,424 @@ body.detail-fullscreen { overflow: hidden; }
 }
 .queue-mandate-badge:hover { background: var(--gold-soft); color: #fff; }
 
+/* ═══════════════════════════════════════════════════════════════════
+   FEATURE 1: Pipeline Enrichment
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* 1A: Enrichment on kanban cards */
+.kc-enrichment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  font-size: 0.78rem;
+}
+.kc-val {
+  font-weight: 700;
+  color: var(--green);
+}
+.kc-prob {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.kc-prob-bar {
+  height: 4px;
+  border-radius: 2px;
+  flex: 1;
+  min-width: 20px;
+}
+.kc-prob-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.kc-close-badge {
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.kc-close-ok { background: var(--bg-soft); color: var(--text-muted); }
+.kc-close-soon { background: #FFF3CD; color: #856404; }
+.kc-close-overdue { background: #F8D7DA; color: #721C24; }
+.kc-owner-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--sidebar-bg);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* 1B: Milestone dots */
+.kc-milestones {
+  display: flex;
+  gap: 3px;
+  margin: 4px 0 2px;
+}
+.kc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.kc-dot:hover {
+  transform: scale(1.5);
+}
+
+/* 1C: Stale deal highlighting */
+.kc-stale {
+  border-left: 3px solid var(--red) !important;
+}
+.kc-stale-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+}
+.kanban-card {
+  position: relative;
+}
+.stale-filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 16px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+.stale-filter-label input { cursor: pointer; }
+
+/* Pipeline sub-tabs */
+.pipeline-subtabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--card-border);
+}
+.pipeline-subtab {
+  background: none;
+  border: none;
+  padding: 8px 18px;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.pipeline-subtab.active {
+  color: var(--gold-dark);
+  border-bottom-color: var(--gold);
+}
+.pipeline-subtab:hover { color: var(--head); }
+
+/* 1D: Pre-Engagement Table */
+.pe-table-wrap {
+  overflow-x: auto;
+}
+.pe-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+.pe-table th {
+  background: var(--bg-soft);
+  text-align: left;
+  padding: 8px 10px;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--card-border);
+  white-space: nowrap;
+}
+.pe-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--card-border-soft);
+  vertical-align: middle;
+}
+.pe-group-header td {
+  background: var(--bg);
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--head);
+  padding: 10px;
+}
+.pe-row.pe-promoted { opacity: 0.5; }
+.pe-priority-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.pe-priority-high { background: #F8D7DA; color: #721C24; }
+.pe-priority-medium { background: #FFF3CD; color: #856404; }
+.pe-priority-low { background: #D4EDDA; color: #155724; }
+.pe-promoted-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: var(--green);
+  color: #fff;
+}
+.pe-check { cursor: pointer; }
+
+/* 1E: Deal Contacts in detail */
+.d-deal-contacts { margin-bottom: 8px; }
+.dc-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--card-border-soft);
+}
+.dc-info strong { font-size: 0.88rem; }
+.dc-role-badge {
+  display: inline-block;
+  background: var(--gold-tint);
+  color: var(--gold-dark);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 8px;
+  margin-left: 6px;
+}
+.dc-detail {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.d-deal-contacts-add {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FEATURE 2: Invite Tab
+   ═══════════════════════════════════════════════════════════════════ */
+.invite-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+@media (max-width: 900px) {
+  .invite-layout { grid-template-columns: 1fr; }
+}
+.invite-section-title {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.invite-platform-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.invite-plat-btn {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  padding: 6px 16px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.84rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.invite-plat-btn.active {
+  background: var(--sidebar-bg);
+  color: #fff;
+  border-color: var(--sidebar-bg);
+}
+.invite-plat-btn:hover:not(.active) {
+  border-color: var(--gold);
+}
+.invite-tz-display {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 4px 0 8px;
+}
+.invite-teams-paste {
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--bg-soft);
+  border-radius: 8px;
+}
+.invite-team-members {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.invite-team-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+.invite-team-email {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+.invite-ext-search { position: relative; }
+.invite-ext-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card-hover);
+  z-index: 20;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.invite-ext-result {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.84rem;
+  display: flex;
+  justify-content: space-between;
+}
+.invite-ext-result:hover { background: var(--bg-soft); }
+.invite-ext-company { color: var(--text-muted); font-size: 0.78rem; }
+.invite-ext-list { margin: 8px 0; }
+.invite-ext-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 0.84rem;
+  border-bottom: 1px solid var(--card-border-soft);
+}
+.invite-ext-manual {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+.invite-output-section { margin-top: 16px; }
+.invite-output {
+  margin-top: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.invite-text {
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+.invite-copy-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FEATURE 3: Documents Tab
+   ═══════════════════════════════════════════════════════════════════ */
+.docs-subtabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--card-border);
+}
+.docs-subtab {
+  background: none;
+  border: none;
+  padding: 8px 18px;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.docs-subtab.active {
+  color: var(--gold-dark);
+  border-bottom-color: var(--gold);
+}
+.docs-subtab:hover { color: var(--head); }
+.docs-desc {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  margin-bottom: 16px;
+}
+.docs-status {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--bg-soft);
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+.doc-legal-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  margin-top: 12px;
+}
+@media (max-width: 700px) {
+  .doc-legal-fields { grid-template-columns: 1fr; }
+}
+.doc-field-row {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FEATURE 4: Calendar Enhancement
+   ═══════════════════════════════════════════════════════════════════ */
+.cal-call-chip {
+  background: #E0F2F1 !important;
+  color: #00695C !important;
+  border-left: 3px solid #009688 !important;
+  font-size: 0.72rem;
+}
+.cal-dot-call {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  background: #009688;
+}
+.cal-outlook-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  margin-left: 12px;
+}
+.cal-outlook-connected {
+  background: #D4EDDA;
+  color: #155724;
+}
+
+

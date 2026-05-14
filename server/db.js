@@ -477,7 +477,8 @@ async function getPipelineBoard({ restrictToVerticals, restrictToTerritories } =
   }
   const rows = await query(
     `SELECT id, name, score, tier, owner, pipeline_stage, closed_lost_reason,
-            pipeline_stage_changed_at, city, state, assigned_to
+            pipeline_stage_changed_at, city, state, assigned_to,
+            valuation, probability, est_close_date, deal_owner_id, last_reviewed_at, updated_at
      FROM companies
      WHERE ${conds.join(' AND ')}
      ORDER BY score DESC NULLS LAST, name ASC`,

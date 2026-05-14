@@ -372,3 +372,78 @@ CREATE TABLE IF NOT EXISTS progress_reports (
 );
 
 CREATE INDEX IF NOT EXISTS idx_progress_reports_mandate ON progress_reports(mandate_id);
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Pipeline Enrichment columns on companies
+-- ────────────────────────────────────────────────────────────────────────────
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS valuation INTEGER;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS probability INTEGER;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS est_close_date DATE;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS deal_owner_id TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS last_reviewed_at TIMESTAMPTZ;
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Deal Milestones (12-dot milestone strip per deal)
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS deal_milestones (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  milestone_key TEXT NOT NULL,
+  state TEXT DEFAULT 'not_started',
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(company_id, milestone_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_deal_milestones_company ON deal_milestones(company_id);
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Pre-Engagement Watchlist
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS pre_engagement (
+  id TEXT PRIMARY KEY,
+  account_name TEXT NOT NULL,
+  primary_contact TEXT,
+  website TEXT,
+  priority TEXT DEFAULT 'Medium',
+  status TEXT DEFAULT 'New',
+  next_action TEXT,
+  first_contact_date DATE,
+  initial_docs_sent BOOLEAN DEFAULT FALSE,
+  initial_data_received BOOLEAN DEFAULT FALSE,
+  initial_model_created BOOLEAN DEFAULT FALSE,
+  notes TEXT,
+  promoted_company_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pre_engagement_priority ON pre_engagement(priority);
+CREATE INDEX IF NOT EXISTS idx_pre_engagement_status ON pre_engagement(status);
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Deal Contacts (linked contacts with role per deal)
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS deal_contacts (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  contact_id TEXT NOT NULL,
+  role TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(company_id, contact_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_deal_contacts_company ON deal_contacts(company_id);
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Calendar Invites (Feature 2: Invite Tab)
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS calendar_invites (
+  id TEXT PRIMARY KEY,
+  title TEXT,
+  platform TEXT,
+  meeting_date DATE,
+  time_ct TEXT,
+  attendees_json JSONB,
+  invite_text TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
