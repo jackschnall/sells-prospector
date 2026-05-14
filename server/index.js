@@ -2007,7 +2007,7 @@ app.get('/api/mandates/:id/pipeline-report.csv', requireUser, async (req, res) =
 
 // ---------- Pipeline Enrichment (Feature 1A) ----------
 app.put('/api/companies/:id/deal-fields', requireUser, async (req, res) => {
-  const { valuation, probability, est_close_date, deal_owner_id } = req.body || {};
+  const { valuation, probability, est_close_date, deal_owner_id, deal_priority, next_steps } = req.body || {};
   const fields = [];
   const params = [];
   let idx = 1;
@@ -2015,6 +2015,8 @@ app.put('/api/companies/:id/deal-fields', requireUser, async (req, res) => {
   if (probability !== undefined) { fields.push(`probability = $${idx++}`); params.push(probability); }
   if (est_close_date !== undefined) { fields.push(`est_close_date = $${idx++}`); params.push(est_close_date || null); }
   if (deal_owner_id !== undefined) { fields.push(`deal_owner_id = $${idx++}`); params.push(deal_owner_id || null); }
+  if (deal_priority !== undefined) { fields.push(`deal_priority = $${idx++}`); params.push(deal_priority || null); }
+  if (next_steps !== undefined) { fields.push(`next_steps = $${idx++}`); params.push(next_steps || null); }
   if (!fields.length) return res.json({ ok: true });
   fields.push('updated_at = NOW()');
   params.push(req.params.id);

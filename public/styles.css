@@ -5512,4 +5512,32 @@ body.detail-fullscreen { overflow: hidden; }
   color: #155724;
 }
 
-
+/* ═══ Deal Popup Modal ═══ */
+.deal-popup-card { max-width: 560px; width: 95vw; }
+.dp-header-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.dp-field-inline { display: flex; align-items: center; gap: 4px; font-size: 0.82rem; }
+.dp-field-inline label { font-weight: 600; color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
+.dp-field-inline select { font-size: 0.82rem; padding: 3px 6px; }
+.dp-reviewed-text { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 12px; text-align: right; }
+.dp-metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+.dp-field label { font-size: 0.72rem; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.04em; display: block; margin-bottom: 2px; }
+.dp-field input { font-size: 0.88rem; }
+.dp-static-value { font-size: 0.88rem; padding: 6px 0; color: var(--text); }
+.dp-section { margin-top: 16px; }
+.dp-section-title { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; margin-bottom: 8px; }
+.dp-hint { font-weight: 400; font-size: 0.7rem; color: var(--text-muted); }
+.dp-milestones { display: flex; flex-wrap: wrap; gap: 6px; }
+.dp-ms-pill {
+  padding: 4px 10px; border-radius: 4px; font-size: 0.78rem; font-weight: 600;
+  border: 2px solid; cursor: pointer; transition: all 0.15s;
+}
+.dp-ms-not_started { background: #fff; border-color: #d4d4d4; color: #888; }
+.dp-ms-in_progress { background: #fef9e7; border-color: #C9A84C; color: #92700C; }
+.dp-ms-complete { background: #e8f9ee; border-color: #22c55e; color: #166534; }
+.dp-ms-pill:hover { transform: scale(1.05); }
+.dp-notes-compose { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.dp-notes-list { display: flex; flex-direction: column; gap: 4px; }
+.dp-note { font-size: 0.82rem; color: var(--text); }
+.dp-note-date { color: var(--text-muted); font-size: 0.72rem; }
+.dp-empty { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
+.dp-quick-actions { display: flex; gap: 8px; }

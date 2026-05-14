@@ -1488,6 +1488,80 @@
       </div>
     </div>
 
+    <!-- Deal Popup Modal -->
+    <div id="deal-popup" class="cal-modal" hidden>
+      <div class="cal-modal-card deal-popup-card">
+        <div class="cal-modal-header">
+          <div class="cal-modal-title" id="dp-title">&mdash;</div>
+          <button type="button" class="detail-close" id="dp-close">&times;</button>
+        </div>
+        <div class="cal-modal-body">
+          <!-- Header row: Mark Reviewed + Stage + Priority -->
+          <div class="dp-header-row">
+            <button type="button" class="btn-primary btn-xs" id="dp-mark-reviewed">Mark Reviewed</button>
+            <div class="dp-field-inline">
+              <label>Stage:</label>
+              <select id="dp-stage" class="cf-input"></select>
+            </div>
+            <div class="dp-field-inline">
+              <label>Priority:</label>
+              <select id="dp-priority" class="cf-input">
+                <option value="">&mdash;</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+          </div>
+          <div class="dp-reviewed-text" id="dp-reviewed-text"></div>
+
+          <!-- Metrics row -->
+          <div class="dp-metrics-grid">
+            <div class="dp-field"><label>Valuation</label><input type="number" id="dp-valuation" class="cf-input" placeholder="e.g. 1500000" /></div>
+            <div class="dp-field"><label>Probability (%)</label><input type="number" id="dp-probability" class="cf-input" min="0" max="100" placeholder="e.g. 40" /></div>
+            <div class="dp-field"><label>Est. Close Date</label><input type="date" id="dp-close-date" class="cf-input" /></div>
+            <div class="dp-field"><label>Created Date</label><div id="dp-created-date" class="dp-static-value">&mdash;</div></div>
+          </div>
+          <button type="button" class="btn-ghost btn-xs" id="dp-save-metrics">Save metrics</button>
+
+          <!-- Milestones -->
+          <div class="dp-section">
+            <div class="dp-section-title">Milestones <span class="dp-hint">(click to cycle: Not Started &rarr; In Progress &rarr; Complete)</span></div>
+            <div id="dp-milestones" class="dp-milestones"></div>
+          </div>
+
+          <!-- Next Steps -->
+          <div class="dp-section">
+            <div class="dp-section-title">Next Steps</div>
+            <textarea id="dp-next-steps" class="cf-input" rows="2" placeholder="What needs to happen next..."></textarea>
+            <button type="button" class="btn-ghost btn-xs" id="dp-save-next-steps">Save next steps</button>
+          </div>
+
+          <!-- Notes -->
+          <div class="dp-section">
+            <div class="dp-section-title">Notes / Updates</div>
+            <div class="dp-notes-compose">
+              <textarea id="dp-note-input" class="cf-input" rows="2" placeholder="Add a timestamped note..."></textarea>
+              <button type="button" class="btn-ghost btn-xs" id="dp-add-note">Add note</button>
+            </div>
+            <div id="dp-notes-list" class="dp-notes-list"></div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="dp-section">
+            <div class="dp-section-title">Quick Actions</div>
+            <div class="dp-quick-actions">
+              <button type="button" class="btn-ghost btn-xs" id="dp-view-calls">&#x1F4DE; View calls</button>
+              <button type="button" class="btn-ghost btn-xs" id="dp-draft-invite">&#x1F4E7; Draft invite</button>
+            </div>
+          </div>
+
+          <!-- View Full Company -->
+          <button type="button" class="btn-primary" id="dp-view-full" style="width:100%;margin-top:12px;">View Full Company &rarr;</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Slide-in detail panel -->
     <aside id="detail-panel" class="detail-panel" hidden>
       <div class="detail-header">

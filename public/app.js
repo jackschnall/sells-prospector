@@ -475,11 +475,11 @@ function renderPipelineBoard() {
   const countEl = $('#pipeline-total-count');
   if (countEl) countEl.textContent = `${totalCount} companies total`;
 
-  // Click handlers on kanban cards
+  // Click handlers on kanban cards — open deal popup instead of detail panel
   $$('.kanban-card', host).forEach((el) => {
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('kc-dot')) return;
-      openDetail(el.dataset.id);
+      openDealPopup(el.dataset.id);
     });
   });
 
@@ -6207,4 +6207,202 @@ function initNewFeatures() {
 
 // Deal contacts loaded inline in openDetail()
 
-document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); initMandateBindings(); initNewFeatures(); });
+// ═══════════════════════════════════════════════════════════════════
+// Deal Popup Modal
+// ═══════════════════════════════════════════════════════════════════
+
+const DP_MS_KEYS = ['buyer_list','qoe','teaser','cim','network_intros','buyer_outreach','iois_received','mgmt_meetings','lois_received','loi_signed','diligence','closing'];
+const DP_MS_LABELS = {
+  buyer_list: 'Buyer List', qoe: 'QoE', teaser: 'Teaser', cim: 'CIM',
+  network_intros: 'Network Intros', buyer_outreach: 'Buyer Outreach',
+  iois_received: 'IOIs Received', mgmt_meetings: 'Mgmt Meetings',
+  lois_received: 'LOIs Received', loi_signed: 'LOI Signed',
+  diligence: 'Diligence', closing: 'Closing'
+};
+
+async function openDealPopup(companyId) {
+  state.dealPopupId = companyId;
+  const company = state.companies.find(c => c.id === companyId)
+    || (state.pipelineBoard ? Object.values(state.pipelineBoard).flat().find(c => c.id === companyId) : null);
+  if (!company) return;
+
+  // Title
+  $('#dp-title').textContent = company.name;
+
+  // Stage dropdown
+  const stageSelect = $('#dp-stage');
+  stageSelect.innerHTML = state.pipelineStages.map(s =>
+    `<option value="${s.key}" ${company.pipeline_stage === s.key ? 'selected' : ''}>${escapeHtml(s.label)}</option>`
+  ).join('');
+
+  // Priority
+  $('#dp-priority').value = company.deal_priority || '';
+
+  // Metrics
+  $('#dp-valuation').value = company.valuation || '';
+  $('#dp-probability').value = company.probability || '';
+  $('#dp-close-date').value = company.est_close_date ? company.est_close_date.split('T')[0] : '';
+  $('#dp-created-date').textContent = company.created_at
+    ? new Date(company.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '\u2014';
+
+  // Last reviewed
+  if (company.last_reviewed_at) {
+    const daysAgo = Math.floor((Date.now() - new Date(company.last_reviewed_at).getTime()) / 86400000);
+    $('#dp-reviewed-text').textContent = `Last reviewed ${daysAgo === 0 ? 'today' : daysAgo + 'd ago'}`;
+  } else {
+    $('#dp-reviewed-text').textContent = 'Not yet reviewed';
+  }
+
+  // Next steps
+  $('#dp-next-steps').value = company.next_steps || '';
+
+  // Load milestones
+  loadDealPopupMilestones(companyId);
+
+  // Load notes
+  loadDealPopupNotes(companyId);
+
+  // Show modal
+  $('#deal-popup').hidden = false;
+}
+
+function closeDealPopup() {
+  $('#deal-popup').hidden = true;
+  state.dealPopupId = null;
+}
+
+async function loadDealPopupMilestones(companyId) {
+  const container = $('#dp-milestones');
+  try {
+    const res = await fetch(`/api/companies/${companyId}/milestones`);
+    const data = await res.json();
+    const milestones = {};
+    (data.milestones || []).forEach(m => milestones[m.milestone_key] = m.state);
+
+    container.innerHTML = DP_MS_KEYS.map(k => {
+      const s = milestones[k] || 'not_started';
+      return `<button type="button" class="dp-ms-pill dp-ms-${s}" data-key="${k}" data-state="${s}">${escapeHtml(DP_MS_LABELS[k])}</button>`;
+    }).join('');
+
+    $$('.dp-ms-pill', container).forEach(pill => {
+      pill.addEventListener('click', async () => {
+        const key = pill.dataset.key;
+        const r = await fetch(`/api/companies/${companyId}/milestones/${key}`, { method: 'PUT' });
+        if (r.ok) {
+          const d = await r.json();
+          pill.dataset.state = d.state;
+          pill.className = `dp-ms-pill dp-ms-${d.state}`;
+          // Also update the kanban card dots
+          const dot = document.querySelector(`.kc-dot[data-company="${companyId}"][data-key="${key}"]`);
+          if (dot) {
+            dot.dataset.state = d.state;
+            dot.style.background = d.state === 'complete' ? 'var(--green)' : d.state === 'in_progress' ? 'var(--gold)' : '#ccc';
+          }
+        }
+      });
+    });
+  } catch { container.innerHTML = ''; }
+}
+
+async function loadDealPopupNotes(companyId) {
+  const list = $('#dp-notes-list');
+  try {
+    const res = await fetch(`/api/companies/${companyId}/notes`);
+    if (!res.ok) { list.innerHTML = '<div class="dp-empty">No notes yet.</div>'; return; }
+    const data = await res.json();
+    const notes = data.notes || [];
+    if (!notes.length) { list.innerHTML = '<div class="dp-empty">No notes yet.</div>'; return; }
+    list.innerHTML = notes.map(n => {
+      const date = n.created_at ? new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      return `<div class="dp-note">\u2022 ${escapeHtml(n.note || '')} <span class="dp-note-date">(${date})</span></div>`;
+    }).join('');
+  } catch { list.innerHTML = '<div class="dp-empty">No notes yet.</div>'; }
+}
+
+function initDealPopupBindings() {
+  $('#dp-close')?.addEventListener('click', closeDealPopup);
+
+  // Close on backdrop click
+  $('#deal-popup')?.addEventListener('click', (e) => {
+    if (e.target.id === 'deal-popup') closeDealPopup();
+  });
+
+  $('#dp-mark-reviewed')?.addEventListener('click', async () => {
+    const id = state.dealPopupId;
+    if (!id) return;
+    await fetch(`/api/companies/${id}/mark-reviewed`, { method: 'POST' });
+    $('#dp-reviewed-text').textContent = 'Last reviewed today';
+    toast('Marked as reviewed', 'ok');
+  });
+
+  $('#dp-save-metrics')?.addEventListener('click', async () => {
+    const id = state.dealPopupId;
+    if (!id) return;
+    const body = {
+      valuation: Number($('#dp-valuation').value) || null,
+      probability: Number($('#dp-probability').value) || null,
+      est_close_date: $('#dp-close-date').value || null,
+      deal_priority: $('#dp-priority').value || null,
+    };
+    await fetch(`/api/companies/${id}/deal-fields`, { method: 'PUT', headers: {'content-type':'application/json'}, body: JSON.stringify(body) });
+    toast('Metrics saved', 'ok');
+    loadPipelineBoard();
+  });
+
+  $('#dp-stage')?.addEventListener('change', async () => {
+    const id = state.dealPopupId;
+    const stage = $('#dp-stage').value;
+    if (!id || !stage) return;
+    await fetch(`/api/companies/${id}/pipeline`, { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ stage }) });
+    toast('Stage updated', 'ok');
+    loadPipelineBoard();
+  });
+
+  $('#dp-priority')?.addEventListener('change', async () => {
+    const id = state.dealPopupId;
+    if (!id) return;
+    const body = { deal_priority: $('#dp-priority').value || null };
+    await fetch(`/api/companies/${id}/deal-fields`, { method: 'PUT', headers: {'content-type':'application/json'}, body: JSON.stringify(body) });
+    toast('Priority updated', 'ok');
+  });
+
+  $('#dp-save-next-steps')?.addEventListener('click', async () => {
+    const id = state.dealPopupId;
+    if (!id) return;
+    const body = { next_steps: $('#dp-next-steps').value.trim() || null };
+    await fetch(`/api/companies/${id}/deal-fields`, { method: 'PUT', headers: {'content-type':'application/json'}, body: JSON.stringify(body) });
+    toast('Next steps saved', 'ok');
+  });
+
+  $('#dp-add-note')?.addEventListener('click', async () => {
+    const id = state.dealPopupId;
+    const text = $('#dp-note-input').value.trim();
+    if (!id || !text) return;
+    await fetch(`/api/companies/${id}/notes`, { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ note: text }) });
+    $('#dp-note-input').value = '';
+    loadDealPopupNotes(id);
+    toast('Note added', 'ok');
+  });
+
+  $('#dp-view-full')?.addEventListener('click', () => {
+    const id = state.dealPopupId;
+    closeDealPopup();
+    if (id) openDetail(id);
+  });
+
+  $('#dp-view-calls')?.addEventListener('click', () => {
+    const id = state.dealPopupId;
+    closeDealPopup();
+    if (id) openDetail(id);
+  });
+
+  $('#dp-draft-invite')?.addEventListener('click', () => {
+    const id = state.dealPopupId;
+    closeDealPopup();
+    const inviteTab = document.querySelector('.tab[data-tab="invite"]');
+    if (inviteTab) inviteTab.click();
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); initMandateBindings(); initNewFeatures(); initDealPopupBindings(); });

@@ -381,6 +381,8 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS probability INTEGER;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS est_close_date DATE;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS deal_owner_id TEXT;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS last_reviewed_at TIMESTAMPTZ;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS deal_priority TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS next_steps TEXT;
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- Deal Milestones (12-dot milestone strip per deal)
