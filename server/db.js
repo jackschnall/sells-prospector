@@ -460,7 +460,7 @@ function formatReason(r) {
 }
 
 async function getPipelineBoard({ restrictToVerticals, restrictToTerritories } = {}) {
-  const conds = ["(status = 'done' OR pipeline_stage != 'no_contact')"];
+  const conds = ["deleted_at IS NULL"];
   const params = [];
   let idx = 1;
   if (restrictToVerticals && restrictToVerticals.length) {

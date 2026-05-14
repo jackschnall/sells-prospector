@@ -588,7 +588,12 @@ function renderKanbanCard(c) {
         ${c.owner ? escapeHtml(c.owner) : ''}
         ${c.city ? ' · ' + escapeHtml(c.city) + (c.state ? ', ' + escapeHtml(c.state) : '') : ''}
       </div>
-      ${valStr || probBar || closeBadge ? `<div class="kc-enrichment">${valStr ? `<span class="kc-val">${valStr}</span>` : ''}${probBar}${closeBadge}</div>` : ''}
+      ${valStr || prob != null || c.est_close_date ? `<div class="kc-deal-info">
+        ${valStr ? `<div class="kc-deal-row"><span class="kc-deal-label">Valuation</span><span class="kc-deal-value">${valStr}</span></div>` : ''}
+        ${prob != null ? `<div class="kc-deal-row"><span class="kc-deal-label">Probability</span><span class="kc-deal-value">${prob}%</span></div>` : ''}
+        ${c.est_close_date ? `<div class="kc-deal-row"><span class="kc-deal-label">Close</span><span class="kc-deal-value">${new Date(c.est_close_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} ${closeBadge}</span></div>` : ''}
+        ${probBar}
+      </div>` : ''}
       <div class="kc-milestones">${dots}</div>
       ${daysInStage != null ? `<div class="kc-days">${daysInStage}d in stage</div>` : ''}
       ${c.closed_lost_reason ? `<span class="kc-reason">${escapeHtml(formatClosedReason(c.closed_lost_reason))}</span>` : ''}

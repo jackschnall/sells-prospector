@@ -2585,8 +2585,8 @@ body.detail-fullscreen { overflow: hidden; }
   min-height: 400px;
 }
 .kanban-col {
-  flex: 0 0 260px;
-  min-width: 240px;
+  flex: 0 0 300px;
+  min-width: 280px;
   background: var(--bg-soft);
   border: 1px solid var(--card-border);
   border-radius: 8px;
@@ -5106,6 +5106,20 @@ body.detail-fullscreen { overflow: hidden; }
    ═══════════════════════════════════════════════════════════════════ */
 
 /* 1A: Enrichment on kanban cards */
+.kc-deal-info {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(0,0,0,0.06);
+}
+.kc-deal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  padding: 1px 0;
+}
+.kc-deal-label { color: var(--text-muted); }
+.kc-deal-value { font-weight: 700; color: var(--text); }
 .kc-enrichment {
   display: flex;
   align-items: center;
