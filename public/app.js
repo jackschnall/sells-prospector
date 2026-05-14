@@ -6265,7 +6265,19 @@ const LEGAL_FIELDS = {
     { key: 'SIGNATORY TITLE', label: 'Signatory Title' },
     { key: 'SIGNATORY EMAIL', label: 'Signatory Email', type: 'email' },
   ],
-  engagement_letter: [],
+  engagement_letter: [
+    { key: 'date', label: 'Effective Date', type: 'date' },
+    { key: 'client_name', label: 'Client Legal Name' },
+    { key: 'jurisdiction', label: 'Jurisdiction (state of formation)' },
+    { key: 'entity_type', label: 'Entity Type (LLC, Corporation, LP, etc.)' },
+    { key: 'retainer_fee', label: 'Retainer Fee ($)', type: 'number' },
+    { key: 'success_fee_pct', label: 'Success Fee (%)', type: 'number' },
+    { key: 'success_fee_min', label: 'Success Fee Minimum ($)', type: 'number' },
+    { key: 'client_contact', label: 'Client Contact (Name, Title)' },
+    { key: 'client_address', label: 'Client Street Address' },
+    { key: 'client_city_state_zip', label: 'Client City, State, ZIP' },
+    { key: 'client_email', label: 'Client Email', type: 'email' },
+  ],
 };
 
 function initDocumentsTab() {
@@ -6311,7 +6323,7 @@ function initDocumentsTab() {
     const fields = LEGAL_FIELDS[type] || [];
     const host = $('#doc-legal-fields');
     if (!fields.length) {
-      host.innerHTML = type === 'engagement_letter' ? '<p style="color:var(--text-muted)">Engagement letter template not available as fillable docx. Reference PDF available for download.</p>' : '';
+      host.innerHTML = '';
       return;
     }
     host.innerHTML = fields.map(f => `

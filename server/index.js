@@ -2337,7 +2337,133 @@ app.post('/api/generate-document', requireUser, async (req, res) => {
       res.status(500).json({ error: 'Failed to generate document: ' + err.message });
     }
   } else if (type === 'engagement_letter') {
-    return res.status(422).json({ error: 'Engagement letter template not available as docx. Reference PDF available at /Engagement_Letter_Reference.pdf' });
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Footer, PageNumber, NumberFormat } = require('docx');
+    const { nanoid } = require('nanoid');
+    const d = data || {};
+
+    // Number to words helper
+    function n2w(n) {
+      const ones = ['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+      const tens = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+      if (n === 0) return 'zero';
+      if (n < 20) return ones[n];
+      if (n < 100) return tens[Math.floor(n/10)] + (n%10 ? ' ' + ones[n%10] : '');
+      if (n < 1000) return ones[Math.floor(n/100)] + ' hundred' + (n%100 ? ' ' + n2w(n%100) : '');
+      if (n < 1000000) return n2w(Math.floor(n/1000)) + ' thousand' + (n%1000 ? ' ' + n2w(n%1000) : '');
+      return n2w(Math.floor(n/1000000)) + ' million' + (n%1000000 ? ' ' + n2w(n%1000000) : '');
+    }
+    const fmtD = n => n2w(Number(n)) + ' dollars ($' + Number(n).toLocaleString() + ')';
+    const fmtP = n => n2w(Number(n)) + ' percent (' + n + '%)';
+
+    const DATE = d.DATE || d.date || '____________';
+    const CLIENT = d['COMPANY LEGAL NAME'] || d.client_name || '[COMPANY LEGAL NAME]';
+    const JURISDICTION = d.JURISDICTION || d.jurisdiction || '[JURISDICTION]';
+    const ENTITY_TYPE = d['ENTITY TYPE'] || d.entity_type || '[ENTITY TYPE]';
+    const RETAINER = d.retainer_fee ? fmtD(d.retainer_fee) : '[RETAINER FEE]';
+    const SUCCESS_PCT = d.success_fee_pct ? fmtP(d.success_fee_pct) : '[SUCCESS FEE PERCENT]';
+    const SUCCESS_MIN = d.success_fee_min ? fmtD(d.success_fee_min) : '[SUCCESS FEE MINIMUM]';
+    const CLIENT_CONTACT = d.client_contact || '[NAME, TITLE]';
+    const CLIENT_ADDRESS = d.client_address || '[STREET ADDRESS]';
+    const CLIENT_CITY = d.client_city_state_zip || '[CITY, STATE, ZIP]';
+    const CLIENT_EMAIL = d.client_email || '[CLIENT EMAIL]';
+
+    const p = (text, opts = {}) => new Paragraph({ children: [new TextRun({ text, size: 22, font: 'Times New Roman', ...opts })], spacing: { after: 200 }, ...opts });
+    const h = (text, level = HeadingLevel.HEADING_2) => new Paragraph({ text, heading: level, spacing: { before: 300, after: 200 } });
+    const b = (label, text) => new Paragraph({ children: [new TextRun({ text: label, bold: true, size: 22, font: 'Times New Roman' }), new TextRun({ text, size: 22, font: 'Times New Roman' })], spacing: { after: 200 } });
+
+    try {
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({ children: [new TextRun({ text: 'SELL-SIDE ENGAGEMENT LETTER', bold: true, size: 24, font: 'Times New Roman' })], alignment: AlignmentType.CENTER, spacing: { after: 400 } }),
+            p(`This Sell-Side Engagement Letter (this "Agreement") is entered into as of ${DATE}, 2026 (the "Effective Date"), by and between Sells Group Investments, LLC dba Sells Group Advisors, a Texas limited liability company ("Sells Group"), and ${CLIENT}, a ${JURISDICTION} ${ENTITY_TYPE} ("Client" and, together with Sells Group, the "Parties" and each, a "Party").`),
+            p('NOW, THEREFORE, in consideration of the mutual promises, undertakings and covenants contained herein, and for other good and valuable consideration, the receipt and adequacy of which is hereby acknowledged, the Parties agree as follows:'),
+            h('1. Purpose'),
+            p('Client hereby engages Sells Group as its exclusive financial advisor in connection with the potential sale of Client, or any other transaction involving Client (a "Transaction"). For purposes of this Agreement, a Transaction means any transaction or series of transactions pursuant to which, directly or indirectly, all or a substantial portion of the equity securities, capital stock, membership interests, partnership interests, assets (tangible or intangible), or business of Client are sold, transferred, exchanged, merged, consolidated, recapitalized, contributed, or otherwise disposed of, whether for cash, securities, notes, other property, assumption or repayment of indebtedness, or any combination thereof, including, without limitation, any acquisition, merger, consolidation, recapitalization, equity or asset purchase, joint venture, license, trust, joint marketing agreement, tender or exchange offer, leveraged buyout, capital contribution, infusion of capital, or other similar business combination or investment involving Client, resulting in (i) control by buyer of Client or its business, and (ii) active management by buyer of Client or its business, as such terms are defined under Section 15(b)(13) of the Securities Exchange Act of 1934, as amended (the "Exchange Act"), and applicable state securities laws.'),
+            h('2. Services'),
+            p('During the Term, Sells Group will:'),
+            p('(a) assist in identifying and evaluating potential strategic and financial buyers;'),
+            p('(b) provide valuation perspectives, including reference to precedent transactions, trading comparables and discounted cash flow analyses;'),
+            p('(c) assist in preparing marketing materials based on information provided by Client, including a confidential information memorandum and/or management presentation;'),
+            p('(d) develop and manage outreach to potential buyers and solicit proposals, including with respect to price, structure and key terms;'),
+            p('(e) assist Client in its financial, strategic and operational evaluation of proposals;'),
+            p('(f) facilitate and coordinate the due diligence process; and'),
+            p('(g) advise on strategy and tactics for negotiations and, if requested by Client, participate in such negotiations alongside Client and its legal and accounting advisors.'),
+            p('Nothing herein constitutes legal, tax, or accounting advice.'),
+            h('3. Term; Exclusivity'),
+            p('This Agreement shall commence on the Effective Date and continue for one (1) year (the "Initial Term"). It shall automatically renew for successive ninety (90) day periods (each, a "Renewal Period") unless either Party provides at least thirty (30) days\' written notice of non-renewal.'),
+            p('This engagement is exclusive, and during the Term Client shall not engage any other financial advisor or investment bank in connection with a Transaction without Sells Group\'s prior written consent.'),
+            h('4. Termination'),
+            p('Either Party may terminate this Agreement at any time upon written notice to the other. In the event of termination by Sells Group without Cause, the Retainer Fee shall be refunded to Client on a pro rata basis for the portion of the Initial Term then remaining.'),
+            h('5. Fees'),
+            b('(a) Retainer Fee. ', `Client shall pay Sells Group a retainer fee of ${RETAINER} (the "Retainer Fee"), due upon execution of this Agreement. The Retainer Fee shall be credited against the Success Fee payable at closing of any Transaction. The Retainer Fee is earned upon receipt and non-refundable, except as expressly provided in Section 4.`),
+            b('(b) Success Fee. ', `If Client consummates a Transaction during the Term or the Tail Period, Client shall pay Sells Group a cash success fee (the "Success Fee") equal to ${SUCCESS_PCT} of the Transaction Consideration (as defined below); provided, however, that in no event shall the Success Fee be less than ${SUCCESS_MIN}. The Success Fee shall be due and payable by wire transfer at the closing of the Transaction.`),
+            p('(c) Transaction Consideration. "Transaction Consideration" shall mean the total value of all consideration paid or payable, directly or indirectly, in connection with the Transaction.'),
+            h('6. Non-Offset'),
+            p('No fee or other compensation payable to any other person or entity by Client (or any Affiliate of Client) in connection with any Transaction shall reduce, offset, or otherwise affect any fee payable to Sells Group under this Agreement.'),
+            h('7. Expenses'),
+            p('Client shall reimburse Sells Group for all reasonable out-of-pocket expenses incurred in connection with this engagement, whether or not any Transaction is consummated.'),
+            h('8. Client Obligations; Information; Reliance'),
+            p('Client shall furnish, or cause to be furnished, to Sells Group such current and historical financial and operational information as Sells Group may reasonably request.'),
+            h('9. Client Representation'),
+            p('Client represents and warrants that it qualifies as an "eligible privately held company" within the meaning of Section 15(b)(13)(E)(iii) of the Exchange Act and applicable law.'),
+            h('10. Independent Contractors; Regulatory Compliance'),
+            p('The Parties are independent contractors. Sells Group shall act solely as an "M&A broker" within the meaning of Section 15(b)(13) of the Exchange Act and applicable state securities laws.'),
+            h('11. Indemnification'),
+            p('(a) By Client. Client shall indemnify and hold harmless Sells Group and its Affiliates from and against any and all losses, claims, damages, liabilities, costs, and expenses arising out of or relating to this engagement, except to the extent resulting from Sells Group\'s fraud or willful misconduct.'),
+            p('(b) By Sells Group. Sells Group shall indemnify and hold harmless Client and its Affiliates from losses to the extent resulting from Sells Group\'s fraud or willful misconduct.'),
+            h('12. Limitation of Liability'),
+            p('The aggregate liability of Sells Group under this Agreement shall not exceed the total fees actually paid by Client to Sells Group hereunder during the twelve (12) months immediately preceding the event giving rise to the claim.'),
+            h('13. Confidentiality; Non-Solicitation; Use of Advice'),
+            p('Each Party agrees to maintain the confidentiality of non-public information disclosed by the other in connection with this Agreement.'),
+            h('14. Governing Law; Dispute Resolution'),
+            p('This Agreement shall be governed by and construed in accordance with the laws of the State of Texas. EACH PARTY KNOWINGLY AND VOLUNTARILY WAIVES ANY RIGHT TO A TRIAL BY JURY.'),
+            h('15. Miscellaneous'),
+            p('(a) Assignment. (b) Entire Agreement. (c) Amendments. (d) Waiver. (e) Severability. (f) Counterparts; Electronic Signatures. (g) Survival. (h) Third-Party Beneficiaries. (i) Headings. (j) Third-Party Confidentiality. (k) Conflicts. (l) Notices.'),
+            new Paragraph({ spacing: { before: 400 } }),
+            p('If to Sells Group:'),
+            p('    Sells Group Investments, LLC'),
+            p('    Attn: Tyler Sells, Chief Executive Officer'),
+            p('    5100 W JB Hunt Dr, STE 830'),
+            p('    Rogers, AR 72758'),
+            p('    Email: tyler@sellsgroupadvisors.com'),
+            new Paragraph({ spacing: { before: 200 } }),
+            p('If to Client:'),
+            p(`    ${CLIENT}`),
+            p(`    Attn: ${CLIENT_CONTACT}`),
+            p(`    ${CLIENT_ADDRESS}`),
+            p(`    ${CLIENT_CITY}`),
+            p(`    Email: ${CLIENT_EMAIL}`),
+            new Paragraph({ spacing: { before: 600 } }),
+            new Paragraph({ children: [new TextRun({ text: '[The remainder of this page is intentionally left blank. Signature page follows.]', italics: true, size: 22, font: 'Times New Roman' })], alignment: AlignmentType.CENTER }),
+            new Paragraph({ spacing: { before: 800 } }),
+            new Paragraph({ children: [new TextRun({ text: CLIENT, bold: true, size: 22, font: 'Times New Roman' })], spacing: { after: 200 } }),
+            p('By: ____________________________'),
+            p('Name: __________________________'),
+            p('Title: ___________________________'),
+            p('Email: __________________________'),
+            p('Address: ________________________'),
+            new Paragraph({ spacing: { before: 400 } }),
+            new Paragraph({ children: [new TextRun({ text: 'SELLS GROUP INVESTMENTS, LLC', bold: true, size: 22, font: 'Times New Roman' })], spacing: { after: 200 } }),
+            p('By: ____________________________'),
+            p('Name: Tyler Sells'),
+            p('Title: Chief Executive Officer'),
+            p('Email: tyler@sellsgroupadvisors.com'),
+            p('Address: 5100 W JB Hunt Dr, STE 830, Rogers, AR 72758'),
+          ],
+        }],
+      });
+
+      const buf = await Packer.toBuffer(doc);
+      const filename = `engagement-letter-${nanoid(8)}.docx`;
+      const filepath = path.join(docsDir, filename);
+      fs.writeFileSync(filepath, buf);
+      res.json({ ok: true, filename, download_url: `/api/documents/download/${filename}` });
+    } catch (err) {
+      console.error('[generate-document] engagement letter error:', err.message);
+      res.status(500).json({ error: 'Failed to generate engagement letter: ' + err.message });
+    }
   } else {
     return res.status(400).json({ error: 'Unknown document type: ' + type });
   }
