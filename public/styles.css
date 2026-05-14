@@ -4848,7 +4848,7 @@ body.detail-fullscreen { overflow: hidden; }
   border: 1px solid var(--card-border);
   border-radius: 8px;
   box-shadow: var(--shadow-card-hover);
-  max-height: 240px;
+  max-height: 60vh;
   overflow-y: auto;
   z-index: 100;
 }
