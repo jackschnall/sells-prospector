@@ -5275,7 +5275,7 @@ function renderProgressReports() {
     const status = r.is_published ? 'published' : 'draft';
     return `<div class="pr-card">
       <div class="pr-card-header">
-        <div class="pr-card-period">${r.period_start} to ${r.period_end}</div>
+        <div class="pr-card-period">${new Date(r.period_start).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})} — ${new Date(r.period_end).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}</div>
         <span class="pr-card-status ${status}">${status}</span>
       </div>
       <div class="pr-card-stats">
@@ -5287,8 +5287,11 @@ function renderProgressReports() {
       </div>
       ${r.notes ? `<div class="pr-card-notes">${escapeHtml(r.notes)}</div>` : ''}
       <div class="pr-card-actions">
-        ${!r.is_published ? `<button class="btn-ghost btn-xs" onclick="publishReport('${r.id}')">Publish</button>
-        <button class="btn-ghost btn-xs" style="color:var(--red)" onclick="deleteReport('${r.id}')">Delete</button>` : ''}
+        ${r.is_published
+          ? `<button class="btn-ghost btn-xs" onclick="viewPublishedReport('${r.id}')">View / Print</button>
+             <button class="btn-ghost btn-xs" onclick="unpublishReport('${r.id}')">Edit</button>`
+          : `<button class="btn-ghost btn-xs" onclick="publishReport('${r.id}')">Publish</button>
+             <button class="btn-ghost btn-xs" style="color:var(--red)" onclick="deleteReport('${r.id}')">Delete</button>`}
       </div>
     </div>`;
   }).join('');
@@ -5323,6 +5326,85 @@ async function publishReport(id) {
   const mandateId = $('#pr-mandate-select')?.value;
   if (mandateId) loadProgressReports(mandateId);
   toast('Report published');
+}
+
+async function unpublishReport(id) {
+  await fetch(`/api/progress-reports/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_published: false }),
+  });
+  const mandateId = $('#pr-mandate-select')?.value;
+  if (mandateId) loadProgressReports(mandateId);
+  toast('Report unpublished — you can now edit and republish');
+}
+
+async function viewPublishedReport(reportId) {
+  try {
+    const res = await fetch(`/api/progress-reports/${reportId}`);
+    if (!res.ok) return toast('Failed to load report', 'error');
+    const report = await res.json();
+    // Get the mandate info
+    const mandateId = report.mandate_id;
+    const mRes = await fetch(`/api/mandates/${mandateId}`);
+    const mandate = mRes.ok ? await mRes.json() : {};
+
+    const periodStart = new Date(report.period_start).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const periodEnd = new Date(report.period_end).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const buyerName = mandate.buyer_name || 'Client';
+    const companies = mandate.companies || [];
+
+    const stageOrder = ['Execution', 'Introduction', 'Engage', 'Qualify'];
+    const grouped = {};
+    stageOrder.forEach(s => grouped[s] = []);
+    companies.forEach(c => {
+      const s = c.deal_stage || 'Qualify';
+      if (!grouped[s]) grouped[s] = [];
+      grouped[s].push(c);
+    });
+
+    const pipelineRows = stageOrder.map(stage => {
+      if (!grouped[stage] || !grouped[stage].length) return '';
+      return `<tr class="pr-print-stage-header"><td colspan="5" style="font-weight:700;background:#f0e8d0;padding:6px 10px;">${stage}</td></tr>` +
+        grouped[stage].map(c => `<tr><td style="padding:4px 10px;">${escapeHtml(c.company_name || '')}</td><td>${escapeHtml(c.owner || '')}</td><td>${escapeHtml((c.city || '') + (c.state ? ', ' + c.state : ''))}</td><td>${c.deal_stage || ''}</td><td>${escapeHtml(c.next_step || '')}</td></tr>`).join('');
+    }).join('');
+
+    const printHtml = `
+    <div id="pr-print-overlay" class="pr-print-overlay" onclick="if(event.target===this)this.remove()">
+      <div class="pr-print-doc">
+        <div class="pr-print-actions no-print">
+          <button onclick="window.print()" class="btn-primary btn-xs">Print / Save PDF</button>
+          <button onclick="this.closest('.pr-print-overlay').remove()" class="btn-ghost btn-xs">Close</button>
+        </div>
+        <div class="pr-print-header">
+          <div style="font-size:1.4rem;font-weight:700;color:#0D1B2A;">Progress Report</div>
+          <div style="font-size:0.9rem;color:#666;">Prepared for ${escapeHtml(buyerName)}</div>
+          <div style="font-size:0.82rem;color:#888;margin-top:4px;">${periodStart} — ${periodEnd}</div>
+        </div>
+        <div class="pr-print-metrics">
+          <div class="pr-print-metric"><div class="pr-print-metric-val">${report.calls_made || 0}</div><div class="pr-print-metric-label">Calls Made</div></div>
+          <div class="pr-print-metric"><div class="pr-print-metric-val">${fmtTalkTime(report.talk_time_seconds)}</div><div class="pr-print-metric-label">Talk Time</div></div>
+          <div class="pr-print-metric"><div class="pr-print-metric-val">${report.emails_sent || 0}</div><div class="pr-print-metric-label">Emails Sent</div></div>
+          <div class="pr-print-metric"><div class="pr-print-metric-val">${report.new_companies_contacted || 0}</div><div class="pr-print-metric-label">New Contacted</div></div>
+          <div class="pr-print-metric"><div class="pr-print-metric-val">${report.companies_advanced || 0}</div><div class="pr-print-metric-label">Advanced</div></div>
+        </div>
+        ${report.notes ? `<div class="pr-print-notes"><div style="font-weight:700;margin-bottom:6px;">Summary</div><div>${escapeHtml(report.notes)}</div></div>` : ''}
+        <div class="pr-print-pipeline">
+          <div style="font-weight:700;margin-bottom:8px;">Pipeline Status</div>
+          <table class="pr-print-table">
+            <thead><tr><th>Company</th><th>Contact</th><th>Location</th><th>Stage</th><th>Next Step</th></tr></thead>
+            <tbody>${pipelineRows || '<tr><td colspan="5" style="text-align:center;color:#888;">No companies in mandate</td></tr>'}</tbody>
+          </table>
+        </div>
+        <div class="pr-print-footer">
+          <div>www.SellsAdvisors.com | Office: +1 (479) 334-3226</div>
+          <div>HQ: 5100 W JB Hunt Dr, STE 830 Rogers, AR 72758</div>
+          <div style="margin-top:4px;color:#999;">Confidential & Proprietary</div>
+        </div>
+      </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', printHtml);
+  } catch (e) { toast('Error loading report: ' + e.message, 'error'); }
 }
 
 async function deleteReport(id) {
@@ -6339,8 +6421,8 @@ async function loadDealPopupMilestones(companyId) {
   try {
     const res = await fetch(`/api/companies/${companyId}/milestones`);
     const data = await res.json();
-    const milestones = {};
-    (data.milestones || []).forEach(m => milestones[m.milestone_key] = m.state);
+    // milestones comes back as { key: state } map
+    const milestones = data.milestones || {};
 
     container.innerHTML = DP_MS_KEYS.map(k => {
       const s = milestones[k] || 'not_started';

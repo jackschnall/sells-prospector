@@ -5550,3 +5550,35 @@ body.detail-fullscreen { overflow: hidden; }
 .dp-note-date { color: var(--text-muted); font-size: 0.72rem; }
 .dp-empty { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
 .dp-quick-actions { display: flex; gap: 8px; }
+
+/* Progress Report Print View */
+.pr-print-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;
+  background: rgba(0,0,0,0.6); display: flex; align-items: flex-start;
+  justify-content: center; padding: 40px 20px; overflow-y: auto;
+}
+.pr-print-doc {
+  background: #fff; max-width: 800px; width: 100%; border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3); padding: 40px 48px;
+  color: #333; font-family: 'Source Sans 3', sans-serif;
+}
+.pr-print-actions { display: flex; gap: 8px; margin-bottom: 20px; }
+.pr-print-header { text-align: center; margin-bottom: 28px; border-bottom: 2px solid #C9A84C; padding-bottom: 16px; }
+.pr-print-metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+.pr-print-metric { text-align: center; background: #f8f6f1; border-radius: 8px; padding: 14px 8px; }
+.pr-print-metric-val { font-size: 1.5rem; font-weight: 700; color: #0D1B2A; }
+.pr-print-metric-label { font-size: 0.72rem; text-transform: uppercase; color: #888; letter-spacing: 0.05em; margin-top: 4px; }
+.pr-print-notes { margin-bottom: 24px; padding: 14px; background: #f8f6f1; border-radius: 6px; font-size: 0.9rem; line-height: 1.6; }
+.pr-print-pipeline { margin-bottom: 24px; }
+.pr-print-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.pr-print-table th { background: #0D1B2A; color: #fff; padding: 6px 10px; text-align: left; font-weight: 600; }
+.pr-print-table td { padding: 5px 10px; border-bottom: 1px solid #eee; }
+.pr-print-footer { text-align: center; font-size: 0.75rem; color: #888; margin-top: 24px; border-top: 1px solid #ddd; padding-top: 12px; }
+
+@media print {
+  body * { visibility: hidden; }
+  .pr-print-overlay, .pr-print-overlay * { visibility: visible; }
+  .pr-print-overlay { position: absolute; top: 0; left: 0; background: #fff; padding: 0; }
+  .pr-print-doc { box-shadow: none; border-radius: 0; }
+  .no-print { display: none !important; }
+}
