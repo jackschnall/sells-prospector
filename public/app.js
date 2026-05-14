@@ -446,6 +446,7 @@ function renderPipelineBoard() {
 
   const tierFilter = state.filter.tier || '';
   const staleOnly = !!($('#stale-filter-toggle') && $('#stale-filter-toggle').checked);
+  const pipelineSearch = ($('#pipeline-search')?.value || '').toLowerCase().trim();
   let totalCount = 0;
   host.innerHTML = stages.map((s) => {
     const all = state.pipelineBoard[s.key] || [];
@@ -455,6 +456,14 @@ function renderPipelineBoard() {
         const d = c.updated_at ? Math.floor((Date.now() - new Date(c.updated_at).getTime()) / 86400000) : null;
         return d != null && d > 7;
       });
+    }
+    if (pipelineSearch) {
+      companies = companies.filter(c =>
+        (c.name || '').toLowerCase().includes(pipelineSearch) ||
+        (c.owner || '').toLowerCase().includes(pipelineSearch) ||
+        (c.city || '').toLowerCase().includes(pipelineSearch) ||
+        (c.state || '').toLowerCase().includes(pipelineSearch)
+      );
     }
     totalCount += companies.length;
     return `
@@ -5573,6 +5582,14 @@ function initStaleFilter() {
     _staleFilter = toggle.checked;
     renderPipelineBoardEnriched();
   });
+  const pipeSearch = $('#pipeline-search');
+  if (pipeSearch) {
+    let _psDebounce;
+    pipeSearch.addEventListener('input', () => {
+      clearTimeout(_psDebounce);
+      _psDebounce = setTimeout(() => renderPipelineBoard(), 250);
+    });
+  }
 }
 
 // 1D: Pre-Engagement Watchlist
@@ -5670,8 +5687,53 @@ function openPeModal(item) {
   $('#pe-next-action').value = item?.next_action || '';
   $('#pe-first-contact').value = item?.first_contact_date || '';
   $('#pe-notes').value = item?.notes || '';
+  $('#pe-linked-company-id').value = '';
+  $('#pe-account-matches').hidden = true;
   $('#pe-modal').hidden = false;
 }
+
+// Pre-engagement company autocomplete
+(function() {
+  let _peSearchDebounce;
+  document.addEventListener('input', (e) => {
+    if (e.target.id !== 'pe-account-name') return;
+    clearTimeout(_peSearchDebounce);
+    const q = e.target.value.trim();
+    if (q.length < 2) { $('#pe-account-matches').hidden = true; return; }
+    _peSearchDebounce = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/companies?search=${encodeURIComponent(q)}&sort=score_desc`);
+        if (!res.ok) return;
+        const { companies } = await res.json();
+        const matches = (companies || []).slice(0, 6);
+        const box = $('#pe-account-matches');
+        if (!matches.length) { box.hidden = true; return; }
+        box.innerHTML = matches.map(c => {
+          const loc = [c.city, c.state].filter(Boolean).join(', ');
+          return `<div class="gs-item" data-id="${c.id}" data-name="${escapeHtml(c.name)}" data-owner="${escapeHtml(c.owner || '')}" data-website="${escapeHtml(c.website || '')}">
+            <div><div class="gs-item-name">${escapeHtml(c.name)}</div><div class="gs-item-sub">${escapeHtml(loc)}${c.owner ? ' · ' + escapeHtml(c.owner) : ''}</div></div>
+          </div>`;
+        }).join('');
+        box.hidden = false;
+        $$('.gs-item', box).forEach(item => {
+          item.addEventListener('click', () => {
+            $('#pe-account-name').value = item.dataset.name;
+            $('#pe-primary-contact').value = item.dataset.owner || '';
+            $('#pe-website').value = item.dataset.website || '';
+            $('#pe-linked-company-id').value = item.dataset.id;
+            box.hidden = true;
+          });
+        });
+      } catch {}
+    }, 250);
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#pe-account-name') && !e.target.closest('#pe-account-matches')) {
+      const box = $('#pe-account-matches');
+      if (box) box.hidden = true;
+    }
+  });
+})();
 
 async function savePeItem() {
   const body = {

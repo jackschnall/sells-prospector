@@ -30,7 +30,7 @@
     <header class="app-header">
       <div class="brand">
         <img src="/sells-logo.png" alt="Sells" class="brand-logo" />
-        <div class="brand-sub-standalone">M&amp;A Prospector</div>
+        <div class="brand-sub-standalone">Network</div>
       </div>
       <div class="rollups" id="rollups">
         <div class="rollup"><div class="rollup-label">Total</div><div class="rollup-value" id="stat-total">0</div></div>
@@ -168,6 +168,9 @@
               <div class="pipeline-board-title">Deal Pipeline</div>
               <div class="pipeline-board-sub">Drag companies between stages or click to change. <span id="pipeline-total-count"></span>
                 <label class="stale-filter-label"><input type="checkbox" id="stale-filter-toggle" /> Show stale only</label>
+              </div>
+              <div class="pipeline-search-row">
+                <input type="text" id="pipeline-search" class="cf-input pipeline-search-input" placeholder="Search pipeline..." />
               </div>
             </div>
             <div class="kanban" id="kanban-board"></div>
@@ -1450,7 +1453,11 @@
         </div>
         <div class="cal-modal-body">
           <label class="camp-label">Account Name *</label>
-          <input type="text" id="pe-account-name" class="cf-input" placeholder="Company name" />
+          <div style="position:relative;">
+            <input type="text" id="pe-account-name" class="cf-input" placeholder="Start typing to search existing companies..." autocomplete="off" />
+            <div id="pe-account-matches" class="gs-matches" hidden></div>
+          </div>
+          <input type="hidden" id="pe-linked-company-id" />
           <label class="camp-label">Primary Contact</label>
           <input type="text" id="pe-primary-contact" class="cf-input" placeholder="Owner / decision maker" />
           <label class="camp-label">Website</label>

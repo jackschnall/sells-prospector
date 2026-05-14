@@ -129,7 +129,7 @@ code, pre, .mono { font-family: var(--font-mono); }
   padding-right: 28px;
 }
 .brand-logo {
-  height: 28px;
+  height: 34px;
   width: auto;
 }
 .global-search-wrap {
@@ -185,7 +185,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 .gs-empty { padding: 16px 12px; text-align: center; color: #8a9aaa; font-size: 0.82rem; }
 
 .brand-sub-standalone {
-  font-size: 0.62rem;
+  font-size: 0.72rem;
   letter-spacing: 0.22em;
   color: var(--gold);
   text-transform: uppercase;
@@ -232,9 +232,10 @@ code, pre, .mono { font-family: var(--font-mono); }
   color: var(--sidebar-text);
   padding: 24px 22px;
   overflow-y: auto;
-  max-height: calc(100vh - 84px);
+  height: calc(100vh - 56px);
   position: sticky;
-  top: 0;
+  top: 56px;
+  align-self: flex-start;
 }
 
 .main {
@@ -2568,6 +2569,14 @@ body.detail-fullscreen { overflow: hidden; }
   margin-top: 4px;
 }
 
+.gs-matches {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
+  background: #fff; border: 1px solid #ddd; border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15); max-height: 250px; overflow-y: auto;
+}
+.pipeline-search-row { margin-top: 8px; }
+.pipeline-search-input { max-width: 300px; font-size: 0.85rem; padding: 6px 10px; }
+
 .kanban {
   display: flex;
   gap: 12px;
@@ -2576,8 +2585,8 @@ body.detail-fullscreen { overflow: hidden; }
   min-height: 400px;
 }
 .kanban-col {
-  flex: 0 0 200px;
-  min-width: 180px;
+  flex: 0 0 260px;
+  min-width: 240px;
   background: var(--bg-soft);
   border: 1px solid var(--card-border);
   border-radius: 8px;
@@ -5157,9 +5166,9 @@ body.detail-fullscreen { overflow: hidden; }
   margin: 4px 0 2px;
 }
 .kc-dot {
-  width: 8px;
+  width: 14px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 2px;
   cursor: pointer;
   transition: transform 0.15s;
 }
