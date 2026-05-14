@@ -717,16 +717,16 @@
 
               <div class="mandate-filter-row">
                 <div class="camp-dropdown">
-                  <button type="button" class="camp-dropdown-btn" id="mandate-state-btn">All States</button>
-                  <div class="camp-dropdown-menu" id="mandate-state-menu" hidden>
+                  <button type="button" class="camp-dropdown-btn" id="mandate-state-btn" onclick="event.stopPropagation();var m=$('#mandate-state-menu');$('#mandate-industry-menu').hidden=true;m.hidden=!m.hidden;">All States</button>
+                  <div class="camp-dropdown-menu" id="mandate-state-menu" hidden onclick="event.stopPropagation()">
                     <label class="camp-dropdown-item"><input type="checkbox" class="camp-select-all" data-group="m-state" /> <strong>Select All</strong></label>
                     <div class="camp-dropdown-divider"></div>
                     <div id="mandate-state-options"></div>
                   </div>
                 </div>
                 <div class="camp-dropdown">
-                  <button type="button" class="camp-dropdown-btn" id="mandate-industry-btn">All Industries</button>
-                  <div class="camp-dropdown-menu" id="mandate-industry-menu" hidden>
+                  <button type="button" class="camp-dropdown-btn" id="mandate-industry-btn" onclick="event.stopPropagation();var m=$('#mandate-industry-menu');$('#mandate-state-menu').hidden=true;m.hidden=!m.hidden;">All Industries</button>
+                  <div class="camp-dropdown-menu" id="mandate-industry-menu" hidden onclick="event.stopPropagation()">
                     <label class="camp-dropdown-item"><input type="checkbox" class="camp-select-all" data-group="m-industry" /> <strong>Select All</strong></label>
                     <div class="camp-dropdown-divider"></div>
                     <label class="camp-dropdown-item"><input type="checkbox" value="Plumbing" data-group="m-industry" /> Plumbing</label>

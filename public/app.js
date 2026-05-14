@@ -5286,10 +5286,7 @@ function updateMandateDropdownLabel(group) {
 async function mandateFilterSearch() {
   const states = getMandateDropdownValues('m-state');
   const industries = getMandateDropdownValues('m-industry');
-  if (!states.length && !industries.length) {
-    toast('Select at least one state or industry filter', 'error');
-    return;
-  }
+  // Allow search with or without filters
   const params = new URLSearchParams();
   if (states.length) params.set('state', states.join(','));
   if (industries.length) params.set('industry', industries.join(','));
