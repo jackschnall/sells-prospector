@@ -1958,6 +1958,12 @@ app.post('/api/mandates/:id/progress-reports', requireUser, async (req, res) => 
   res.json({ ok: true, id });
 });
 
+app.get('/api/progress-reports/:id', requireUser, async (req, res) => {
+  const { rows: [report] } = await pool.query('SELECT * FROM progress_reports WHERE id = $1', [req.params.id]);
+  if (!report) return res.status(404).json({ error: 'Report not found' });
+  res.json(report);
+});
+
 app.put('/api/progress-reports/:id', requireUser, async (req, res) => {
   const b = req.body || {};
   const fields = [];
