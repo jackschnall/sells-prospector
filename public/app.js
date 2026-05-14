@@ -2168,7 +2168,7 @@ function renderQueue(data) {
       list.innerHTML = `
         <div class="queue-empty">
           <div style="font-weight:600;margin-bottom:6px;">No territories assigned yet.</div>
-          <div>Ask your admin to assign verticals/territories in Settings.</div>
+          <div>Ask your admin to assign industries/territories in Settings.</div>
         </div>`;
     } else {
       list.innerHTML = `<div class="queue-empty">You're all caught up. Come back tomorrow — or adjust cooldown in Settings.</div>`;
@@ -5049,7 +5049,7 @@ function renderMandateDetail() {
   if (m.revenue_min || m.revenue_max) metaParts.push(`<span>Revenue: <strong>${m.revenue_min ? fmtDollars(m.revenue_min) : '?'} - ${m.revenue_max ? fmtDollars(m.revenue_max) : '?'}</strong></span>`);
   if (m.ebitda_min || m.ebitda_max) metaParts.push(`<span>EBITDA: <strong>${m.ebitda_min ? fmtDollars(m.ebitda_min) : '?'} - ${m.ebitda_max ? fmtDollars(m.ebitda_max) : '?'}</strong></span>`);
   if (geos.length) metaParts.push(`<span>Geos: <strong>${geos.join(', ')}</strong></span>`);
-  if (verts.length) metaParts.push(`<span>Verticals: <strong>${verts.join(', ')}</strong></span>`);
+  if (verts.length) metaParts.push(`<span>Industries: <strong>${verts.join(', ')}</strong></span>`);
   metaParts.push(`<span>Reporting: <strong>${m.reporting_frequency || 'biweekly'}</strong></span>`);
   $('#mandate-detail-meta').innerHTML = metaParts.join('');
 
@@ -5247,6 +5247,97 @@ function initMandateAddSearch() {
   });
 
   input.addEventListener('blur', () => setTimeout(() => { results.hidden = true; }, 200));
+}
+
+// ---------- Mandate filter helpers ----------
+
+async function populateMandateStateDropdown() {
+  const container = $('#mandate-state-options');
+  if (!container) return;
+  let states = [...new Set((state.companies || []).map(c => c.state).filter(Boolean))].sort();
+  if (!states.length) {
+    try {
+      const res = await fetch('/api/companies?sort=state_asc');
+      if (res.ok) {
+        const data = await res.json();
+        states = [...new Set((data.companies || []).map(c => c.state).filter(Boolean))].sort();
+      }
+    } catch {}
+  }
+  container.innerHTML = states.map(s =>
+    `<label class="camp-dropdown-item"><input type="checkbox" value="${escapeHtml(s)}" data-group="m-state" /> ${escapeHtml(s)}</label>`
+  ).join('');
+}
+
+function getMandateDropdownValues(group) {
+  return $$(`input[data-group="${group}"]:checked:not(.camp-select-all)`).map(cb => cb.value);
+}
+
+function updateMandateDropdownLabel(group) {
+  const selected = getMandateDropdownValues(group);
+  const btn = group === 'm-state' ? $('#mandate-state-btn') : $('#mandate-industry-btn');
+  if (!btn) return;
+  const allLabel = group === 'm-state' ? 'All States' : 'All Industries';
+  if (selected.length === 0) btn.textContent = allLabel;
+  else if (selected.length <= 3) btn.textContent = selected.join(', ');
+  else btn.textContent = `${selected.length} selected`;
+}
+
+async function mandateFilterSearch() {
+  const states = getMandateDropdownValues('m-state');
+  const industries = getMandateDropdownValues('m-industry');
+  if (!states.length && !industries.length) {
+    toast('Select at least one state or industry filter', 'error');
+    return;
+  }
+  const params = new URLSearchParams();
+  if (states.length) params.set('state', states.join(','));
+  if (industries.length) params.set('industry', industries.join(','));
+  try {
+    const res = await fetch(`/api/campaigns/search/companies?${params}`);
+    if (!res.ok) return;
+    const { companies } = await res.json();
+    const existing = new Set(mandateState.activeCompanies.map(c => c.company_id));
+    const filtered = (companies || []).filter(c => !existing.has(c.id));
+    if (!filtered.length) {
+      toast('No new companies found matching filters', 'error');
+      return;
+    }
+    // Show results in a modal-like dropdown below the filter row
+    const resultsEl = $('#mandate-add-results');
+    resultsEl.innerHTML = `<div style="padding:8px;font-weight:600;border-bottom:1px solid var(--card-border)">
+      ${filtered.length} companies found — click to add
+      <button type="button" class="btn-ghost btn-xs" id="mandate-filter-close" style="float:right">&times;</button>
+    </div>` +
+    filtered.map(c => {
+      const loc = [c.city, c.state].filter(Boolean).join(', ');
+      return `<div class="mandate-add-item" data-id="${c.id}">
+        <div><div class="mandate-add-item-name">${escapeHtml(c.name)}</div><div class="mandate-add-item-sub">${escapeHtml(loc)}${c.owner ? ' · ' + escapeHtml(c.owner) : ''}</div></div>
+        <div style="font-size:0.82rem;color:var(--text-muted)">${c.score ? Number(c.score).toFixed(1) : ''}</div>
+      </div>`;
+    }).join('');
+    resultsEl.hidden = false;
+    $('#mandate-filter-close')?.addEventListener('click', () => { resultsEl.hidden = true; });
+    $$('.mandate-add-item', resultsEl).forEach(item => {
+      item.addEventListener('click', async () => {
+        const companyId = item.dataset.id;
+        if (!companyId) return;
+        const r = await fetch(`/api/mandates/${mandateState.activeMandateId}/companies`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_id: companyId }),
+        });
+        if (r.ok) {
+          toast('Company added');
+          item.remove();
+          openMandateDetail(mandateState.activeMandateId);
+        } else {
+          const err = await r.json();
+          toast(err.error || 'Failed to add', 'error');
+        }
+      });
+    });
+  } catch { toast('Search failed', 'error'); }
 }
 
 // ---------- Progress Reports ----------
@@ -5586,6 +5677,72 @@ function initMandateBindings() {
 
   // Add company search
   initMandateAddSearch();
+
+  // Import button
+  $('#mandate-import-btn')?.addEventListener('click', () => $('#mandate-import-file')?.click());
+  $('#mandate-import-file')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file || !mandateState.activeMandateId) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch(`/api/mandates/${mandateState.activeMandateId}/import`, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (res.ok) {
+        toast(`${data.matched} companies added${data.not_found.length ? `, ${data.not_found.length} not found` : ''}`, 'ok');
+        openMandateDetail(mandateState.activeMandateId);
+      } else { toast(data.error || 'Import failed', 'error'); }
+    } catch { toast('Import failed', 'error'); }
+    e.target.value = '';
+  });
+
+  // Mandate filter dropdowns
+  $('#mandate-state-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = $('#mandate-state-menu');
+    const wasHidden = menu.hidden;
+    $('#mandate-state-menu').hidden = true;
+    $('#mandate-industry-menu').hidden = true;
+    menu.hidden = !wasHidden;
+  });
+  $('#mandate-industry-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = $('#mandate-industry-menu');
+    const wasHidden = menu.hidden;
+    $('#mandate-state-menu').hidden = true;
+    $('#mandate-industry-menu').hidden = true;
+    menu.hidden = !wasHidden;
+  });
+  $('#mandate-state-menu')?.addEventListener('click', e => e.stopPropagation());
+  $('#mandate-industry-menu')?.addEventListener('click', e => e.stopPropagation());
+
+  // Select-all for mandate filters
+  $$('.camp-select-all[data-group="m-state"]').forEach(sa => {
+    sa.addEventListener('change', () => {
+      $$('input[data-group="m-state"]:not(.camp-select-all)').forEach(cb => cb.checked = sa.checked);
+      updateMandateDropdownLabel('m-state');
+    });
+  });
+  $$('.camp-select-all[data-group="m-industry"]').forEach(sa => {
+    sa.addEventListener('change', () => {
+      $$('input[data-group="m-industry"]:not(.camp-select-all)').forEach(cb => cb.checked = sa.checked);
+      updateMandateDropdownLabel('m-industry');
+    });
+  });
+  document.addEventListener('change', (e) => {
+    if (e.target.dataset?.group === 'm-state' && !e.target.classList.contains('camp-select-all')) {
+      updateMandateDropdownLabel('m-state');
+    }
+    if (e.target.dataset?.group === 'm-industry' && !e.target.classList.contains('camp-select-all')) {
+      updateMandateDropdownLabel('m-industry');
+    }
+  });
+
+  // Populate mandate state dropdown
+  populateMandateStateDropdown();
+
+  // Search & Add button
+  $('#mandate-filter-search')?.addEventListener('click', mandateFilterSearch);
 
   // Progress reports
   const prSelect = $('#pr-mandate-select');

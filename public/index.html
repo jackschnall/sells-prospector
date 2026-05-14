@@ -710,7 +710,40 @@
 
               <div class="mandate-add-company-row">
                 <input type="text" id="mandate-add-search" class="cf-input" placeholder="Search companies to add..." autocomplete="off" />
+                <button type="button" class="btn-ghost btn-xs" id="mandate-import-btn">Import</button>
+                <input type="file" id="mandate-import-file" accept=".csv,.xlsx,.xls" hidden />
                 <div id="mandate-add-results" class="mandate-add-results" hidden></div>
+              </div>
+
+              <div class="mandate-filter-row">
+                <div class="camp-dropdown">
+                  <button type="button" class="camp-dropdown-btn" id="mandate-state-btn">All States</button>
+                  <div class="camp-dropdown-menu" id="mandate-state-menu" hidden>
+                    <label class="camp-dropdown-item"><input type="checkbox" class="camp-select-all" data-group="m-state" /> <strong>Select All</strong></label>
+                    <div class="camp-dropdown-divider"></div>
+                    <div id="mandate-state-options"></div>
+                  </div>
+                </div>
+                <div class="camp-dropdown">
+                  <button type="button" class="camp-dropdown-btn" id="mandate-industry-btn">All Industries</button>
+                  <div class="camp-dropdown-menu" id="mandate-industry-menu" hidden>
+                    <label class="camp-dropdown-item"><input type="checkbox" class="camp-select-all" data-group="m-industry" /> <strong>Select All</strong></label>
+                    <div class="camp-dropdown-divider"></div>
+                    <label class="camp-dropdown-item"><input type="checkbox" value="Plumbing" data-group="m-industry" /> Plumbing</label>
+                    <label class="camp-dropdown-item"><input type="checkbox" value="HVAC" data-group="m-industry" /> HVAC</label>
+                    <label class="camp-dropdown-item"><input type="checkbox" value="Pest Control" data-group="m-industry" /> Pest Control</label>
+                    <label class="camp-dropdown-item"><input type="checkbox" value="Restoration" data-group="m-industry" /> Restoration</label>
+                    <label class="camp-dropdown-item"><input type="checkbox" value="Painting" data-group="m-industry" /> Painting</label>
+                    <label class="camp-dropdown-item"><input type="checkbox" value="Electrical" data-group="m-industry" /> Electrical</label>
+                    <label class="camp-dropdown-item"><input type="checkbox" value="Septic" data-group="m-industry" /> Septic</label>
+                    <label class="camp-dropdown-item"><input type="checkbox" value="Cleaning" data-group="m-industry" /> Cleaning</label>
+                    <label class="camp-dropdown-item"><input type="checkbox" value="Landscaping" data-group="m-industry" /> Landscaping</label>
+                    <label class="camp-dropdown-item"><input type="checkbox" value="Roofing" data-group="m-industry" /> Roofing</label>
+                    <label class="camp-dropdown-item"><input type="checkbox" value="Excavation" data-group="m-industry" /> Excavation</label>
+                    <label class="camp-dropdown-item"><input type="checkbox" value="Other" data-group="m-industry" /> Other</label>
+                  </div>
+                </div>
+                <button type="button" class="btn-primary btn-xs" id="mandate-filter-search">Search &amp; Add</button>
               </div>
 
               <div class="mandate-pipeline-table-wrap">
@@ -787,7 +820,7 @@
                 <div class="tag-list" id="mm-geo-list"></div>
                 <input type="text" class="tag-input" id="mm-geo-input" placeholder="Type and press Enter..." />
               </div>
-              <label class="camp-label">Target Verticals</label>
+              <label class="camp-label">Target Industries</label>
               <div class="tag-input-wrap" id="mm-vert-tags">
                 <div class="tag-list" id="mm-vert-list"></div>
                 <input type="text" class="tag-input" id="mm-vert-input" placeholder="Type and press Enter..." />
@@ -1229,7 +1262,7 @@
         <div id="tab-settings" class="tab-panel">
           <div class="settings-header">
             <div class="settings-title">User &amp; Team Settings</div>
-            <div class="settings-sub">Assign analysts to verticals &amp; territories. The first account is auto-promoted to admin.</div>
+            <div class="settings-sub">Assign analysts to industries &amp; territories. The first account is auto-promoted to admin.</div>
           </div>
           <section class="settings-section">
             <div class="settings-section-title"><span class="diamond">&#9670;</span> My Preferences</div>
@@ -1529,7 +1562,7 @@
             <div class="dp-field"><label>Est. Close Date</label><input type="date" id="dp-close-date" class="cf-input" /></div>
             <div class="dp-field"><label>Created Date</label><div id="dp-created-date" class="dp-static-value">&mdash;</div></div>
           </div>
-          <button type="button" class="btn-ghost btn-xs" id="dp-save-metrics">Save metrics</button>
+          <button type="button" class="btn-primary btn-xs" id="dp-save-metrics">Save metrics</button>
 
           <!-- Milestones -->
           <div class="dp-section">

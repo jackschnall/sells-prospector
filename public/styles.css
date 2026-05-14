@@ -4826,7 +4826,18 @@ body.detail-fullscreen { overflow: hidden; }
 /* Add company search */
 .mandate-add-company-row {
   position: relative;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.mandate-add-company-row .cf-input { flex: 1; }
+.mandate-filter-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
   margin-bottom: 14px;
+  flex-wrap: wrap;
 }
 .mandate-add-results {
   position: absolute;

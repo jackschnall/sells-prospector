@@ -1839,6 +1839,42 @@ app.post('/api/mandates/:id/companies', requireUser, async (req, res) => {
   }
 });
 
+// Import companies to mandate from CSV
+app.post('/api/mandates/:id/import', requireUser, upload.single('file'), async (req, res) => {
+  const { nanoid } = require('nanoid');
+  const { parse } = require('csv-parse/sync');
+  if (!req.file) return res.status(400).json({ error: 'No file' });
+
+  let records;
+  try {
+    records = parse(req.file.buffer, { columns: false, skip_empty_lines: true, trim: true, relax_column_count: true });
+  } catch {
+    return res.status(400).json({ error: 'Could not parse file' });
+  }
+
+  let matched = 0, notFound = [];
+  for (const row of records) {
+    const name = (row[0] || '').trim();
+    if (!name) continue;
+    const { rows } = await pool.query(
+      "SELECT id FROM companies WHERE LOWER(name) LIKE $1 AND deleted_at IS NULL LIMIT 1",
+      ['%' + name.toLowerCase() + '%']
+    );
+    if (rows.length) {
+      try {
+        await pool.query(
+          'INSERT INTO mandate_companies (id, mandate_id, company_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+          [nanoid(), req.params.id, rows[0].id]
+        );
+        matched++;
+      } catch {}
+    } else {
+      notFound.push(name);
+    }
+  }
+  res.json({ ok: true, matched, not_found: notFound });
+});
+
 // Remove company from mandate
 app.delete('/api/mandates/:id/companies/:companyId', requireUser, async (req, res) => {
   await pool.query('DELETE FROM mandate_companies WHERE mandate_id = $1 AND company_id = $2', [req.params.id, req.params.companyId]);
