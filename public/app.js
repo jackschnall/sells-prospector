@@ -631,6 +631,7 @@ function bindTabs() {
       if (target === 'settings') loadSettings();
       if (target === 'contacts') loadAllContacts();
       if (target === 'campaigns') { loadCampaignsList(); populateCampStateDropdown(); }
+      if (target === 'reports') loadMandates();
       if (target === 'deleted') loadDeletedItems();
       if (target === 'actlog') loadActivityLog();
       if (target === 'inbox') loadInbox();
@@ -663,6 +664,7 @@ async function openDetail(id) {
   const data = await res.json();
   renderDetail(data);
   renderCallHistory(id);
+  loadCompanyMandates(id);
   $('#detail-panel').hidden = false;
   document.body.classList.add('detail-open');
 }
@@ -2059,6 +2061,8 @@ async function loadQueue() {
     const countEl = $('#queue-today-count');
     if (countEl) countEl.textContent = `${data.calls_today || 0} call${(data.calls_today || 0) === 1 ? '' : 's'} today`;
     renderQueue(data);
+    loadQueueMandateFilter();
+    setTimeout(renderQueueWithMandateFilter, 100);
   } catch (err) {
     list.innerHTML = `<div class="queue-empty">Error loading queue: ${escapeHtml(err.message)}</div>`;
   }
@@ -2088,7 +2092,7 @@ function renderQueue(data) {
         .join(' · ');
       const score = r.score != null ? Number(r.score).toFixed(1) : '—';
       return `
-        <div class="queue-row ${selected}" data-id="${escapeHtml(r.id)}">
+        <div class="queue-row ${selected}" data-id="${escapeHtml(r.id)}" data-company-id="${escapeHtml(r.id)}">
           <div class="queue-rank">${r.rank}</div>
           <div class="queue-row-score">${score}</div>
           <div class="queue-row-main">
@@ -4845,4 +4849,633 @@ async function globalSearch(q) {
   } catch { results.hidden = true; }
 }
 
-document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); });
+// ============================================================================
+// Mandates (Buy-Side Mandate Management)
+// ============================================================================
+
+const mandateState = {
+  mandates: [],
+  activeMandateId: null,
+  activeMandateData: null,
+  activeCompanies: [],
+  progressReports: [],
+  searchDebounce: null,
+  geoTags: [],
+  vertTags: [],
+  editingId: null,
+  queueMandateCompanyIds: null,
+};
+
+function fmtDollars(n) {
+  if (n == null || isNaN(Number(n))) return '';
+  return '$' + Number(n).toLocaleString();
+}
+
+function fmtTalkTime(seconds) {
+  const s = Number(seconds) || 0;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}` : `0:${String(m).padStart(2, '0')}`;
+}
+
+// ---------- Load & render mandates ----------
+
+async function loadMandates() {
+  try {
+    const res = await fetch('/api/mandates');
+    if (!res.ok) return;
+    const data = await res.json();
+    mandateState.mandates = data.mandates || [];
+    renderMandateList();
+    populatePRMandateSelect();
+  } catch (e) { console.error('[mandates]', e); }
+}
+
+function renderMandateList() {
+  const host = $('#mandate-list');
+  if (!host) return;
+  const detail = $('#mandate-detail');
+  if (detail) detail.hidden = true;
+
+  if (!mandateState.mandates.length) {
+    host.innerHTML = '<div class="empty-msg">No active mandates. Create one to get started.</div>';
+    return;
+  }
+  host.innerHTML = mandateState.mandates.map(m => {
+    const geos = (typeof m.target_geographies === 'string' ? JSON.parse(m.target_geographies || '[]') : m.target_geographies || []);
+    const verts = (typeof m.target_verticals === 'string' ? JSON.parse(m.target_verticals || '[]') : m.target_verticals || []);
+    const tags = [...geos, ...verts].slice(0, 6).map(t => `<span class="mandate-tag">${escapeHtml(t)}</span>`).join('');
+    const revRange = m.revenue_min || m.revenue_max
+      ? `${m.revenue_min ? fmtDollars(m.revenue_min) : '?'} - ${m.revenue_max ? fmtDollars(m.revenue_max) : '?'} rev`
+      : '';
+    return `<div class="mandate-card" data-mandate-id="${m.id}">
+      <div class="mandate-card-name">${escapeHtml(m.buyer_name)}</div>
+      <div class="mandate-card-meta">${escapeHtml(revRange)}${m.reporting_frequency ? ' · ' + escapeHtml(m.reporting_frequency) : ''}</div>
+      ${tags ? `<div class="mandate-card-tags">${tags}</div>` : ''}
+      <div class="mandate-card-stats">
+        <div class="mandate-card-stat"><strong>${m.company_count || 0}</strong> companies</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  $$('.mandate-card', host).forEach(card => {
+    card.addEventListener('click', () => openMandateDetail(card.dataset.mandateId));
+  });
+}
+
+// ---------- Mandate detail ----------
+
+async function openMandateDetail(id) {
+  try {
+    const res = await fetch(`/api/mandates/${id}`);
+    if (!res.ok) return toast('Mandate not found', 'error');
+    const data = await res.json();
+    mandateState.activeMandateId = id;
+    mandateState.activeMandateData = data.mandate;
+    mandateState.activeCompanies = data.companies || [];
+    renderMandateDetail();
+  } catch (e) { toast('Failed to load mandate', 'error'); }
+}
+
+function renderMandateDetail() {
+  const m = mandateState.activeMandateData;
+  if (!m) return;
+  $('#mandate-list').innerHTML = '';
+  const detail = $('#mandate-detail');
+  detail.hidden = false;
+
+  $('#mandate-detail-name').textContent = m.buyer_name;
+  $('#mandate-detail-status').textContent = m.status || 'active';
+
+  const geos = (typeof m.target_geographies === 'string' ? JSON.parse(m.target_geographies || '[]') : m.target_geographies || []);
+  const verts = (typeof m.target_verticals === 'string' ? JSON.parse(m.target_verticals || '[]') : m.target_verticals || []);
+  const metaParts = [];
+  if (m.revenue_min || m.revenue_max) metaParts.push(`<span>Revenue: <strong>${m.revenue_min ? fmtDollars(m.revenue_min) : '?'} - ${m.revenue_max ? fmtDollars(m.revenue_max) : '?'}</strong></span>`);
+  if (m.ebitda_min || m.ebitda_max) metaParts.push(`<span>EBITDA: <strong>${m.ebitda_min ? fmtDollars(m.ebitda_min) : '?'} - ${m.ebitda_max ? fmtDollars(m.ebitda_max) : '?'}</strong></span>`);
+  if (geos.length) metaParts.push(`<span>Geos: <strong>${geos.join(', ')}</strong></span>`);
+  if (verts.length) metaParts.push(`<span>Verticals: <strong>${verts.join(', ')}</strong></span>`);
+  metaParts.push(`<span>Reporting: <strong>${m.reporting_frequency || 'biweekly'}</strong></span>`);
+  $('#mandate-detail-meta').innerHTML = metaParts.join('');
+
+  renderMandatePipelineTable();
+}
+
+function renderMandatePipelineTable() {
+  const tbody = $('#mandate-pipeline-tbody');
+  if (!tbody) return;
+  const companies = mandateState.activeCompanies;
+  if (!companies.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px">No companies in this mandate yet. Use the search above to add some.</td></tr>';
+    return;
+  }
+  const stages = ['Execution', 'Introduction', 'Engage', 'Qualify'];
+  let html = '';
+  for (const stage of stages) {
+    const stageCompanies = companies.filter(c => c.deal_stage === stage);
+    if (!stageCompanies.length) continue;
+    html += `<tr class="stage-header stage-header-${stage}"><td colspan="9">${escapeHtml(stage)} (${stageCompanies.length})</td></tr>`;
+    for (const c of stageCompanies) {
+      const loc = [c.city, c.state].filter(Boolean).join(', ');
+      html += `<tr data-company-id="${c.company_id}">
+        <td><strong style="cursor:pointer" onclick="openDetail('${c.company_id}')">${escapeHtml(c.company_name)}</strong></td>
+        <td>${escapeHtml(loc)}</td>
+        <td>${c.score != null ? Number(c.score).toFixed(1) : ''}</td>
+        <td>
+          <select class="mandate-stage-select" data-field="deal_stage" data-company-id="${c.company_id}">
+            ${stages.map(s => `<option value="${s}" ${s === c.deal_stage ? 'selected' : ''}>${s}</option>`).join('')}
+          </select>
+        </td>
+        <td><input type="checkbox" class="mandate-check" data-field="nda_sent" data-company-id="${c.company_id}" ${c.nda_sent ? 'checked' : ''} title="NDA Sent" />
+            <input type="checkbox" class="mandate-check" data-field="nda_signed" data-company-id="${c.company_id}" ${c.nda_signed ? 'checked' : ''} title="NDA Signed" /></td>
+        <td><input type="checkbox" class="mandate-check" data-field="offer_sent" data-company-id="${c.company_id}" ${c.offer_sent ? 'checked' : ''} title="Offer Sent" />
+            <input type="checkbox" class="mandate-check" data-field="offer_signed" data-company-id="${c.company_id}" ${c.offer_signed ? 'checked' : ''} title="Offer Signed" /></td>
+        <td><input type="text" class="mandate-tev-input" data-field="offer_tev" data-company-id="${c.company_id}" value="${c.offer_tev ? Number(c.offer_tev).toLocaleString() : ''}" placeholder="$" /></td>
+        <td><input type="text" class="mandate-next-input" data-field="next_step" data-company-id="${c.company_id}" value="${escapeHtml(c.next_step || '')}" placeholder="Next step..." /></td>
+        <td><button class="mandate-remove-btn" data-company-id="${c.company_id}" title="Remove">&times;</button></td>
+      </tr>`;
+    }
+  }
+  tbody.innerHTML = html;
+
+  // Bind inline edit handlers
+  $$('.mandate-stage-select', tbody).forEach(sel => {
+    sel.addEventListener('change', () => updateMandateCompany(sel.dataset.companyId, { deal_stage: sel.value }));
+  });
+  $$('.mandate-check', tbody).forEach(chk => {
+    chk.addEventListener('change', () => updateMandateCompany(chk.dataset.companyId, { [chk.dataset.field]: chk.checked }));
+  });
+  $$('.mandate-tev-input', tbody).forEach(inp => {
+    inp.addEventListener('change', () => {
+      const val = inp.value.replace(/[^0-9]/g, '');
+      updateMandateCompany(inp.dataset.companyId, { offer_tev: val ? Number(val) : null });
+    });
+  });
+  $$('.mandate-next-input', tbody).forEach(inp => {
+    inp.addEventListener('change', () => updateMandateCompany(inp.dataset.companyId, { next_step: inp.value }));
+  });
+  $$('.mandate-remove-btn', tbody).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Remove this company from the mandate?')) return;
+      await fetch(`/api/mandates/${mandateState.activeMandateId}/companies/${btn.dataset.companyId}`, { method: 'DELETE' });
+      openMandateDetail(mandateState.activeMandateId);
+    });
+  });
+}
+
+async function updateMandateCompany(companyId, updates) {
+  try {
+    await fetch(`/api/mandates/${mandateState.activeMandateId}/companies/${companyId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    // If stage changed, reload to re-sort
+    if (updates.deal_stage) openMandateDetail(mandateState.activeMandateId);
+  } catch (e) { toast('Update failed', 'error'); }
+}
+
+// ---------- Create / Edit mandate modal ----------
+
+function openMandateModal(mandate) {
+  mandateState.editingId = mandate?.id || null;
+  mandateState.geoTags = mandate ? (typeof mandate.target_geographies === 'string' ? JSON.parse(mandate.target_geographies || '[]') : mandate.target_geographies || []) : [];
+  mandateState.vertTags = mandate ? (typeof mandate.target_verticals === 'string' ? JSON.parse(mandate.target_verticals || '[]') : mandate.target_verticals || []) : [];
+
+  $('#mandate-modal-title').textContent = mandate ? 'Edit Mandate' : 'New Mandate';
+  $('#mm-buyer-name').value = mandate?.buyer_name || '';
+  $('#mm-logo-url').value = mandate?.buyer_logo_url || '';
+  $('#mm-rev-min').value = mandate?.revenue_min || '';
+  $('#mm-rev-max').value = mandate?.revenue_max || '';
+  $('#mm-ebitda-min').value = mandate?.ebitda_min || '';
+  $('#mm-ebitda-max').value = mandate?.ebitda_max || '';
+  $('#mm-frequency').value = mandate?.reporting_frequency || 'biweekly';
+  renderTagList('mm-geo-list', mandateState.geoTags, 'geo');
+  renderTagList('mm-vert-list', mandateState.vertTags, 'vert');
+  $('#mandate-modal').hidden = false;
+}
+
+function renderTagList(hostId, tags, type) {
+  const host = $(`#${hostId}`);
+  if (!host) return;
+  host.innerHTML = tags.map((t, i) =>
+    `<span class="tag-chip">${escapeHtml(t)}<span class="tag-chip-x" data-type="${type}" data-idx="${i}">&times;</span></span>`
+  ).join('');
+  $$('.tag-chip-x', host).forEach(x => {
+    x.addEventListener('click', () => {
+      const arr = x.dataset.type === 'geo' ? mandateState.geoTags : mandateState.vertTags;
+      arr.splice(Number(x.dataset.idx), 1);
+      renderTagList(hostId, arr, x.dataset.type);
+    });
+  });
+}
+
+async function saveMandate() {
+  const buyer_name = $('#mm-buyer-name').value.trim();
+  if (!buyer_name) return toast('Buyer name required', 'error');
+  const body = {
+    buyer_name,
+    buyer_logo_url: $('#mm-logo-url').value.trim() || null,
+    revenue_min: Number($('#mm-rev-min').value) || null,
+    revenue_max: Number($('#mm-rev-max').value) || null,
+    ebitda_min: Number($('#mm-ebitda-min').value) || null,
+    ebitda_max: Number($('#mm-ebitda-max').value) || null,
+    target_geographies: mandateState.geoTags,
+    target_verticals: mandateState.vertTags,
+    reporting_frequency: $('#mm-frequency').value,
+  };
+
+  const url = mandateState.editingId ? `/api/mandates/${mandateState.editingId}` : '/api/mandates';
+  const method = mandateState.editingId ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) { toast('Save failed', 'error'); return; }
+  $('#mandate-modal').hidden = true;
+  toast(mandateState.editingId ? 'Mandate updated' : 'Mandate created');
+  loadMandates();
+}
+
+// ---------- CSV export ----------
+
+function exportPipelineCSV(mandateId) {
+  window.open(`/api/mandates/${mandateId}/pipeline-report.csv`, '_blank');
+}
+
+// ---------- Add company search ----------
+
+function initMandateAddSearch() {
+  const input = $('#mandate-add-search');
+  const results = $('#mandate-add-results');
+  if (!input || !results) return;
+
+  input.addEventListener('input', () => {
+    clearTimeout(mandateState.searchDebounce);
+    const q = input.value.trim();
+    if (q.length < 2) { results.hidden = true; return; }
+    mandateState.searchDebounce = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/campaigns/search/companies?q=${encodeURIComponent(q)}&limit=10`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const existing = new Set(mandateState.activeCompanies.map(c => c.company_id));
+        const filtered = (data.companies || []).filter(c => !existing.has(c.id));
+        if (!filtered.length) { results.innerHTML = '<div class="mandate-add-item" style="color:var(--text-muted)">No results</div>'; results.hidden = false; return; }
+        results.innerHTML = filtered.map(c => {
+          const loc = [c.city, c.state].filter(Boolean).join(', ');
+          return `<div class="mandate-add-item" data-id="${c.id}">
+            <div><div class="mandate-add-item-name">${escapeHtml(c.name)}</div><div class="mandate-add-item-sub">${escapeHtml(loc)}${c.owner ? ' · ' + escapeHtml(c.owner) : ''}</div></div>
+            <div style="font-size:0.82rem;color:var(--text-muted)">${c.score ? Number(c.score).toFixed(1) : ''}</div>
+          </div>`;
+        }).join('');
+        results.hidden = false;
+        $$('.mandate-add-item', results).forEach(item => {
+          item.addEventListener('click', async () => {
+            const companyId = item.dataset.id;
+            if (!companyId) return;
+            const r = await fetch(`/api/mandates/${mandateState.activeMandateId}/companies`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ company_id: companyId }),
+            });
+            if (r.ok) {
+              toast('Company added');
+              input.value = '';
+              results.hidden = true;
+              openMandateDetail(mandateState.activeMandateId);
+            } else {
+              const err = await r.json();
+              toast(err.error || 'Failed to add', 'error');
+            }
+          });
+        });
+      } catch { results.hidden = true; }
+    }, 300);
+  });
+
+  input.addEventListener('blur', () => setTimeout(() => { results.hidden = true; }, 200));
+}
+
+// ---------- Progress Reports ----------
+
+function populatePRMandateSelect() {
+  const sel = $('#pr-mandate-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Select mandate...</option>' +
+    mandateState.mandates.map(m => `<option value="${m.id}">${escapeHtml(m.buyer_name)}</option>`).join('');
+}
+
+async function loadProgressReports(mandateId) {
+  if (!mandateId) { $('#pr-list').innerHTML = '<div class="empty-msg">Select a mandate to view reports.</div>'; return; }
+  try {
+    const res = await fetch(`/api/mandates/${mandateId}/progress-reports`);
+    if (!res.ok) return;
+    const data = await res.json();
+    mandateState.progressReports = data.reports || [];
+    renderProgressReports();
+  } catch (e) { console.error('[pr]', e); }
+}
+
+function renderProgressReports() {
+  const host = $('#pr-list');
+  if (!host) return;
+  if (!mandateState.progressReports.length) {
+    host.innerHTML = '<div class="empty-msg">No reports yet. Click "+ New Report" to create one.</div>';
+    return;
+  }
+  host.innerHTML = mandateState.progressReports.map(r => {
+    const status = r.is_published ? 'published' : 'draft';
+    return `<div class="pr-card">
+      <div class="pr-card-header">
+        <div class="pr-card-period">${r.period_start} to ${r.period_end}</div>
+        <span class="pr-card-status ${status}">${status}</span>
+      </div>
+      <div class="pr-card-stats">
+        <div class="pr-stat"><div class="pr-stat-value">${r.calls_made || 0}</div><div class="pr-stat-label">Calls Made</div></div>
+        <div class="pr-stat"><div class="pr-stat-value">${fmtTalkTime(r.talk_time_seconds)}</div><div class="pr-stat-label">Talk Time</div></div>
+        <div class="pr-stat"><div class="pr-stat-value">${r.emails_sent || 0}</div><div class="pr-stat-label">Emails Sent</div></div>
+        <div class="pr-stat"><div class="pr-stat-value">${r.new_companies_contacted || 0}</div><div class="pr-stat-label">New Contacted</div></div>
+        <div class="pr-stat"><div class="pr-stat-value">${r.companies_advanced || 0}</div><div class="pr-stat-label">Advanced</div></div>
+      </div>
+      ${r.notes ? `<div class="pr-card-notes">${escapeHtml(r.notes)}</div>` : ''}
+      <div class="pr-card-actions">
+        ${!r.is_published ? `<button class="btn-ghost btn-xs" onclick="publishReport('${r.id}')">Publish</button>
+        <button class="btn-ghost btn-xs" style="color:var(--red)" onclick="deleteReport('${r.id}')">Delete</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function createProgressReport() {
+  const mandateId = $('#pr-mandate-select')?.value;
+  if (!mandateId) return toast('Select a mandate first', 'error');
+  const period_start = $('#prm-start').value;
+  const period_end = $('#prm-end').value;
+  const notes = $('#prm-notes').value;
+  if (!period_start || !period_end) return toast('Period dates required', 'error');
+  try {
+    const res = await fetch(`/api/mandates/${mandateId}/progress-reports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ period_start, period_end, notes }),
+    });
+    if (!res.ok) { toast('Failed to create report', 'error'); return; }
+    $('#pr-modal').hidden = true;
+    toast('Report created with auto-populated stats');
+    loadProgressReports(mandateId);
+  } catch (e) { toast('Error creating report', 'error'); }
+}
+
+async function publishReport(id) {
+  await fetch(`/api/progress-reports/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_published: true }),
+  });
+  const mandateId = $('#pr-mandate-select')?.value;
+  if (mandateId) loadProgressReports(mandateId);
+  toast('Report published');
+}
+
+async function deleteReport(id) {
+  if (!confirm('Delete this draft report?')) return;
+  await fetch(`/api/progress-reports/${id}`, { method: 'DELETE' });
+  const mandateId = $('#pr-mandate-select')?.value;
+  if (mandateId) loadProgressReports(mandateId);
+  toast('Report deleted');
+}
+
+// ---------- Detail panel: company mandates ----------
+
+async function loadCompanyMandates(companyId) {
+  const section = $('#d-mandates-section');
+  const list = $('#d-mandates-list');
+  const count = $('#d-mandates-count');
+  const sel = $('#d-mandate-select');
+  if (!section || !list) return;
+
+  try {
+    const [mandRes, allRes] = await Promise.all([
+      fetch(`/api/companies/${companyId}/mandates`),
+      fetch('/api/mandates'),
+    ]);
+    const { mandates: companyMandates } = await mandRes.json();
+    const { mandates: allMandates } = await allRes.json();
+
+    if (count) count.textContent = companyMandates.length;
+
+    if (companyMandates.length) {
+      list.innerHTML = companyMandates.map(mc => `
+        <div class="d-mandate-row">
+          <span class="d-mandate-buyer">${escapeHtml(mc.buyer_name)}</span>
+          <span class="deal-stage-badge deal-stage-${mc.deal_stage}">${escapeHtml(mc.deal_stage)}</span>
+          <button class="d-mandate-remove" data-mandate-id="${mc.mandate_id}" title="Remove">&times;</button>
+        </div>
+      `).join('');
+      $$('.d-mandate-remove', list).forEach(btn => {
+        btn.addEventListener('click', async () => {
+          await fetch(`/api/mandates/${btn.dataset.mandateId}/companies/${companyId}`, { method: 'DELETE' });
+          loadCompanyMandates(companyId);
+        });
+      });
+    } else {
+      list.innerHTML = '<div style="font-size:0.82rem;color:var(--text-muted);padding:4px 0">Not in any mandate</div>';
+    }
+
+    // Populate dropdown with mandates not already assigned
+    const assigned = new Set(companyMandates.map(mc => mc.mandate_id));
+    const available = allMandates.filter(m => !assigned.has(m.id));
+    if (sel) {
+      sel.innerHTML = '<option value="">Add to mandate...</option>' +
+        available.map(m => `<option value="${m.id}">${escapeHtml(m.buyer_name)}</option>`).join('');
+    }
+  } catch (e) { console.error('[company-mandates]', e); }
+}
+
+// ---------- Queue mandate filter ----------
+
+async function loadQueueMandateFilter() {
+  const sel = $('#queue-mandate-filter');
+  if (!sel) return;
+  try {
+    const res = await fetch('/api/mandates');
+    if (!res.ok) return;
+    const { mandates } = await res.json();
+    sel.innerHTML = '<option value="">All Companies</option>' +
+      mandates.map(m => `<option value="${m.id}">${escapeHtml(m.buyer_name)}</option>`).join('');
+    // Restore from localStorage
+    const saved = localStorage.getItem('callQueue_mandateFilter');
+    if (saved && mandates.find(m => m.id === saved)) {
+      sel.value = saved;
+      applyQueueMandateFilter(saved);
+    }
+  } catch {}
+}
+
+async function applyQueueMandateFilter(mandateId) {
+  const badge = $('#queue-mandate-badge');
+  if (!mandateId) {
+    mandateState.queueMandateCompanyIds = null;
+    localStorage.removeItem('callQueue_mandateFilter');
+    if (badge) badge.hidden = true;
+    return;
+  }
+  localStorage.setItem('callQueue_mandateFilter', mandateId);
+  try {
+    const res = await fetch(`/api/mandates/${mandateId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    mandateState.queueMandateCompanyIds = new Set((data.companies || []).map(c => c.company_id));
+    if (badge) {
+      badge.textContent = '\u25C6 Filtered: ' + data.mandate.buyer_name + ' \u2715';
+      badge.hidden = false;
+    }
+  } catch {}
+}
+
+// ---------- Init mandate bindings ----------
+
+function initMandateBindings() {
+  // Subtab switching
+  $$('.mandate-subtab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      $$('.mandate-subtab').forEach(t => t.classList.toggle('active', t === tab));
+      const sub = tab.dataset.mandateSub;
+      const pipeView = $('#mandate-pipeline-view');
+      const progView = $('#mandate-progress-view');
+      if (pipeView) pipeView.hidden = sub !== 'pipeline';
+      if (progView) progView.hidden = sub !== 'progress';
+    });
+  });
+
+  // New mandate
+  const newBtn = $('#mandate-new-btn');
+  if (newBtn) newBtn.addEventListener('click', () => openMandateModal(null));
+
+  // Modal
+  const modalClose = $('#mandate-modal-close');
+  if (modalClose) modalClose.addEventListener('click', () => { $('#mandate-modal').hidden = true; });
+  const mmCancel = $('#mm-cancel');
+  if (mmCancel) mmCancel.addEventListener('click', () => { $('#mandate-modal').hidden = true; });
+  const mmSave = $('#mm-save');
+  if (mmSave) mmSave.addEventListener('click', saveMandate);
+
+  // Tag inputs
+  const geoInput = $('#mm-geo-input');
+  if (geoInput) geoInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && geoInput.value.trim()) {
+      e.preventDefault();
+      mandateState.geoTags.push(geoInput.value.trim());
+      geoInput.value = '';
+      renderTagList('mm-geo-list', mandateState.geoTags, 'geo');
+    }
+  });
+  const vertInput = $('#mm-vert-input');
+  if (vertInput) vertInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && vertInput.value.trim()) {
+      e.preventDefault();
+      mandateState.vertTags.push(vertInput.value.trim());
+      vertInput.value = '';
+      renderTagList('mm-vert-list', mandateState.vertTags, 'vert');
+    }
+  });
+
+  // Back button
+  const backBtn = $('#mandate-back-btn');
+  if (backBtn) backBtn.addEventListener('click', () => {
+    mandateState.activeMandateId = null;
+    loadMandates();
+  });
+
+  // Edit button
+  const editBtn = $('#mandate-edit-btn');
+  if (editBtn) editBtn.addEventListener('click', () => {
+    if (mandateState.activeMandateData) openMandateModal(mandateState.activeMandateData);
+  });
+
+  // Delete button
+  const deleteBtn = $('#mandate-delete-btn');
+  if (deleteBtn) deleteBtn.addEventListener('click', async () => {
+    if (!confirm('Close this mandate?')) return;
+    await fetch(`/api/mandates/${mandateState.activeMandateId}`, { method: 'DELETE' });
+    mandateState.activeMandateId = null;
+    toast('Mandate closed');
+    loadMandates();
+  });
+
+  // Export CSV
+  const exportBtn = $('#mandate-export-csv');
+  if (exportBtn) exportBtn.addEventListener('click', () => {
+    if (mandateState.activeMandateId) exportPipelineCSV(mandateState.activeMandateId);
+  });
+
+  // Add company search
+  initMandateAddSearch();
+
+  // Progress reports
+  const prSelect = $('#pr-mandate-select');
+  if (prSelect) prSelect.addEventListener('change', () => loadProgressReports(prSelect.value));
+
+  const prNewBtn = $('#pr-new-btn');
+  if (prNewBtn) prNewBtn.addEventListener('click', () => {
+    if (!$('#pr-mandate-select')?.value) return toast('Select a mandate first', 'error');
+    // Default dates to last 2 weeks
+    const end = new Date();
+    const start = new Date(end.getTime() - 14 * 24 * 60 * 60 * 1000);
+    $('#prm-start').value = start.toISOString().slice(0, 10);
+    $('#prm-end').value = end.toISOString().slice(0, 10);
+    $('#prm-notes').value = '';
+    $('#pr-modal').hidden = false;
+  });
+
+  const prmClose = $('#pr-modal-close');
+  if (prmClose) prmClose.addEventListener('click', () => { $('#pr-modal').hidden = true; });
+  const prmCancel = $('#prm-cancel');
+  if (prmCancel) prmCancel.addEventListener('click', () => { $('#pr-modal').hidden = true; });
+  const prmSave = $('#prm-save');
+  if (prmSave) prmSave.addEventListener('click', createProgressReport);
+
+  // Detail panel: add to mandate
+  const dMandateAddBtn = $('#d-mandate-add-btn');
+  if (dMandateAddBtn) dMandateAddBtn.addEventListener('click', async () => {
+    const mandateId = $('#d-mandate-select')?.value;
+    if (!mandateId || !state.activeId) return;
+    const r = await fetch(`/api/mandates/${mandateId}/companies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company_id: state.activeId }),
+    });
+    if (r.ok) { toast('Added to mandate'); loadCompanyMandates(state.activeId); }
+    else { const err = await r.json(); toast(err.error || 'Failed', 'error'); }
+  });
+
+  // Queue mandate filter
+  const queueFilter = $('#queue-mandate-filter');
+  if (queueFilter) queueFilter.addEventListener('change', () => {
+    applyQueueMandateFilter(queueFilter.value);
+    // Re-render the queue list with filter
+    renderQueueWithMandateFilter();
+  });
+  const queueBadge = $('#queue-mandate-badge');
+  if (queueBadge) queueBadge.addEventListener('click', () => {
+    const sel = $('#queue-mandate-filter');
+    if (sel) sel.value = '';
+    applyQueueMandateFilter('');
+    renderQueueWithMandateFilter();
+  });
+}
+
+function renderQueueWithMandateFilter() {
+  const items = $$('.queue-row', $('#queue-list'));
+  if (!mandateState.queueMandateCompanyIds) {
+    items.forEach(item => { item.style.display = ''; });
+    return;
+  }
+  items.forEach(item => {
+    const companyId = item.dataset?.companyId || item.dataset?.id;
+    if (companyId && !mandateState.queueMandateCompanyIds.has(companyId)) {
+      item.style.display = 'none';
+    } else {
+      item.style.display = '';
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); initMandateBindings(); });

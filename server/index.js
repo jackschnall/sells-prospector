@@ -1742,6 +1742,268 @@ function mergeCampaignTemplate(template, recipient) {
     .replace(/\{\{summary\}\}/gi, recipient.summary || '');
 }
 
+// ---------- Mandates (buy-side mandate management) ----------
+
+// List all mandates with company count
+app.get('/api/mandates', requireUser, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT m.*, (SELECT COUNT(*) FROM mandate_companies mc WHERE mc.mandate_id = m.id) AS company_count
+    FROM mandates m WHERE m.status != 'closed' ORDER BY m.created_at DESC
+  `);
+  res.json({ mandates: rows });
+});
+
+// Get single mandate with companies
+app.get('/api/mandates/:id', requireUser, async (req, res) => {
+  const mandate = await pool.query('SELECT * FROM mandates WHERE id = $1', [req.params.id]).then(r => r.rows[0]);
+  if (!mandate) return res.status(404).json({ error: 'Mandate not found' });
+  const { rows: companies } = await pool.query(`
+    SELECT mc.*, c.name AS company_name, c.owner, c.city, c.state, c.website, c.score, c.tier,
+           c.phone, c.email, c.pipeline_stage, c.summary, c.industry
+    FROM mandate_companies mc
+    JOIN companies c ON c.id = mc.company_id
+    WHERE mc.mandate_id = $1
+    ORDER BY CASE mc.deal_stage WHEN 'Execution' THEN 1 WHEN 'Introduction' THEN 2 WHEN 'Engage' THEN 3 WHEN 'Qualify' THEN 4 ELSE 5 END
+  `, [req.params.id]);
+  res.json({ mandate, companies });
+});
+
+// Create mandate
+app.post('/api/mandates', requireUser, async (req, res) => {
+  const { nanoid } = require('nanoid');
+  const b = req.body || {};
+  if (!b.buyer_name || !String(b.buyer_name).trim()) return res.status(400).json({ error: 'Buyer name required' });
+  const id = nanoid();
+  await pool.query(`
+    INSERT INTO mandates (id, buyer_name, buyer_logo_url, revenue_min, revenue_max, ebitda_min, ebitda_max,
+      target_geographies, target_verticals, reporting_frequency)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+  `, [
+    id, String(b.buyer_name).trim(), b.buyer_logo_url || null,
+    b.revenue_min || null, b.revenue_max || null, b.ebitda_min || null, b.ebitda_max || null,
+    JSON.stringify(b.target_geographies || []), JSON.stringify(b.target_verticals || []),
+    b.reporting_frequency || 'biweekly',
+  ]);
+  res.json({ ok: true, id });
+});
+
+// Update mandate
+app.put('/api/mandates/:id', requireUser, async (req, res) => {
+  const b = req.body || {};
+  const fields = [];
+  const params = [];
+  let idx = 1;
+  for (const key of ['buyer_name', 'buyer_logo_url', 'revenue_min', 'revenue_max', 'ebitda_min', 'ebitda_max', 'reporting_frequency', 'status']) {
+    if (b[key] !== undefined) {
+      fields.push(`${key} = $${idx++}`);
+      params.push(b[key]);
+    }
+  }
+  if (b.target_geographies !== undefined) {
+    fields.push(`target_geographies = $${idx++}`);
+    params.push(JSON.stringify(b.target_geographies || []));
+  }
+  if (b.target_verticals !== undefined) {
+    fields.push(`target_verticals = $${idx++}`);
+    params.push(JSON.stringify(b.target_verticals || []));
+  }
+  if (!fields.length) return res.json({ ok: true });
+  fields.push('updated_at = NOW()');
+  params.push(req.params.id);
+  await pool.query(`UPDATE mandates SET ${fields.join(', ')} WHERE id = $${idx}`, params);
+  res.json({ ok: true });
+});
+
+// Soft-delete mandate (set status = closed)
+app.delete('/api/mandates/:id', requireUser, async (req, res) => {
+  await pool.query("UPDATE mandates SET status = 'closed', updated_at = NOW() WHERE id = $1", [req.params.id]);
+  res.json({ ok: true });
+});
+
+// Add company to mandate
+app.post('/api/mandates/:id/companies', requireUser, async (req, res) => {
+  const { nanoid } = require('nanoid');
+  const { company_id, deal_stage } = req.body || {};
+  if (!company_id) return res.status(400).json({ error: 'company_id required' });
+  const id = nanoid();
+  try {
+    await pool.query(`
+      INSERT INTO mandate_companies (id, mandate_id, company_id, deal_stage)
+      VALUES ($1, $2, $3, $4)
+    `, [id, req.params.id, company_id, deal_stage || 'Qualify']);
+    res.json({ ok: true, id });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Company already in this mandate' });
+    throw err;
+  }
+});
+
+// Remove company from mandate
+app.delete('/api/mandates/:id/companies/:companyId', requireUser, async (req, res) => {
+  await pool.query('DELETE FROM mandate_companies WHERE mandate_id = $1 AND company_id = $2', [req.params.id, req.params.companyId]);
+  res.json({ ok: true });
+});
+
+// Update mandate company details
+app.put('/api/mandates/:id/companies/:companyId', requireUser, async (req, res) => {
+  const b = req.body || {};
+  const fields = [];
+  const params = [];
+  let idx = 1;
+  for (const key of ['deal_stage', 'next_step', 'nda_sent', 'nda_signed', 'offer_sent', 'offer_signed', 'offer_tev']) {
+    if (b[key] !== undefined) {
+      fields.push(`${key} = $${idx++}`);
+      if (['nda_sent', 'nda_signed', 'offer_sent', 'offer_signed'].includes(key)) params.push(!!b[key]);
+      else params.push(b[key]);
+    }
+  }
+  if (!fields.length) return res.json({ ok: true });
+  fields.push('updated_at = NOW()');
+  params.push(req.params.id, req.params.companyId);
+  await pool.query(`UPDATE mandate_companies SET ${fields.join(', ')} WHERE mandate_id = $${idx++} AND company_id = $${idx}`, params);
+  res.json({ ok: true });
+});
+
+// Get mandates for a company
+app.get('/api/companies/:id/mandates', requireUser, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT mc.*, m.buyer_name, m.status AS mandate_status
+    FROM mandate_companies mc
+    JOIN mandates m ON m.id = mc.mandate_id
+    WHERE mc.company_id = $1 AND m.status != 'closed'
+    ORDER BY mc.added_at DESC
+  `, [req.params.id]);
+  res.json({ mandates: rows });
+});
+
+// Progress Reports
+app.get('/api/mandates/:id/progress-reports', requireUser, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT * FROM progress_reports WHERE mandate_id = $1 ORDER BY period_end DESC',
+    [req.params.id]
+  );
+  res.json({ reports: rows });
+});
+
+app.post('/api/mandates/:id/progress-reports', requireUser, async (req, res) => {
+  const { nanoid } = require('nanoid');
+  const mandateId = req.params.id;
+  const { period_start, period_end, notes } = req.body || {};
+  if (!period_start || !period_end) return res.status(400).json({ error: 'period_start and period_end required' });
+
+  // Auto-populate calls and talk time
+  const { rows: [callStats] } = await pool.query(`
+    SELECT COUNT(*) AS calls_made, COALESCE(SUM(duration_sec), 0) AS talk_time_seconds
+    FROM call_logs cl
+    WHERE cl.company_id IN (SELECT company_id FROM mandate_companies WHERE mandate_id = $1)
+      AND cl.called_at >= $2 AND cl.called_at <= $3
+  `, [mandateId, period_start, period_end]);
+
+  // Auto-populate emails sent
+  const { rows: [emailStats] } = await pool.query(`
+    SELECT COUNT(*) AS emails_sent
+    FROM activities a
+    WHERE a.company_id IN (SELECT company_id FROM mandate_companies WHERE mandate_id = $1)
+      AND a.type = 'email' AND a.created_at >= $2 AND a.created_at <= $3
+  `, [mandateId, period_start, period_end]);
+
+  const id = nanoid();
+  await pool.query(`
+    INSERT INTO progress_reports (id, mandate_id, period_start, period_end, calls_made, talk_time_seconds, emails_sent, notes)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  `, [
+    id, mandateId, period_start, period_end,
+    Number(callStats?.calls_made) || 0,
+    Number(callStats?.talk_time_seconds) || 0,
+    Number(emailStats?.emails_sent) || 0,
+    notes || null,
+  ]);
+  res.json({ ok: true, id });
+});
+
+app.put('/api/progress-reports/:id', requireUser, async (req, res) => {
+  const b = req.body || {};
+  const fields = [];
+  const params = [];
+  let idx = 1;
+  for (const key of ['calls_made', 'talk_time_seconds', 'emails_sent', 'new_companies_contacted', 'companies_advanced', 'notes', 'is_published']) {
+    if (b[key] !== undefined) {
+      fields.push(`${key} = $${idx++}`);
+      params.push(key === 'is_published' ? !!b[key] : b[key]);
+    }
+  }
+  if (!fields.length) return res.json({ ok: true });
+  fields.push('updated_at = NOW()');
+  params.push(req.params.id);
+  await pool.query(`UPDATE progress_reports SET ${fields.join(', ')} WHERE id = $${idx}`, params);
+  res.json({ ok: true });
+});
+
+app.delete('/api/progress-reports/:id', requireUser, async (req, res) => {
+  // Only allow deleting drafts
+  const { rows: [report] } = await pool.query('SELECT is_published FROM progress_reports WHERE id = $1', [req.params.id]);
+  if (report?.is_published) return res.status(400).json({ error: 'Cannot delete published report' });
+  await pool.query('DELETE FROM progress_reports WHERE id = $1', [req.params.id]);
+  res.json({ ok: true });
+});
+
+// Pipeline Report CSV export
+app.get('/api/mandates/:id/pipeline-report.csv', requireUser, async (req, res) => {
+  const mandate = await pool.query('SELECT * FROM mandates WHERE id = $1', [req.params.id]).then(r => r.rows[0]);
+  if (!mandate) return res.status(404).json({ error: 'Mandate not found' });
+  const { rows: companies } = await pool.query(`
+    SELECT mc.*, c.name AS company_name, c.owner, c.city, c.state, c.score, c.tier, c.phone, c.email, c.industry
+    FROM mandate_companies mc
+    JOIN companies c ON c.id = mc.company_id
+    WHERE mc.mandate_id = $1
+    ORDER BY CASE mc.deal_stage WHEN 'Execution' THEN 1 WHEN 'Introduction' THEN 2 WHEN 'Engage' THEN 3 WHEN 'Qualify' THEN 4 ELSE 5 END,
+             c.score DESC NULLS LAST
+  `, [req.params.id]);
+
+  const stages = ['Execution', 'Introduction', 'Engage', 'Qualify'];
+  const lines = [];
+  lines.push(`Pipeline Report: ${mandate.buyer_name}`);
+  lines.push(`Generated: ${new Date().toISOString().slice(0, 10)}`);
+  lines.push('');
+  lines.push('Stage,Company,Owner,City,State,Score,NDA Sent,NDA Signed,Offer Sent,Offer Signed,Offer TEV,Next Step');
+
+  for (const stage of stages) {
+    const stageCompanies = companies.filter(c => c.deal_stage === stage);
+    if (stageCompanies.length === 0) continue;
+    lines.push('');
+    lines.push(`"--- ${stage} (${stageCompanies.length}) ---"`);
+    for (const c of stageCompanies) {
+      const csvRow = [
+        stage,
+        `"${(c.company_name || '').replace(/"/g, '""')}"`,
+        `"${(c.owner || '').replace(/"/g, '""')}"`,
+        c.city || '',
+        c.state || '',
+        c.score != null ? Number(c.score).toFixed(1) : '',
+        c.nda_sent ? 'Yes' : 'No',
+        c.nda_signed ? 'Yes' : 'No',
+        c.offer_sent ? 'Yes' : 'No',
+        c.offer_signed ? 'Yes' : 'No',
+        c.offer_tev ? `$${Number(c.offer_tev).toLocaleString()}` : '',
+        `"${(c.next_step || '').replace(/"/g, '""')}"`,
+      ].join(',');
+      lines.push(csvRow);
+    }
+  }
+
+  lines.push('');
+  lines.push(`Total Companies,${companies.length}`);
+  const totalOfferTev = companies.filter(c => c.offer_tev).reduce((sum, c) => sum + Number(c.offer_tev), 0);
+  if (totalOfferTev) lines.push(`Total Offer TEV,"$${totalOfferTev.toLocaleString()}"`);
+
+  const csv = lines.join('\r\n');
+  res.set({
+    'Content-Type': 'text/csv',
+    'Content-Disposition': `attachment; filename="pipeline-${mandate.buyer_name.replace(/[^a-z0-9]/gi, '-')}-${new Date().toISOString().slice(0, 10)}.csv"`,
+  });
+  res.send(csv);
+});
+
 // ---------- Health check (replaces WAL checkpoint) ----------
 app.post('/api/_checkpoint', (req, res) => {
   // No-op for Postgres (was SQLite WAL checkpoint)

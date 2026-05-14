@@ -4679,3 +4679,416 @@ body.detail-fullscreen { overflow: hidden; }
 .actlog-company { font-weight: 600; color: var(--gold); }
 .actlog-details { font-size: 0.82rem; color: var(--text-muted); margin-top: 4px; white-space: pre-wrap; }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Mandates / Reports tab
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.mandate-subtabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--card-border);
+}
+.mandate-subtab {
+  background: none;
+  border: none;
+  padding: 10px 20px;
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.mandate-subtab:hover { color: var(--text); }
+.mandate-subtab.active {
+  color: var(--gold-dark);
+  border-bottom-color: var(--gold);
+}
+
+.mandate-sub-panel[hidden] { display: none !important; }
+
+.mandate-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+/* Mandate cards */
+.mandate-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+.mandate-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 18px;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.mandate-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--gold-soft);
+}
+.mandate-card-name {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--head);
+  margin-bottom: 4px;
+}
+.mandate-card-meta {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.mandate-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.mandate-tag {
+  display: inline-block;
+  background: var(--gold-tint);
+  color: var(--gold-dark);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.02em;
+}
+.mandate-card-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.mandate-card-stat strong {
+  color: var(--text);
+  font-weight: 700;
+}
+.mandate-status-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 10px;
+  border-radius: 10px;
+  background: #dff5e3;
+  color: var(--green);
+}
+
+/* Mandate detail */
+.mandate-detail[hidden] { display: none !important; }
+.mandate-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.mandate-detail-title {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-head);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.mandate-detail-actions { display: flex; gap: 6px; }
+.mandate-detail-meta {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.mandate-detail-meta strong { color: var(--text); }
+
+/* Add company search */
+.mandate-add-company-row {
+  position: relative;
+  margin-bottom: 14px;
+}
+.mandate-add-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card-hover);
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 100;
+}
+.mandate-add-results[hidden] { display: none !important; }
+.mandate-add-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--card-border-soft);
+}
+.mandate-add-item:hover { background: var(--bg-soft); }
+.mandate-add-item:last-child { border-bottom: none; }
+.mandate-add-item-name { font-weight: 600; }
+.mandate-add-item-sub { font-size: 0.78rem; color: var(--text-muted); }
+
+/* Pipeline table */
+.mandate-pipeline-table-wrap { overflow-x: auto; }
+.mandate-pipeline-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.mandate-pipeline-table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--card-border);
+  white-space: nowrap;
+}
+.mandate-pipeline-table td {
+  padding: 10px 10px;
+  border-bottom: 1px solid var(--card-border-soft);
+  vertical-align: middle;
+}
+.mandate-pipeline-table tr:hover td { background: var(--bg-soft); }
+.mandate-pipeline-table .stage-header td {
+  background: var(--bg-soft);
+  font-weight: 700;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 6px 10px;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--card-border);
+}
+.mandate-pipeline-table .stage-header-Execution td { border-left: 3px solid var(--green); }
+.mandate-pipeline-table .stage-header-Introduction td { border-left: 3px solid var(--gold); }
+.mandate-pipeline-table .stage-header-Engage td { border-left: 3px solid #5b8fea; }
+.mandate-pipeline-table .stage-header-Qualify td { border-left: 3px solid var(--text-muted); }
+
+/* Deal stage badges */
+.deal-stage-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.deal-stage-Execution { background: #dff5e3; color: var(--green); }
+.deal-stage-Introduction { background: var(--gold-tint); color: var(--gold-dark); }
+.deal-stage-Engage { background: #e0eaff; color: #3b6fd0; }
+.deal-stage-Qualify { background: #eee; color: var(--text-muted); }
+
+.mandate-check { width: 16px; height: 16px; accent-color: var(--green); cursor: pointer; }
+.mandate-tev-input {
+  width: 90px;
+  font-size: 0.82rem;
+  padding: 3px 6px;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  background: var(--card-bg);
+}
+.mandate-next-input {
+  width: 140px;
+  font-size: 0.82rem;
+  padding: 3px 6px;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  background: var(--card-bg);
+}
+.mandate-stage-select {
+  font-size: 0.82rem;
+  padding: 3px 6px;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  background: var(--card-bg);
+}
+.mandate-remove-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 2px 6px;
+}
+.mandate-remove-btn:hover { color: var(--red); }
+
+/* Tag input */
+.tag-input-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  min-height: 36px;
+  margin-bottom: 10px;
+}
+.tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--gold-tint);
+  color: var(--gold-dark);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.tag-chip-x {
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  opacity: 0.7;
+}
+.tag-chip-x:hover { opacity: 1; color: var(--red); }
+.tag-input {
+  border: none;
+  outline: none;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  background: transparent;
+  flex: 1;
+  min-width: 80px;
+}
+
+/* Progress reports */
+.mandate-pr-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+.mandate-pr-select label { font-weight: 600; color: var(--text-muted); }
+.pr-list { display: flex; flex-direction: column; gap: 10px; }
+.pr-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.pr-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.pr-card-period {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.pr-card-status {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.pr-card-status.draft { background: #fef3c7; color: #92400e; }
+.pr-card-status.published { background: #dff5e3; color: var(--green); }
+.pr-card-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.pr-stat {
+  text-align: center;
+  padding: 8px;
+  background: var(--bg-soft);
+  border-radius: 6px;
+}
+.pr-stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--head);
+}
+.pr-stat-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.pr-card-notes {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  margin-top: 8px;
+}
+.pr-card-actions { display: flex; gap: 6px; margin-top: 10px; }
+
+/* Detail panel — mandates section */
+.d-mandates-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.d-mandate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-soft);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.d-mandate-buyer { font-weight: 600; flex: 1; }
+.d-mandate-remove {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.88rem;
+  padding: 0 4px;
+}
+.d-mandate-remove:hover { color: var(--red); }
+.d-mandates-add {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Queue mandate filter */
+.queue-mandate-filter {
+  font-size: 0.82rem;
+  max-width: 200px;
+}
+.queue-mandate-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--gold-tint);
+  color: var(--gold-dark);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.queue-mandate-badge:hover { background: var(--gold-soft); color: #fff; }
+

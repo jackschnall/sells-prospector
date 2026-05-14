@@ -75,6 +75,7 @@
           <button type="button" class="tab" data-tab="markets" role="tab">Markets</button>
           <button type="button" class="tab" data-tab="agent" role="tab">Agent</button>
           <button type="button" class="tab" data-tab="export" role="tab">Export</button>
+          <button type="button" class="tab" data-tab="reports" role="tab" data-requires-user="1" hidden>Reports</button>
           <button type="button" class="tab" data-tab="campaigns" role="tab" data-requires-user="1" hidden>Campaigns</button>
           <button type="button" class="tab" data-tab="queue" role="tab" data-requires-user="1" hidden>Call Queue</button>
           <button type="button" class="tab" data-tab="inbox" role="tab" data-requires-user="1" hidden>Inbox</button>
@@ -632,6 +633,166 @@
           </section>
         </div>
 
+        <!-- REPORTS (MANDATES) TAB -->
+        <div id="tab-reports" class="tab-panel">
+          <!-- Subtabs -->
+          <div class="mandate-subtabs">
+            <button type="button" class="mandate-subtab active" data-mandate-sub="pipeline">Active Pipeline</button>
+            <button type="button" class="mandate-subtab" data-mandate-sub="progress">Progress Reports</button>
+          </div>
+
+          <!-- Active Pipeline sub-view -->
+          <div id="mandate-pipeline-view" class="mandate-sub-panel">
+            <div class="mandate-header">
+              <h2 class="section-title">Buy-Side Mandates</h2>
+              <button type="button" class="btn-primary" id="mandate-new-btn">+ New Mandate</button>
+            </div>
+            <div id="mandate-list" class="mandate-list">
+              <div class="empty-msg">No active mandates. Create one to get started.</div>
+            </div>
+
+            <!-- Mandate detail view -->
+            <div id="mandate-detail" class="mandate-detail" hidden>
+              <div class="mandate-detail-header">
+                <button type="button" class="btn-ghost btn-xs" id="mandate-back-btn">&larr; All Mandates</button>
+                <div class="mandate-detail-title">
+                  <span id="mandate-detail-name">—</span>
+                  <span class="mandate-status-pill" id="mandate-detail-status">Active</span>
+                </div>
+                <div class="mandate-detail-actions">
+                  <button type="button" class="btn-ghost btn-xs" id="mandate-export-csv">Export CSV</button>
+                  <button type="button" class="btn-ghost btn-xs" id="mandate-edit-btn">Edit</button>
+                  <button type="button" class="btn-ghost btn-xs" id="mandate-delete-btn" style="color:var(--red)">Close Mandate</button>
+                </div>
+              </div>
+              <div class="mandate-detail-meta" id="mandate-detail-meta"></div>
+
+              <div class="mandate-add-company-row">
+                <input type="text" id="mandate-add-search" class="cf-input" placeholder="Search companies to add..." autocomplete="off" />
+                <div id="mandate-add-results" class="mandate-add-results" hidden></div>
+              </div>
+
+              <div class="mandate-pipeline-table-wrap">
+                <table class="mandate-pipeline-table" id="mandate-pipeline-table">
+                  <thead>
+                    <tr>
+                      <th>Company</th>
+                      <th>Location</th>
+                      <th>Score</th>
+                      <th>Stage</th>
+                      <th>NDA</th>
+                      <th>Offer</th>
+                      <th>TEV</th>
+                      <th>Next Step</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="mandate-pipeline-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Progress Reports sub-view -->
+          <div id="mandate-progress-view" class="mandate-sub-panel" hidden>
+            <div class="mandate-header">
+              <h2 class="section-title">Progress Reports</h2>
+            </div>
+            <div class="mandate-pr-select">
+              <label>Mandate:</label>
+              <select id="pr-mandate-select" class="select"></select>
+              <button type="button" class="btn-primary btn-xs" id="pr-new-btn">+ New Report</button>
+            </div>
+            <div id="pr-list" class="pr-list">
+              <div class="empty-msg">Select a mandate to view reports.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- New Mandate modal -->
+        <div id="mandate-modal" class="cal-modal" hidden>
+          <div class="cal-modal-card" style="max-width:540px">
+            <div class="cal-modal-header">
+              <div class="cal-modal-title" id="mandate-modal-title">New Mandate</div>
+              <button type="button" class="detail-close" id="mandate-modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="cal-modal-body">
+              <label class="camp-label">Buyer Name *</label>
+              <input type="text" id="mm-buyer-name" class="cf-input" placeholder="e.g. Alpine Plumbing Partners" />
+              <label class="camp-label">Logo URL</label>
+              <input type="text" id="mm-logo-url" class="cf-input" placeholder="https://..." />
+              <div class="cm-row">
+                <div style="flex:1">
+                  <label class="camp-label">Revenue Min ($K)</label>
+                  <input type="number" id="mm-rev-min" class="cf-input" placeholder="e.g. 5000" />
+                </div>
+                <div style="flex:1">
+                  <label class="camp-label">Revenue Max ($K)</label>
+                  <input type="number" id="mm-rev-max" class="cf-input" placeholder="e.g. 50000" />
+                </div>
+              </div>
+              <div class="cm-row">
+                <div style="flex:1">
+                  <label class="camp-label">EBITDA Min ($K)</label>
+                  <input type="number" id="mm-ebitda-min" class="cf-input" placeholder="e.g. 1000" />
+                </div>
+                <div style="flex:1">
+                  <label class="camp-label">EBITDA Max ($K)</label>
+                  <input type="number" id="mm-ebitda-max" class="cf-input" placeholder="e.g. 10000" />
+                </div>
+              </div>
+              <label class="camp-label">Target Geographies</label>
+              <div class="tag-input-wrap" id="mm-geo-tags">
+                <div class="tag-list" id="mm-geo-list"></div>
+                <input type="text" class="tag-input" id="mm-geo-input" placeholder="Type and press Enter..." />
+              </div>
+              <label class="camp-label">Target Verticals</label>
+              <div class="tag-input-wrap" id="mm-vert-tags">
+                <div class="tag-list" id="mm-vert-list"></div>
+                <input type="text" class="tag-input" id="mm-vert-input" placeholder="Type and press Enter..." />
+              </div>
+              <label class="camp-label">Reporting Frequency</label>
+              <select id="mm-frequency" class="select">
+                <option value="weekly">Weekly</option>
+                <option value="biweekly" selected>Biweekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+              <div class="cal-ev-actions">
+                <button type="button" class="btn-ghost" id="mm-cancel">Cancel</button>
+                <button type="button" class="btn-primary" id="mm-save">Save Mandate</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- New Progress Report modal -->
+        <div id="pr-modal" class="cal-modal" hidden>
+          <div class="cal-modal-card" style="max-width:480px">
+            <div class="cal-modal-header">
+              <div class="cal-modal-title">New Progress Report</div>
+              <button type="button" class="detail-close" id="pr-modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="cal-modal-body">
+              <div class="cm-row">
+                <div style="flex:1">
+                  <label class="camp-label">Period Start</label>
+                  <input type="date" id="prm-start" class="cf-input" />
+                </div>
+                <div style="flex:1">
+                  <label class="camp-label">Period End</label>
+                  <input type="date" id="prm-end" class="cf-input" />
+                </div>
+              </div>
+              <label class="camp-label">Notes</label>
+              <textarea id="prm-notes" class="cf-input" rows="4" placeholder="Summary of activity this period..."></textarea>
+              <div class="cal-ev-actions">
+                <button type="button" class="btn-ghost" id="prm-cancel">Cancel</button>
+                <button type="button" class="btn-primary" id="prm-save">Create Report</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- CAMPAIGNS TAB -->
         <div id="tab-campaigns" class="tab-panel">
           <!-- Campaign list view -->
@@ -751,6 +912,10 @@
               <div class="queue-sub" id="queue-sub">Ranked by callback urgency, tier, and outreach hygiene.</div>
             </div>
             <div class="queue-header-right">
+              <select id="queue-mandate-filter" class="select queue-mandate-filter" title="Filter by mandate">
+                <option value="">All Companies</option>
+              </select>
+              <span id="queue-mandate-badge" class="queue-mandate-badge" hidden></span>
               <span id="queue-mock-badge" class="queue-mock-badge" hidden>MOCK MODE</span>
               <button type="button" class="btn-ghost btn-xs" id="queue-refresh">Refresh</button>
             </div>
@@ -1205,6 +1370,19 @@
               <option value="bad_timing">Bad Timing</option>
               <option value="ineligible">Ineligible</option>
             </select>
+          </div>
+        </section>
+
+        <section class="d-section" id="d-mandates-section">
+          <div class="d-section-title">
+            Mandates <span class="d-section-count" id="d-mandates-count">0</span>
+          </div>
+          <div id="d-mandates-list" class="d-mandates-list"></div>
+          <div class="d-mandates-add" id="d-mandates-add">
+            <select id="d-mandate-select" class="cf-input" style="flex:1;font-size:0.82rem">
+              <option value="">Add to mandate...</option>
+            </select>
+            <button type="button" class="btn-ghost btn-xs" id="d-mandate-add-btn">Add</button>
           </div>
         </section>
 

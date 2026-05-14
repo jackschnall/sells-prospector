@@ -316,3 +316,59 @@ ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS ai_prompt TEXT;
 CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
 CREATE INDEX IF NOT EXISTS idx_campaign_recip_campaign ON campaign_recipients(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_recip_company  ON campaign_recipients(company_id);
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Mandates (buy-side mandate management)
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS mandates (
+  id TEXT PRIMARY KEY,
+  buyer_name TEXT NOT NULL,
+  buyer_logo_url TEXT,
+  revenue_min INTEGER,
+  revenue_max INTEGER,
+  ebitda_min INTEGER,
+  ebitda_max INTEGER,
+  target_geographies JSONB DEFAULT '[]'::JSONB,
+  target_verticals JSONB DEFAULT '[]'::JSONB,
+  reporting_frequency TEXT DEFAULT 'biweekly',
+  status TEXT DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS mandate_companies (
+  id TEXT PRIMARY KEY,
+  mandate_id TEXT NOT NULL REFERENCES mandates(id) ON DELETE CASCADE,
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  deal_stage TEXT DEFAULT 'Qualify',
+  next_step TEXT,
+  nda_sent BOOLEAN DEFAULT FALSE,
+  nda_signed BOOLEAN DEFAULT FALSE,
+  offer_sent BOOLEAN DEFAULT FALSE,
+  offer_signed BOOLEAN DEFAULT FALSE,
+  offer_tev INTEGER,
+  added_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(mandate_id, company_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mandate_companies_mandate ON mandate_companies(mandate_id);
+CREATE INDEX IF NOT EXISTS idx_mandate_companies_company ON mandate_companies(company_id);
+
+CREATE TABLE IF NOT EXISTS progress_reports (
+  id TEXT PRIMARY KEY,
+  mandate_id TEXT NOT NULL REFERENCES mandates(id) ON DELETE CASCADE,
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  calls_made INTEGER DEFAULT 0,
+  talk_time_seconds INTEGER DEFAULT 0,
+  emails_sent INTEGER DEFAULT 0,
+  new_companies_contacted INTEGER DEFAULT 0,
+  companies_advanced INTEGER DEFAULT 0,
+  notes TEXT,
+  is_published BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_progress_reports_mandate ON progress_reports(mandate_id);
