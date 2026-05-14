@@ -5821,7 +5821,7 @@ function initStaleFilter() {
   const toggle = $('#stale-filter-toggle');
   if (toggle) toggle.addEventListener('change', () => {
     _staleFilter = toggle.checked;
-    renderPipelineBoardEnriched();
+    renderPipelineBoard();
   });
   const pipeSearch = $('#pipeline-search');
   if (pipeSearch) {
