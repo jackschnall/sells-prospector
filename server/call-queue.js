@@ -21,7 +21,7 @@
 
 const { pool, getUserConfig } = require('./db');
 
-const TERMINAL_STAGES = ['deal_closed', 'closed_lost'];
+const TERMINAL_STAGES = ['close', 'deal_closed', 'closed_lost'];
 
 function parseArr(v) {
   if (Array.isArray(v)) return v;

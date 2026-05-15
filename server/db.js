@@ -401,14 +401,13 @@ async function countCompaniesInMarket(city, state) {
 
 const PIPELINE_STAGES = [
   'no_contact',
+  'outreach_started',
   'initial_contact',
-  'nurture',
-  'lead_memo',
-  'pitch',
-  'engagement_letter',
-  'lois_collected',
-  'deal_closed',
-  'closed_lost',
+  'relationship_established',
+  'prep',
+  'market',
+  'loi',
+  'close',
 ];
 
 const CLOSED_LOST_REASONS = ['no_interest', 'bad_timing', 'ineligible'];
@@ -442,14 +441,21 @@ async function updatePipelineStage(companyId, stage, closedLostReason = null, us
 function formatStage(s) {
   const map = {
     no_contact: 'No Contact',
-    initial_contact: 'Initial Contact',
-    nurture: 'Nurture',
-    lead_memo: 'Lead Memo / Books & Records',
-    pitch: 'Pitch',
-    engagement_letter: 'Engagement Letter Signed',
-    lois_collected: "LOI's Collected",
-    deal_closed: 'Deal Closed',
-    closed_lost: 'Closed/Lost',
+    outreach_started: 'Outreach Started',
+    initial_contact: 'Initial Contact Made',
+    relationship_established: 'Relationship Established (NDA Signed)',
+    prep: 'Prep',
+    market: 'Market',
+    loi: 'LOI',
+    close: 'Close',
+    // Legacy stage mappings for existing data
+    nurture: 'Outreach Started',
+    lead_memo: 'Prep',
+    pitch: 'Market',
+    engagement_letter: 'Relationship Established (NDA Signed)',
+    lois_collected: 'LOI',
+    deal_closed: 'Close',
+    closed_lost: 'Close',
   };
   return map[s] || s;
 }
@@ -485,9 +491,20 @@ async function getPipelineBoard({ restrictToVerticals, restrictToTerritories } =
     params
   );
   const board = {};
+  // Map legacy stages to new ones
+  const LEGACY_MAP = {
+    nurture: 'outreach_started',
+    lead_memo: 'prep',
+    pitch: 'market',
+    engagement_letter: 'relationship_established',
+    lois_collected: 'loi',
+    deal_closed: 'close',
+    closed_lost: 'close',
+  };
   for (const stage of PIPELINE_STAGES) board[stage] = [];
   for (const r of rows) {
-    const stage = r.pipeline_stage || 'no_contact';
+    let stage = r.pipeline_stage || 'no_contact';
+    if (LEGACY_MAP[stage]) stage = LEGACY_MAP[stage];
     if (board[stage]) board[stage].push(r);
     else board.no_contact.push(r);
   }

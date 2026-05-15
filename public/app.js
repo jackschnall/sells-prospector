@@ -270,7 +270,7 @@ function renderDashboard(stats) {
   const pipHost = $('#dash-pipeline');
   if (pipHost && state.pipelineBoard && state.pipelineStages.length) {
     const board = state.pipelineBoard;
-    const stageColors = { no_contact: '#8B8FA3', initial_contact: '#3B82F6', nurture: '#8B5CF6', lead_memo: '#F59E0B', pitch: '#EC4899', engagement_letter: '#10B981', lois_collected: '#06B6D4', deal_closed: '#22C55E', closed_lost: '#EF4444' };
+    const stageColors = { no_contact: '#8B8FA3', outreach_started: '#6366F1', initial_contact: '#3B82F6', relationship_established: '#10B981', prep: '#F59E0B', market: '#EC4899', loi: '#06B6D4', close: '#22C55E', nurture: '#8B5CF6', lead_memo: '#F59E0B', pitch: '#EC4899', engagement_letter: '#10B981', lois_collected: '#06B6D4', deal_closed: '#22C55E', closed_lost: '#EF4444' };
     const totalInPipeline = Object.values(board).reduce((s, arr) => s + arr.length, 0) || 1;
     pipHost.innerHTML = '<div class="pip-bar">' + state.pipelineStages.map((s) => {
       const count = (board[s.key] || []).length;
