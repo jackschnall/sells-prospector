@@ -5636,3 +5636,14 @@ body.detail-fullscreen { overflow: hidden; }
   border-radius: 2px;
   min-height: 100px;
 }
+
+/* Pipeline legend */
+.pipeline-legend { margin-top: 6px; }
+.pipeline-legend-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.75rem; color: var(--text-muted);
+}
+.kc-stale-dot-legend {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #b91c1c; display: inline-block; flex-shrink: 0;
+}
