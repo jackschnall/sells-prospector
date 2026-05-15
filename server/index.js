@@ -1693,7 +1693,7 @@ app.get('/api/campaigns/search/companies', requireUser, async (req, res) => {
   const excludeCampaign = req.query.exclude_campaign || '';
   let sql = `SELECT c.id, c.name, c.owner, c.city, c.state, c.email, c.score, c.tier, c.pipeline_stage,
               c.outreach_angle, c.phone
-             FROM companies c WHERE c.status = 'done'`;
+             FROM companies c WHERE c.deleted_at IS NULL`;
   const params = [];
   let idx = 1;
   if (q) {
