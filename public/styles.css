@@ -5618,7 +5618,7 @@ body.detail-fullscreen { overflow: hidden; }
   flex-shrink: 0;
 }
 .kanban-divider-label {
-  font-size: 0.65rem;
+  font-size: 0.82rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
