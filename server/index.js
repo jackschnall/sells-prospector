@@ -1723,7 +1723,7 @@ app.get('/api/campaigns/search/companies', requireUser, async (req, res) => {
     params.push(excludeCampaign);
     idx++;
   }
-  sql += ' ORDER BY c.score DESC NULLS LAST LIMIT 200';
+  sql += ' ORDER BY c.score DESC NULLS LAST LIMIT 1000';
   const rows = await pool.query(sql, params).then((r) => r.rows);
   res.json({ companies: rows });
 });
