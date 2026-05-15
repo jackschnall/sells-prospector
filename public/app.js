@@ -466,6 +466,7 @@ function renderPipelineBoard() {
       );
     }
     totalCount += companies.length;
+    const dividerAfter = s.key === 'relationship_established' ? '<div class="kanban-divider"><div class="kanban-divider-label">Engagement Letter Signed</div><div class="kanban-divider-line"></div></div>' : '';
     return `
       <div class="kanban-col" data-stage="${s.key}">
         <div class="kanban-col-header">
@@ -478,6 +479,7 @@ function renderPipelineBoard() {
             : companies.map(renderKanbanCard).join('')}
         </div>
       </div>
+      ${dividerAfter}
     `;
   }).join('');
 
