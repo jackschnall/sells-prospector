@@ -204,6 +204,16 @@ async function analyzeCall(callLogId) {
     outreach_angle_refined: analysis.outreach_angle_refined,
   });
 
+  // Mark company as warm on positive sentiment
+  if (['Receptive', 'Callback Requested'].includes(analysis.sentiment) && call.company_id) {
+    try {
+      const warmUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      await execute('UPDATE companies SET warm_until = $1 WHERE id = $2', [warmUntil, call.company_id]);
+    } catch (err) {
+      console.warn('[call-analyzer] Failed to set warm_until:', err.message);
+    }
+  }
+
   // Merge key_info into company record (additive — never overwrite with null)
   if (analysis.key_info && call.company_id) {
     try {

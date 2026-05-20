@@ -1666,12 +1666,22 @@ Return ONLY valid JSON: { "subject": "...", "body": "..." }`,
       });
 
       if (parsed?.subject && parsed?.body) {
+        const { nanoid: genNanoid } = require('nanoid');
         // Convert body to HTML — simple line breaks, no extra spacing
         const bodyHtml = parsed.body.replace(/\n/g, '<br>');
         const fullHtml = bodyHtml + (senderSig ? `<br><br>${senderSig.replace(/\n/g, '<br>')}` : '');
+        // Create tracking pixel for open tracking
+        const trackId = genNanoid();
+        await pool.query(
+          'INSERT INTO email_tracking (id, company_id, contact_id, user_id, campaign_id, recipient_email) VALUES ($1, $2, $3, $4, $5, $6)',
+          [trackId, r.company_id, null, req.currentUser.id, req.params.id, r.to_email || null]
+        );
+        const publicUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+        const pixelTag = `<img src="${publicUrl}/api/track/${trackId}.png" width="1" height="1" style="display:none" alt="" />`;
+        const trackedHtml = fullHtml + pixelTag;
         await execute(
           `UPDATE campaign_recipients SET merged_subject = $1, merged_body = $2 WHERE campaign_id = $3 AND company_id = $4`,
-          [parsed.subject, fullHtml, req.params.id, r.company_id]
+          [parsed.subject, trackedHtml, req.params.id, r.company_id]
         );
         generated++;
       }
@@ -2523,6 +2533,93 @@ registerOutlookRoutes(app);
 app.post('/api/_checkpoint', (req, res) => {
   // No-op for Postgres (was SQLite WAL checkpoint)
   res.json({ ok: true });
+});
+
+// ---------- Email Open Tracking ----------
+
+// GET /api/track/:trackingId.png — tracking pixel endpoint (NO auth — hit by email clients)
+app.get('/api/track/:trackingId.png', async (req, res) => {
+  const trackingId = req.params.trackingId;
+  try {
+    const { rows: [track] } = await pool.query(
+      'SELECT * FROM email_tracking WHERE id = $1', [trackingId]
+    );
+    if (track) {
+      await pool.query(
+        'UPDATE email_tracking SET opened_at = NOW(), ip_address = $1, user_agent = $2 WHERE id = $3',
+        [req.ip, req.headers['user-agent'] || '', trackingId]
+      );
+      const warmUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      if (track.company_id) {
+        await pool.query('UPDATE companies SET warm_until = $1 WHERE id = $2', [warmUntil, track.company_id]);
+      }
+      if (track.contact_id) {
+        await pool.query('UPDATE contacts SET warm_until = $1 WHERE id = $2', [warmUntil, track.contact_id]);
+      }
+    }
+  } catch (err) {
+    console.error('[tracking] pixel error:', err.message);
+  }
+  // Always return the 1x1 transparent PNG regardless of errors
+  const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  res.set('Content-Type', 'image/png');
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.send(pixel);
+});
+
+// POST /api/tracking/create — create a tracking pixel record and return the URL
+app.post('/api/tracking/create', requireUser, async (req, res) => {
+  const { nanoid } = require('nanoid');
+  const { company_id, contact_id, campaign_id, recipient_email } = req.body || {};
+  const id = nanoid();
+  await pool.query(
+    'INSERT INTO email_tracking (id, company_id, contact_id, user_id, campaign_id, recipient_email) VALUES ($1, $2, $3, $4, $5, $6)',
+    [id, company_id || null, contact_id || null, req.currentUser.id, campaign_id || null, recipient_email || null]
+  );
+  const publicUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+  res.json({ ok: true, tracking_id: id, pixel_url: `${publicUrl}/api/track/${id}.png` });
+});
+
+// POST /api/webhooks/engagement — accept engagement events from any source
+app.post('/api/webhooks/engagement', async (req, res) => {
+  const { email, company_id, contact_id, event_type, source } = req.body || {};
+  const warmUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  let matchedCompanyId = company_id;
+  let matchedContactId = contact_id;
+  if (!matchedCompanyId && email) {
+    const { rows } = await pool.query(
+      'SELECT id, company_id FROM contacts WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL LIMIT 1', [email]
+    );
+    if (rows[0]) {
+      matchedContactId = rows[0].id;
+      matchedCompanyId = rows[0].company_id;
+    }
+    if (!matchedCompanyId) {
+      const { rows: companies } = await pool.query(
+        'SELECT id FROM companies WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL LIMIT 1', [email]
+      );
+      if (companies[0]) matchedCompanyId = companies[0].id;
+    }
+  }
+
+  if (matchedCompanyId) {
+    await pool.query('UPDATE companies SET warm_until = $1 WHERE id = $2', [warmUntil, matchedCompanyId]);
+  }
+  if (matchedContactId) {
+    await pool.query('UPDATE contacts SET warm_until = $1 WHERE id = $2', [warmUntil, matchedContactId]);
+  }
+  res.json({ ok: true, matched_company: matchedCompanyId, matched_contact: matchedContactId });
+});
+
+// GET /api/companies/warm — list all currently warm companies
+app.get('/api/companies/warm', requireUser, async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT id, name, city, state, owner, score, tier, warm_until FROM companies WHERE warm_until > NOW() AND deleted_at IS NULL ORDER BY warm_until DESC"
+  );
+  res.json({ companies: rows });
 });
 
 // ---------- Start ----------

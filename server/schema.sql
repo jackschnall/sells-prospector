@@ -449,3 +449,25 @@ CREATE TABLE IF NOT EXISTS calendar_invites (
   invite_text TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Email Tracking (open-pixel tracking for campaigns)
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS email_tracking (
+  id TEXT PRIMARY KEY,
+  company_id TEXT REFERENCES companies(id) ON DELETE CASCADE,
+  contact_id TEXT REFERENCES contacts(id) ON DELETE SET NULL,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  campaign_id TEXT,
+  recipient_email TEXT,
+  event_type TEXT DEFAULT 'open',
+  opened_at TIMESTAMPTZ DEFAULT NOW(),
+  ip_address TEXT,
+  user_agent TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_tracking_company ON email_tracking(company_id);
+CREATE INDEX IF NOT EXISTS idx_email_tracking_opened ON email_tracking(opened_at);
+
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS warm_until TIMESTAMPTZ;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS warm_until TIMESTAMPTZ;

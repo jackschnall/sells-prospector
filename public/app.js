@@ -191,12 +191,13 @@ function renderCard(c) {
   const stageChip = stageInfo && c.pipeline_stage !== 'no_contact'
     ? `<span class="chip chip-stage">${escapeHtml(stageInfo.label)}</span>`
     : '';
+  const isWarm = c.warm_until && new Date(c.warm_until) > new Date();
   return `
     <article class="card ${c.crm_known ? 'card-dim' : ''}" data-id="${c.id}">
       <div class="card-top">
         <div class="score-badge ${tierClass(c.tier)}">${fmtScore(c.score)}</div>
         <div class="card-head">
-          <div class="card-name">${escapeHtml(c.name)}</div>
+          <div class="card-name">${escapeHtml(c.name)}${isWarm ? '<span class="warm-badge" title="Engaged — opened email or had positive call">🔥</span>' : ''}</div>
           <div class="card-loc">${escapeHtml(loc || '—')}</div>
         </div>
         <div class="card-tier ${tierClass(c.tier)}">${escapeHtml(tierLabel(c.tier))}</div>
@@ -583,7 +584,7 @@ function renderKanbanCard(c) {
       ${isStale ? '<span class="kc-stale-dot" title="Stale - not updated in 7+ days"></span>' : ''}
       <div class="kc-top">
         <span class="kc-score ${tierClass(c.tier)}">${fmtScore(c.score)}</span>
-        <span class="kc-name">${escapeHtml(c.name)}</span>
+        <span class="kc-name">${escapeHtml(c.name)}${c.warm_until && new Date(c.warm_until) > new Date() ? '<span class="warm-badge" title="Engaged — opened email or had positive call">🔥</span>' : ''}</span>
         ${ownerCircle}
       </div>
       <div class="kc-meta">
@@ -799,7 +800,18 @@ function renderDetail(data) {
   $('#d-score').className = `detail-score ${tierClass(c.tier)}`;
   $('#d-score-edit').hidden = true;
   $('#d-score').hidden = false;
-  $('#d-name').textContent = c.name;
+  const dNameEl = $('#d-name');
+  dNameEl.textContent = c.name;
+  // Append warm badge if company has recent engagement
+  const existingWarm = dNameEl.querySelector('.warm-badge');
+  if (existingWarm) existingWarm.remove();
+  if (c.warm_until && new Date(c.warm_until) > new Date()) {
+    const wb = document.createElement('span');
+    wb.className = 'warm-badge';
+    wb.title = 'Engaged — opened email or had positive call';
+    wb.textContent = '🔥';
+    dNameEl.appendChild(wb);
+  }
   $('#d-sub').textContent = loc || '—';
   $('#d-tier').textContent = tierLabel(c.tier);
   $('#d-tier').className = `detail-tier ${tierClass(c.tier)}`;
@@ -2190,7 +2202,7 @@ function renderQueue(data) {
           <div class="queue-rank">${r.rank}</div>
           <div class="queue-row-score">${score}</div>
           <div class="queue-row-main">
-            <div class="queue-row-name">${escapeHtml(r.name)}</div>
+            <div class="queue-row-name">${escapeHtml(r.name)}${r.warm_until && new Date(r.warm_until) > new Date() ? '<span class="warm-badge" title="Engaged — opened email or had positive call">🔥</span>' : ''}</div>
             <div class="queue-row-meta">${escapeHtml(meta)}</div>
             <div class="queue-row-reason">${escapeHtml(r.reason || '')}</div>
           </div>
@@ -3894,6 +3906,7 @@ function renderContactsTab(contacts) {
 
 function renderContactRow(c) {
   const name = escapeHtml(c.name || 'Unnamed');
+  const warmBadge = c.warm_until && new Date(c.warm_until) > new Date() ? '<span class="warm-badge" title="Engaged — opened email or had positive call">🔥</span>' : '';
   const title = c.title ? escapeHtml(c.title) : '';
   const primary = c.is_primary ? '<span class="contact-row-primary-pill">Primary</span>' : '';
   const allPhones = [c.phone, ...((c.phones ? (typeof c.phones === 'string' ? JSON.parse(c.phones || '[]') : c.phones) : []))].filter(Boolean);
@@ -3911,7 +3924,7 @@ function renderContactRow(c) {
   return `
     <div class="contact-row">
       <div class="contact-row-main">
-        <div class="contact-row-name">${name}${primary}</div>
+        <div class="contact-row-name">${name}${warmBadge}${primary}</div>
         ${title ? `<div class="contact-row-title">${title}</div>` : ''}
       </div>
       <div class="contact-row-contactinfo">${contactInfo}</div>
