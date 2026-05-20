@@ -2131,6 +2131,7 @@ async function dismissOldestDebrief() {
     }
     toast(n === 1 ? 'Debrief dismissed' : `${n} debriefs dismissed`, 'ok');
     await refreshPendingDebriefs();
+    await loadQueue();
   } catch {
     toast('Failed to dismiss debrief', 'error');
   }
