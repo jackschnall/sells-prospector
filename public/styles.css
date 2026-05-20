@@ -5647,3 +5647,8 @@ body.detail-fullscreen { overflow: hidden; }
   width: 8px; height: 8px; border-radius: 50%;
   background: #b91c1c; display: inline-block; flex-shrink: 0;
 }
+
+/* Editable key info */
+.keyinfo-editable { cursor: pointer; border-bottom: 1px dashed transparent; }
+.keyinfo-editable:hover { border-bottom-color: var(--gold); }
+.keyinfo-edit-input { font-size: 0.82rem; padding: 1px 4px; width: 100%; }

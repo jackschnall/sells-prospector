@@ -2048,6 +2048,13 @@ app.get('/api/mandates/:id/pipeline-report.csv', requireUser, async (req, res) =
 });
 
 // ---------- Pipeline Enrichment (Feature 1A) ----------
+app.put('/api/companies/:id/key-info', requireUser, async (req, res) => {
+  const { key_info } = req.body || {};
+  if (!key_info) return res.status(400).json({ error: 'key_info required' });
+  await execute('UPDATE companies SET key_info = $1, updated_at = NOW() WHERE id = $2', [JSON.stringify(key_info), req.params.id]);
+  res.json({ ok: true });
+});
+
 app.put('/api/companies/:id/deal-fields', requireUser, async (req, res) => {
   const { valuation, probability, est_close_date, deal_owner_id, deal_priority, next_steps } = req.body || {};
   const fields = [];

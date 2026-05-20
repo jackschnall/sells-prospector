@@ -914,7 +914,7 @@ function renderDetail(data) {
   renderNotes(data.notes || []);
 
   // Key Info
-  renderKeyInfo(c.key_info, '#d-keyinfo', '#d-keyinfo-section');
+  renderKeyInfo(c.key_info, '#d-keyinfo', '#d-keyinfo-section', c.id);
 
   // Messages
   loadCompanyMessages(c.id);
@@ -2292,7 +2292,7 @@ function selectQueueRow(id) {
 
   // Key Info
   const qpCompany = state.companies.find((c) => c.id === id);
-  renderKeyInfo(qpCompany?.key_info, '#qp-keyinfo', '#qp-keyinfo-section');
+  renderKeyInfo(qpCompany?.key_info, '#qp-keyinfo', '#qp-keyinfo-section', id);
 
   // Call Intelligence in queue
   const qpCallIntelSection = $('#qp-call-intel-section');
@@ -2379,7 +2379,7 @@ const KEY_INFO_LABELS = {
   other: 'Other',
 };
 
-function renderKeyInfo(keyInfo, hostSel, sectionSel) {
+function renderKeyInfo(keyInfo, hostSel, sectionSel, companyId) {
   const host = $(hostSel);
   const section = $(sectionSel);
   if (!host || !section) return;
@@ -2391,8 +2391,38 @@ function renderKeyInfo(keyInfo, hostSel, sectionSel) {
   host.innerHTML = entries.map(([k, v]) => {
     const label = KEY_INFO_LABELS[k] || k.replace(/_/g, ' ');
     const val = Array.isArray(v) ? v.join(', ') : String(v);
-    return `<div class="keyinfo-row"><span class="keyinfo-label">${escapeHtml(label)}</span><span class="keyinfo-value">${escapeHtml(val)}</span></div>`;
+    return `<div class="keyinfo-row"><span class="keyinfo-label">${escapeHtml(label)}</span><span class="keyinfo-value keyinfo-editable" data-key="${escapeHtml(k)}" title="Click to edit">${escapeHtml(val)}</span></div>`;
   }).join('');
+  if (companyId) {
+    $$('.keyinfo-editable', host).forEach(el => {
+      el.addEventListener('click', () => {
+        if (el.querySelector('input')) return;
+        const currentVal = el.textContent;
+        const key = el.dataset.key;
+        el.innerHTML = `<input type="text" class="cf-input keyinfo-edit-input" value="${escapeHtml(currentVal)}" />`;
+        const input = el.querySelector('input');
+        input.focus();
+        input.select();
+        const save = async () => {
+          const newVal = input.value.trim();
+          el.textContent = newVal || currentVal;
+          if (newVal !== currentVal) {
+            const updated = { ...(info || {}) };
+            updated[key] = newVal;
+            try {
+              await fetch(`/api/companies/${companyId}/key-info`, {
+                method: 'PUT',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ key_info: updated }),
+              });
+            } catch {}
+          }
+        };
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+      });
+    });
+  }
 }
 
 // ---------- Queue outreach angle (prefer call-refined) ----------
