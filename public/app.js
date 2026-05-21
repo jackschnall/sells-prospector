@@ -3441,9 +3441,9 @@ function renderSettingsUsers() {
 }
 
 const SETTINGS_VERTICALS = [
-  'Plumbing', 'HVAC', 'Pest Control', 'Restoration',
-  'Painting', 'Electrical', 'Septic', 'Cleaning',
-  'Landscaping', 'Roofing', 'Fire Protection', 'Pool Service',
+  'Plumbing', 'HVAC', 'Electrical', 'Pest Control', 'Roofing', 'Siding',
+  'Janitorial', 'Painting', 'Cleaning', 'Restoration', 'Landscaping',
+  'Septic', 'Excavation', 'Fire Protection', 'Pool Service',
   'Garage Door', 'Insulation', 'Other',
 ];
 
