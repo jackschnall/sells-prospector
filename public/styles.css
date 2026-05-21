@@ -5663,3 +5663,7 @@ body.detail-fullscreen { overflow: hidden; }
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* Queue filter group labels */
+.queue-filter-group { display: flex; flex-direction: column; gap: 2px; }
+.queue-filter-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); font-weight: 700; }

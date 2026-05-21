@@ -988,17 +988,23 @@
               <div class="queue-sub" id="queue-sub">Ranked by callback urgency, tier, and outreach hygiene.</div>
             </div>
             <div class="queue-header-right">
-              <select id="queue-mandate-filter" class="select queue-mandate-filter" title="Filter by mandate">
-                <option value="">All Companies</option>
-              </select>
-              <span id="queue-mandate-badge" class="queue-mandate-badge" hidden></span>
-              <div class="queue-target-section" style="display:inline-flex;align-items:center;gap:6px;">
-                <select id="queue-target-select" class="cf-input" style="font-size:0.82rem;max-width:200px;">
+              <div class="queue-filter-group">
+                <div class="queue-filter-label">Mandate</div>
+                <select id="queue-mandate-filter" class="select queue-mandate-filter" title="Filter by mandate">
                   <option value="">All Companies</option>
                 </select>
-                <button type="button" class="btn-ghost btn-xs" id="queue-target-create">+ Create Target</button>
-                <button type="button" class="btn-ghost btn-xs" id="queue-target-edit" hidden>Edit</button>
-                <button type="button" class="btn-ghost btn-xs" id="queue-target-delete" hidden style="color:var(--red)">Delete</button>
+                <span id="queue-mandate-badge" class="queue-mandate-badge" hidden></span>
+              </div>
+              <div class="queue-filter-group">
+                <div class="queue-filter-label">Target</div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <select id="queue-target-select" class="cf-input" style="font-size:0.82rem;max-width:200px;">
+                    <option value="">All Companies</option>
+                  </select>
+                  <button type="button" class="btn-ghost btn-xs" id="queue-target-create">+ Create</button>
+                  <button type="button" class="btn-ghost btn-xs" id="queue-target-edit" hidden>Edit</button>
+                  <button type="button" class="btn-ghost btn-xs" id="queue-target-delete" hidden style="color:var(--red)">Delete</button>
+                </div>
               </div>
               <span id="queue-mock-badge" class="queue-mock-badge" hidden>MOCK MODE</span>
               <button type="button" class="btn-ghost btn-xs" id="queue-refresh">Refresh</button>
