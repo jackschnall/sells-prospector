@@ -1153,14 +1153,28 @@ function bindToolbar() {
     document.addEventListener('click', (e) => {
       if (!$('#industry-filter-wrap')?.contains(e.target)) indDrop.hidden = true;
     });
-    $$('input[type="checkbox"]', indDrop).forEach((cb) => {
-      cb.addEventListener('change', () => {
-        const checked = $$('input[type="checkbox"]:checked', indDrop).map((c) => c.value);
+    const selectAllCb = $('#industry-select-all');
+    if (selectAllCb) {
+      selectAllCb.addEventListener('change', () => {
+        $$('input[type="checkbox"]', indDrop).forEach(cb => {
+          if (cb !== selectAllCb) cb.checked = selectAllCb.checked;
+        });
+        const checked = $$('input[type="checkbox"]:checked', indDrop).filter(c => c !== selectAllCb).map(c => c.value);
         state.filter.industries = checked;
-        const total = $$('input[type="checkbox"]', indDrop).length;
+        indBtn.textContent = selectAllCb.checked ? 'All Industries \u25BE' : 'None \u25BE';
+        loadCompanies();
+      });
+    }
+    $$('input[type="checkbox"]', indDrop).forEach((cb) => {
+      if (cb === selectAllCb) return;
+      cb.addEventListener('change', () => {
+        const checked = $$('input[type="checkbox"]:checked', indDrop).filter(c => c !== selectAllCb).map((c) => c.value);
+        const total = $$('input[type="checkbox"]', indDrop).length - 1;
+        state.filter.industries = checked;
+        if (selectAllCb) selectAllCb.checked = checked.length === total;
         indBtn.textContent = checked.length === total || checked.length === 0
           ? 'All Industries \u25BE'
-          : checked.map((v) => v).join(', ') + ' \u25BE';
+          : checked.length <= 3 ? checked.join(', ') + ' \u25BE' : checked.length + ' selected \u25BE';
         loadCompanies();
       });
     });
