@@ -2,22 +2,24 @@ const { MODELS, callWithWebSearch } = require('./claude');
 const { DISCOVERY_SYSTEM_PROMPT } = require('./prompts');
 const { mockDiscovery } = require('./mock');
 
-function buildUserPrompt(geography, blocklistNames) {
+function buildUserPrompt(geography, blocklistNames, industry) {
   const blocklistText = blocklistNames && blocklistNames.length
     ? blocklistNames.slice(0, 500).map((n) => `  - ${n}`).join('\n')
     : '  (none)';
 
-  return `Find plumbing-company owners in the following geography who may be candidates for a Sells sell-side engagement.
+  const industryLabel = industry || 'service';
+
+  return `Find ${industryLabel}-company owners in the following geography who may be candidates for a Sells sell-side engagement.
 
 Geography: ${geography || '(not specified — use the entire United States)'}
 
 BLOCKLIST — do NOT return any company whose name matches any of these (already in Sells CRM):
 ${blocklistText}
 
-Use web_search to identify 8-15 NET-NEW, independently-owned plumbing companies in the geography. Return the final JSON object only.`;
+Use web_search to identify 8-15 NET-NEW, independently-owned ${industryLabel} companies in the geography. Return the final JSON object only.`;
 }
 
-async function runDiscovery(geography, blocklistNames = []) {
+async function runDiscovery(geography, blocklistNames = [], industry = null) {
   if (process.env.MOCK_MODE === '1') {
     return mockDiscovery(geography, blocklistNames);
   }
@@ -25,7 +27,7 @@ async function runDiscovery(geography, blocklistNames = []) {
   const { parsed, raw } = await callWithWebSearch({
     model: MODELS.worker,
     system: DISCOVERY_SYSTEM_PROMPT,
-    user: buildUserPrompt(geography, blocklistNames),
+    user: buildUserPrompt(geography, blocklistNames, industry),
     maxTokens: 4000,
     maxIterations: 10,
     maxSearches: 8,

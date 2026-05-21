@@ -115,6 +115,8 @@ async function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stat
   const params = [];
   let idx = 1;
   // Per-user visibility restrictions
+  // NOTE: COALESCE(industry, 'Plumbing') is a backward-compat fallback for legacy rows.
+  // New companies should always have industry set explicitly on insert.
   if (restrictToVerticals && restrictToVerticals.length) {
     const ph = restrictToVerticals.map((_, i) => `$${idx + i}`).join(', ');
     where.push(`COALESCE(industry, 'Plumbing') IN (${ph})`);
@@ -153,6 +155,7 @@ async function listCompanies({ tier, crmKnown, search, sort = 'score_desc', stat
     const industries = String(industry).split(',').map((s) => s.trim()).filter(Boolean);
     if (industries.length) {
       const placeholders = industries.map((_, i) => `$${idx + i}`).join(', ');
+      // 'Plumbing' fallback = backward-compat for legacy rows without industry set
       where.push(`COALESCE(industry, 'Plumbing') IN (${placeholders})`);
       params.push(...industries);
       idx += industries.length;

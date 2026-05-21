@@ -10,7 +10,8 @@ function buildUserPrompt(company, thesis = {}) {
   if (thesis.minYears) thesisLines.push(`Min years in business: ${thesis.minYears}`);
   if (thesis.minRating) thesisLines.push(`Min Google rating: ${thesis.minRating}`);
 
-  return `Research the following plumbing company for a potential Sells M&A engagement.
+  const industryLabel = company.industry || 'service';
+  return `Research the following ${industryLabel.toLowerCase()} company for a potential Sells M&A engagement.
 
 Company: ${company.name}
 ${company.city ? `City: ${company.city}` : ''}

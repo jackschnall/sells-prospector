@@ -250,7 +250,7 @@ function mockEnrich(company) {
     year_founded: 2005,
     ownership_type: 'Private',
     naics_codes: ['238220'],
-    description: 'Full-service plumbing company.',
+    description: `Full-service ${(company.industry || 'contractor').toLowerCase()} company.`,
     headquarters: { city: company.city, state: company.state },
     website: company.website,
     linkedin_url: null,

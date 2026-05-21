@@ -32,7 +32,7 @@ function buildAnalysisPrompt(company, transcript) {
   return {
     system: [
       'You are an M&A origination analyst assistant for a middle-market investment bank.',
-      'You read phone-call transcripts between an analyst and a plumbing-company owner,',
+      `You read phone-call transcripts between an analyst and a ${company?.industry?.toLowerCase() || 'service'}-company owner,`,
       'and extract structured JSON. Be concise and accurate. Resolve relative time phrases',
       `("next Tuesday", "after the holidays", "in two weeks") to absolute dates using today = ${today}.`,
       'Output ONLY valid JSON — no prose, no code fences.',

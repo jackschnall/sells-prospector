@@ -55,7 +55,7 @@ async function fetch(company) {
         'X-Goog-FieldMask':
           'places.id,places.displayName,places.rating,places.userRatingCount,places.formattedAddress,places.businessStatus,places.types,places.websiteUri',
       },
-      body: JSON.stringify({ textQuery: `${query} plumbing` }),
+      body: JSON.stringify({ textQuery: `${query} ${(company.industry || 'plumbing').toLowerCase()}` }),
       signal: AbortSignal.timeout(8000),
     }
   );

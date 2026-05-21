@@ -39,10 +39,10 @@ async function fetch(company) {
   if (process.env.MOCK_MODE === '1') return mockFetch(company);
   if (!process.env.YELP_API_KEY) return null;
 
+  const industryTerm = (company.industry || 'plumbing').toLowerCase();
   const params = new URLSearchParams({
-    term: `${company.name} plumbing`,
+    term: `${company.name} ${industryTerm}`,
     location: [company.city, company.state].filter(Boolean).join(', ') || 'USA',
-    categories: 'plumbing',
     limit: '3',
   });
   const res = await globalThis.fetch(

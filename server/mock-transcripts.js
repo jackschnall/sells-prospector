@@ -10,7 +10,7 @@ const MOCK_TRANSCRIPTS = [
     transcript:
       `[Agent] Hi, is this {owner}?\n` +
       `[Owner] Yeah, speaking.\n` +
-      `[Agent] This is Jack from Sells — we work with plumbing company owners on succession planning. Got a minute?\n` +
+      `[Agent] This is Jack from Sells — we work with service business owners on succession planning. Got a minute?\n` +
       `[Owner] Sure, quick one though, I've got a meeting at three.\n` +
       `[Agent] Understood. I'll be brief. We've been looking at {company} and your footprint in the {state} market — really strong reputation on reviews and a good commercial mix. Have you given any thought to succession? Next five, ten years?\n` +
       `[Owner] Honestly, yeah. My wife and I were just talking about it last weekend. I'm 62. Kids aren't interested in taking it over.\n` +
@@ -26,7 +26,7 @@ const MOCK_TRANSCRIPTS = [
     transcript:
       `[Agent] {owner}, hi — Jack from Sells. You have a second?\n` +
       `[Owner] A second, yeah.\n` +
-      `[Agent] We focus on M&A for plumbing companies in the Southeast. Your name came up as one of the strongest operators in {state}. I'd love to learn more about your business and what your plans look like.\n` +
+      `[Agent] We focus on M&A for service businesses in the Southeast. Your name came up as one of the strongest operators in {state}. I'd love to learn more about your business and what your plans look like.\n` +
       `[Owner] What kind of plans?\n` +
       `[Agent] Any thoughts on succession, a transaction, bringing in outside capital — that sort of thing.\n` +
       `[Owner] Well, we're doing about $8M this year. Growing maybe 15%. My business partner is looking to retire in a few years, so we've thought about it, but nothing concrete.\n` +
@@ -42,7 +42,7 @@ const MOCK_TRANSCRIPTS = [
     transcript:
       `[Agent] Hi, is this the owner of {company}?\n` +
       `[Owner] This is {owner}, yeah.\n` +
-      `[Agent] Jack from Sells — we're an M&A advisory firm focused on plumbing contractors. Do you mind if I ask a couple of quick questions?\n` +
+      `[Agent] Jack from Sells — we're an M&A advisory firm focused on service contractors. Do you mind if I ask a couple of quick questions?\n` +
       `[Owner] Go ahead.\n` +
       `[Agent] What's your rough annual revenue and employee count?\n` +
       `[Owner] I'm not sharing that over the phone, sorry.\n` +
@@ -70,7 +70,7 @@ const MOCK_TRANSCRIPTS = [
     transcript:
       `[Agent] {owner}? Jack from Sells.\n` +
       `[Owner] Yeah?\n` +
-      `[Agent] We advise plumbing company owners on succession and sale. Wanted to see if you'd be open to a quick chat.\n` +
+      `[Agent] We advise business owners on succession and sale. Wanted to see if you'd be open to a quick chat.\n` +
       `[Owner] Not a good time. Look, call me back after the holidays. Things will settle down then.\n` +
       `[Agent] Got it. I'll plan to reach out in early January. Anything I should send your way in the meantime?\n` +
       `[Owner] Nah, just call me after the holidays. Thanks.`,
@@ -82,7 +82,7 @@ const MOCK_TRANSCRIPTS = [
     transcript:
       `[Agent] Hi, looking for {owner} — this is Jack with Sells.\n` +
       `[Owner] Yeah, I'm {owner}. What's this about?\n` +
-      `[Agent] We work with plumbing company owners on M&A and succession. Wanted to introduce ourselves.\n` +
+      `[Agent] We work with business owners on M&A and succession. Wanted to introduce ourselves.\n` +
       `[Owner] I'm not selling. Built this thing from nothing. Not interested. Please take me off your list.\n` +
       `[Agent] Understood. I'll note that. Thanks for your time.`,
   },
@@ -92,7 +92,7 @@ const MOCK_TRANSCRIPTS = [
     duration_sec: 22,
     transcript:
       `[Voicemail] You've reached {company}. We're not able to take your call right now. Please leave a message after the tone and we'll get back to you as soon as we can.\n` +
-      `[Agent] Hi, this is Jack from Sells calling for {owner}. We work with plumbing business owners in {state} on succession planning and M&A. I'd love to connect when you have a few minutes — I'll try you again in a couple of days. Thanks.`,
+      `[Agent] Hi, this is Jack from Sells calling for {owner}. We work with business owners in {state} on succession planning and M&A. I'd love to connect when you have a few minutes — I'll try you again in a couple of days. Thanks.`,
   },
   {
     id: 'gatekeeper',
@@ -113,7 +113,7 @@ const MOCK_TRANSCRIPTS = [
     transcript:
       `[Agent] {owner}, hi — Jack from Sells. Do you have a quick minute?\n` +
       `[Owner] Yeah, I've got a minute.\n` +
-      `[Agent] Wanted to briefly introduce the firm — we do M&A for plumbing contractors. Have you thought at all about what a transition might look like for {company}?\n` +
+      `[Agent] Wanted to briefly introduce the firm — we do M&A for service contractors. Have you thought at all about what a transition might look like for {company}?\n` +
       `[Owner] We've actually been thinking about it a lot. My wife Linda runs the office and she's been pushing me to slow down. She's 60, I'm 64. The business is doing well — about $6M — but we're both tired.\n` +
       `[Agent] That's a really honest answer and I appreciate it. Transitions where the spouse is involved operationally actually go smoother when both people are aligned. Would it make sense to set up a call with both of you?\n` +
       `[Owner] Yeah. Linda would definitely want to be on it. Let me check her calendar and get back to you. Give me a few weeks.\n` +
@@ -125,7 +125,7 @@ const MOCK_TRANSCRIPTS = [
     sentiment_hint: 'Not Interested',
     duration_sec: 103,
     transcript:
-      `[Agent] {owner}? Jack from Sells, plumbing M&A.\n` +
+      `[Agent] {owner}? Jack from Sells, M&A advisory.\n` +
       `[Owner] Yeah, I got your message. Listen, I just had another firm pitch me last month. They were offering what felt like a lowball number. Frankly it left a bad taste.\n` +
       `[Agent] I'm sorry to hear that. Every firm works a little differently. Can I ask — was it a valuation conversation or an actual offer on paper?\n` +
       `[Owner] Verbal number. Seven times EBITDA, but they were using our trailing twelve months which was our worst year. Ridiculous.\n` +
