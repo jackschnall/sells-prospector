@@ -471,3 +471,19 @@ CREATE INDEX IF NOT EXISTS idx_email_tracking_opened ON email_tracking(opened_at
 
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS warm_until TIMESTAMPTZ;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS warm_until TIMESTAMPTZ;
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Call Targets (named filter sets for the call queue)
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS call_targets (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  filter_industries JSONB DEFAULT '[]'::JSONB,
+  filter_states JSONB DEFAULT '[]'::JSONB,
+  filter_tiers JSONB DEFAULT '[]'::JSONB,
+  filter_min_score NUMERIC,
+  filter_max_score NUMERIC,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);

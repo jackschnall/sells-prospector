@@ -30,6 +30,9 @@ const state = {
   detailActiveCall: null,
   debriefCall: null,
   debriefDraftTimer: null,
+  callTargets: [],
+  activeTargetFilter: null,
+  editingTargetId: null,
   calendarCursor: null, // {year, month}
   calendarEvents: [],
   calendarEditing: null,
@@ -2168,6 +2171,7 @@ async function loadQueue() {
     if (countEl) countEl.textContent = `${data.calls_today || 0} call${(data.calls_today || 0) === 1 ? '' : 's'} today`;
     renderQueue(data);
     loadQueueMandateFilter();
+    loadCallTargets();
     setTimeout(renderQueueWithMandateFilter, 100);
   } catch (err) {
     list.innerHTML = `<div class="queue-empty">Error loading queue: ${escapeHtml(err.message)}</div>`;
@@ -2177,7 +2181,7 @@ async function loadQueue() {
 function renderQueue(data) {
   const list = $('#queue-list');
   if (!list) return;
-  const rows = state.queue;
+  const rows = getFilteredQueue();
   if (!rows.length) {
     if (data.empty_reason === 'no_assignments') {
       list.innerHTML = `
@@ -3625,6 +3629,17 @@ function bindPhase2() {
   bindLogin();
   bindProfile();
   $('#queue-refresh')?.addEventListener('click', loadQueue);
+  $('#queue-target-select')?.addEventListener('change', applyTargetFilter);
+  $('#queue-target-create')?.addEventListener('click', () => openTargetModal());
+  $('#queue-target-edit')?.addEventListener('click', () => {
+    const targetId = $('#queue-target-select')?.value;
+    const target = (state.callTargets || []).find(t => t.id === targetId);
+    if (target) openTargetModal(target);
+  });
+  $('#queue-target-delete')?.addEventListener('click', deleteTarget);
+  $('#target-save')?.addEventListener('click', saveTarget);
+  $('#target-cancel')?.addEventListener('click', () => { $('#target-modal').hidden = true; });
+  $('#target-modal-close')?.addEventListener('click', () => { $('#target-modal').hidden = true; });
   $('#qp-call-btn')?.addEventListener('click', startQueueCall);
   $('#qp-end-btn')?.addEventListener('click', endQueueCall);
   $('#qp-mute-btn')?.addEventListener('click', toggleMute);
@@ -5599,6 +5614,141 @@ async function loadCompanyMandates(companyId) {
         available.map(m => `<option value="${m.id}">${escapeHtml(m.buyer_name)}</option>`).join('');
     }
   } catch (e) { console.error('[company-mandates]', e); }
+}
+
+// ---------- Call Targets ----------
+
+async function loadCallTargets() {
+  try {
+    const res = await fetch('/api/call-targets');
+    if (!res.ok) return;
+    const { targets } = await res.json();
+    state.callTargets = targets;
+    const select = $('#queue-target-select');
+    if (!select) return;
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">All Companies</option>' +
+      targets.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+    if (currentVal) select.value = currentVal;
+  } catch {}
+}
+
+function applyTargetFilter() {
+  const targetId = $('#queue-target-select')?.value;
+  const editBtn = $('#queue-target-edit');
+  const deleteBtn = $('#queue-target-delete');
+  if (editBtn) editBtn.hidden = !targetId;
+  if (deleteBtn) deleteBtn.hidden = !targetId;
+
+  if (!targetId) {
+    state.activeTargetFilter = null;
+    renderQueueList();
+    return;
+  }
+
+  const target = (state.callTargets || []).find(t => t.id === targetId);
+  if (!target) return;
+  state.activeTargetFilter = target;
+  renderQueueList();
+}
+
+function getFilteredQueue() {
+  let queue = state.queue || [];
+  const target = state.activeTargetFilter;
+  if (!target) return queue;
+
+  const industries = (typeof target.filter_industries === 'string' ? JSON.parse(target.filter_industries) : target.filter_industries) || [];
+  const states = (typeof target.filter_states === 'string' ? JSON.parse(target.filter_states) : target.filter_states) || [];
+  const tiers = (typeof target.filter_tiers === 'string' ? JSON.parse(target.filter_tiers) : target.filter_tiers) || [];
+  const minScore = target.filter_min_score ? Number(target.filter_min_score) : null;
+  const maxScore = target.filter_max_score ? Number(target.filter_max_score) : null;
+
+  return queue.filter(c => {
+    if (industries.length && !industries.includes(c.industry || 'Plumbing')) return false;
+    if (states.length && !states.includes((c.state || '').toUpperCase())) return false;
+    if (tiers.length && !tiers.includes(c.tier)) return false;
+    if (minScore != null && (c.score || 0) < minScore) return false;
+    if (maxScore != null && (c.score || 0) > maxScore) return false;
+    return true;
+  });
+}
+
+function renderQueueList() {
+  renderQueue({ queue: state.queue });
+  setTimeout(renderQueueWithMandateFilter, 50);
+}
+
+function openTargetModal(target = null) {
+  state.editingTargetId = target ? target.id : null;
+  $('#target-modal-title').textContent = target ? 'Edit Target' : 'Create Target';
+  $('#target-name').value = target ? target.name : '';
+  $('#target-min-score').value = target?.filter_min_score || '';
+  $('#target-max-score').value = target?.filter_max_score || '';
+
+  // Render industry chips
+  const INDUSTRIES = ['Plumbing','HVAC','Pest Control','Restoration','Painting','Electrical','Septic','Cleaning','Landscaping','Roofing','Excavation','Fire Protection','Pool Service','Garage Door','Insulation','Other'];
+  const selectedIndustries = target ? (typeof target.filter_industries === 'string' ? JSON.parse(target.filter_industries) : target.filter_industries) || [] : [];
+  $('#target-industries').innerHTML = INDUSTRIES.map(i =>
+    `<span class="settings-chip ${selectedIndustries.includes(i) ? 'active' : ''}" data-industry="${escapeHtml(i)}">${escapeHtml(i)}</span>`
+  ).join('');
+  $$('#target-industries .settings-chip').forEach(chip => {
+    chip.addEventListener('click', () => chip.classList.toggle('active'));
+  });
+
+  // Render state chips
+  const allStates = [...new Set((state.companies || []).map(c => c.state).filter(Boolean))].sort();
+  const selectedStates = target ? (typeof target.filter_states === 'string' ? JSON.parse(target.filter_states) : target.filter_states) || [] : [];
+  $('#target-states').innerHTML = allStates.map(s =>
+    `<span class="settings-chip ${selectedStates.includes(s.toUpperCase()) ? 'active' : ''}" data-state="${escapeHtml(s.toUpperCase())}">${escapeHtml(s)}</span>`
+  ).join('');
+  $$('#target-states .settings-chip').forEach(chip => {
+    chip.addEventListener('click', () => chip.classList.toggle('active'));
+  });
+
+  // Tier chips
+  const selectedTiers = target ? (typeof target.filter_tiers === 'string' ? JSON.parse(target.filter_tiers) : target.filter_tiers) || [] : [];
+  $$('#target-tiers .settings-chip').forEach(chip => {
+    const tier = chip.dataset.tier;
+    chip.classList.toggle('active', selectedTiers.includes(tier));
+    chip.onclick = () => chip.classList.toggle('active');
+  });
+
+  $('#target-modal').hidden = false;
+}
+
+async function saveTarget() {
+  const name = $('#target-name').value.trim();
+  if (!name) return toast('Target name required', 'error');
+
+  const filter_industries = [...$$('#target-industries .settings-chip.active')].map(c => c.dataset.industry);
+  const filter_states = [...$$('#target-states .settings-chip.active')].map(c => c.dataset.state);
+  const filter_tiers = [...$$('#target-tiers .settings-chip.active')].map(c => c.dataset.tier);
+  const filter_min_score = $('#target-min-score').value ? Number($('#target-min-score').value) : null;
+  const filter_max_score = $('#target-max-score').value ? Number($('#target-max-score').value) : null;
+
+  const body = { name, filter_industries, filter_states, filter_tiers, filter_min_score, filter_max_score };
+
+  try {
+    const url = state.editingTargetId ? `/api/call-targets/${state.editingTargetId}` : '/api/call-targets';
+    const method = state.editingTargetId ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    if (res.ok) {
+      toast(state.editingTargetId ? 'Target updated' : 'Target created', 'ok');
+      $('#target-modal').hidden = true;
+      await loadCallTargets();
+    } else { toast('Failed to save target', 'error'); }
+  } catch { toast('Error saving target', 'error'); }
+}
+
+async function deleteTarget() {
+  const targetId = $('#queue-target-select')?.value;
+  if (!targetId) return;
+  if (!confirm('Delete this target list?')) return;
+  await fetch(`/api/call-targets/${targetId}`, { method: 'DELETE' });
+  $('#queue-target-select').value = '';
+  applyTargetFilter();
+  await loadCallTargets();
+  toast('Target deleted', 'ok');
 }
 
 // ---------- Queue mandate filter ----------

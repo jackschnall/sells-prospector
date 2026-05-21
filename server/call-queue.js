@@ -118,7 +118,7 @@ async function buildQueue(user, opts = {}) {
     )
     SELECT
       c.id, c.name, c.city, c.state, c.phone, c.phone_type, c.owner, c.email,
-      c.score, c.tier, c.outreach_angle, c.pipeline_stage, c.warm_until,
+      c.score, c.tier, c.outreach_angle, c.pipeline_stage, c.warm_until, COALESCE(c.industry, 'Plumbing') AS industry,
       lc.last_call_id, lc.last_called_at, lc.last_sentiment,
       lc.last_status, lc.last_debrief_status,
       pc.scheduled_callback_date, pc.call_log_id AS callback_call_log_id,
@@ -165,6 +165,7 @@ async function buildQueue(user, opts = {}) {
       email: row.email,
       score: row.score,
       tier: row.tier,
+      industry: row.industry,
       outreach_angle: row.outreach_angle,
       pipeline_stage: row.pipeline_stage,
       bucket,

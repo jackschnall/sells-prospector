@@ -1113,6 +1113,45 @@ app.post('/api/queue/skip', requireUser, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Call Targets ----------
+app.get('/api/call-targets', requireUser, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT * FROM call_targets WHERE user_id = $1 ORDER BY name ASC',
+    [req.currentUser.id]
+  );
+  res.json({ targets: rows });
+});
+
+app.post('/api/call-targets', requireUser, async (req, res) => {
+  const { nanoid } = require('nanoid');
+  const { name, filter_industries, filter_states, filter_tiers, filter_min_score, filter_max_score } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  const id = nanoid();
+  await pool.query(
+    `INSERT INTO call_targets (id, user_id, name, filter_industries, filter_states, filter_tiers, filter_min_score, filter_max_score)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [id, req.currentUser.id, name, JSON.stringify(filter_industries || []), JSON.stringify(filter_states || []), JSON.stringify(filter_tiers || []), filter_min_score || null, filter_max_score || null]
+  );
+  res.json({ ok: true, id });
+});
+
+app.put('/api/call-targets/:id', requireUser, async (req, res) => {
+  const { name, filter_industries, filter_states, filter_tiers, filter_min_score, filter_max_score } = req.body || {};
+  await pool.query(
+    `UPDATE call_targets SET name = COALESCE($1, name), filter_industries = COALESCE($2, filter_industries),
+     filter_states = COALESCE($3, filter_states), filter_tiers = COALESCE($4, filter_tiers),
+     filter_min_score = $5, filter_max_score = $6, updated_at = NOW() WHERE id = $7 AND user_id = $8`,
+    [name, filter_industries ? JSON.stringify(filter_industries) : null, filter_states ? JSON.stringify(filter_states) : null,
+     filter_tiers ? JSON.stringify(filter_tiers) : null, filter_min_score || null, filter_max_score || null, req.params.id, req.currentUser.id]
+  );
+  res.json({ ok: true });
+});
+
+app.delete('/api/call-targets/:id', requireUser, async (req, res) => {
+  await pool.query('DELETE FROM call_targets WHERE id = $1 AND user_id = $2', [req.params.id, req.currentUser.id]);
+  res.json({ ok: true });
+});
+
 // ---------- Calendar ----------
 app.get('/api/calendar', requireUser, async (req, res) => {
   const year = Number(req.query.year);
