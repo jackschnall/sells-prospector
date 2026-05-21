@@ -95,6 +95,22 @@ function updateStats(stats) {
   $('#stat-strong').textContent = stats.strongBuy ?? 0;
   const mt = $('#method-total');
   if (mt) mt.textContent = stats.researched ?? 0;
+  // Update industry dropdown labels with counts
+  if (stats.industryCounts) {
+    const drop = $('#industry-filter-dropdown');
+    if (drop) {
+      $$('input[type="checkbox"]', drop).forEach(cb => {
+        if (cb.id === 'industry-select-all') return;
+        const label = cb.parentElement;
+        const val = cb.value;
+        const cnt = stats.industryCounts[val] || 0;
+        const textNode = label.childNodes[label.childNodes.length - 1];
+        if (textNode && textNode.nodeType === 3) {
+          textNode.textContent = ` ${val} (${cnt})`;
+        }
+      });
+    }
+  }
 }
 
 async function loadCompanies() {

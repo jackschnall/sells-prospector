@@ -75,10 +75,10 @@ async function insertCompany(row) {
   await execute(
     `INSERT INTO companies (
        id, name, name_key, city, state, phone, website, owner, email, address,
-       crm_known, status, created_at, updated_at
+       industry, crm_known, status, created_at, updated_at
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-       $11, 'pending', NOW(), NOW()
+       $11, $12, 'pending', NOW(), NOW()
      )
      ON CONFLICT(name_key) DO UPDATE SET
        city = COALESCE(EXCLUDED.city, companies.city),
@@ -88,12 +88,13 @@ async function insertCompany(row) {
        owner = COALESCE(EXCLUDED.owner, companies.owner),
        email = COALESCE(EXCLUDED.email, companies.email),
        address = COALESCE(EXCLUDED.address, companies.address),
+       industry = COALESCE(EXCLUDED.industry, companies.industry),
        crm_known = EXCLUDED.crm_known,
        updated_at = NOW()`,
     [
       row.id, row.name, row.name_key, row.city || null, row.state || null,
       row.phone || null, row.website || null, row.owner || null,
-      row.email || null, row.address || null, row.crm_known || false,
+      row.email || null, row.address || null, row.industry || null, row.crm_known || false,
     ]
   );
 }
@@ -325,6 +326,13 @@ async function rollupStats({ restrictToVerticals, restrictToTerritories } = {}) 
       COUNT(*) FILTER (WHERE outreach_status = 'relationship') AS outreach_relationship
     FROM companies ${w}
   `, params);
+  const indRows = await query(
+    `SELECT COALESCE(industry, 'Other') AS industry, COUNT(*) AS cnt
+     FROM companies WHERE deleted_at IS NULL
+     GROUP BY COALESCE(industry, 'Other') ORDER BY cnt DESC`
+  );
+  const industryCounts = {};
+  for (const r of indRows) industryCounts[r.industry] = Number(r.cnt);
   return {
     total: Number(row.total), researched: Number(row.researched),
     strongBuy: Number(row.strong_buy), watchlist: Number(row.watchlist), pass: Number(row.pass),
@@ -332,6 +340,7 @@ async function rollupStats({ restrictToVerticals, restrictToTerritories } = {}) 
     outreachNoContact: Number(row.outreach_no_contact),
     outreachContacted: Number(row.outreach_contacted),
     outreachRelationship: Number(row.outreach_relationship),
+    industryCounts,
   };
 }
 

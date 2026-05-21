@@ -74,7 +74,7 @@ async function main() {
     var name_key = normalizeName(c.name);
     if (!name_key) continue;
     try {
-      await insertCompany({ id: id, name: c.name, name_key: name_key, city: c.city || null, state: c.state || null, phone: c.phone || null, website: c.website || null, owner: c.owner || null, email: c.email || null, address: c.address || null, crm_known: false });
+      await insertCompany({ id: id, name: c.name, name_key: name_key, city: c.city || null, state: c.state || null, phone: c.phone || null, website: c.website || null, owner: c.owner || null, email: c.email || null, address: c.address || null, industry: c.industry || null, crm_known: false });
       added.push({ id: id, name: c.name, city: c.city, state: c.state });
     } catch (err) {
       dbExcluded.push({ name: c.name, note: 'insert conflict' });
