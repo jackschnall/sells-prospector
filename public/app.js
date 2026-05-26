@@ -7192,8 +7192,43 @@ function renderAdvisorPipeline() {
       </div>`;
   }).join('')}</div>`;
 
+  // Click to open detail
   $$('.advisor-kanban-card', el).forEach(card => {
-    card.addEventListener('click', () => openAdvisorDetail(card.dataset.id));
+    card.addEventListener('click', (e) => {
+      if (card.classList.contains('dragging')) return;
+      openAdvisorDetail(card.dataset.id);
+    });
+  });
+
+  // Drag and drop
+  $$('.advisor-kanban-card', el).forEach(card => {
+    card.setAttribute('draggable', 'true');
+    card.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', card.dataset.id);
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  });
+
+  $$('.kanban-col-body', el).forEach(col => {
+    col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('drag-over'); });
+    col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
+    col.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      col.classList.remove('drag-over');
+      const advisorId = e.dataTransfer.getData('text/plain');
+      const newStage = col.closest('.kanban-col')?.dataset.stage;
+      if (!advisorId || !newStage) return;
+      try {
+        await fetch(`/api/advisors/${advisorId}/stage`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stage: newStage }),
+        });
+        toast(`Moved to ${ADVISOR_STAGE_LABELS[newStage] || newStage}`);
+        loadAdvisors();
+      } catch { toast('Failed to update stage', 'error'); }
+    });
   });
 }
 
@@ -7589,7 +7624,6 @@ function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerL
         ${Object.entries(ADVISOR_STAGE_LABELS).map(([k, v]) => `<option value="${k}" ${k === advisor.relationship_stage ? 'selected' : ''}>${v}</option>`).join('')}
       </select>
       <button type="button" class="btn-ghost btn-xs" id="btn-advisor-stage-save">Update Stage</button>
-      <button type="button" class="btn-ghost btn-xs" id="btn-advisor-reresearch">Re-Research</button>
     </div>
   `;
 
@@ -7764,11 +7798,6 @@ function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerL
     toast('Stage updated');
     loadAdvisors();
     openAdvisorDetail(advisor.id);
-  });
-
-  $('#btn-advisor-reresearch')?.addEventListener('click', async () => {
-    await fetch(`/api/advisors/${advisor.id}/re-research`, { method: 'POST' });
-    toast('Re-research started');
   });
 
   $('#btn-add-advisor-contact')?.addEventListener('click', () => showAdvisorContactForm(advisor.id));
