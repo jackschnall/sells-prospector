@@ -114,6 +114,10 @@ const {
   listAdvisorOwnerLinks,
   listOwnerAdvisorLinks,
   getAdvisorQueue,
+  listCallLogsByAdvisor,
+  listAdvisorMessages,
+  addAdvisorNote,
+  getAdvisorNotes,
 } = require('./db');
 const { promoteToAdminIfFirstUser, requireUser, requireAdmin, isAdmin } = require('./auth');
 const { registerRoutes: registerTwilioRoutes, isMockMode: isTwilioMockMode } = require('./twilio');
@@ -2984,6 +2988,108 @@ app.delete('/api/advisors/:id', async (req, res) => {
   try {
     await softDeleteAdvisor(req.params.id);
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Advisor call logs ---
+app.get('/api/advisors/:id/calls', async (req, res) => {
+  try {
+    const calls = await listCallLogsByAdvisor(req.params.id);
+    res.json({ calls });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Advisor call initiation (wraps twilio/call pattern with advisor_id) ---
+app.post('/api/advisors/:id/call', async (req, res) => {
+  try {
+    const advisor = await getAdvisor(req.params.id);
+    if (!advisor) return res.status(404).json({ error: 'Advisor not found' });
+    const { to } = req.body || {};
+    const phone = to || advisor.phone;
+    if (!phone) return res.status(400).json({ error: 'No phone number available' });
+
+    const mock = !process.env.TWILIO_ACCOUNT_SID || process.env.MOCK_CALLS === '1';
+    const callLogId = await insertCallLog({
+      company_id: null,
+      contact_id: null,
+      user_id: req.currentUser?.id || null,
+      direction: 'outbound',
+      status: mock ? 'mock-in-progress' : 'initiated',
+      mock,
+    });
+    // Set advisor_id on the call_log
+    await execute('UPDATE call_logs SET advisor_id = $1 WHERE id = $2', [advisor.id, callLogId]);
+
+    emit({ type: 'call_started', call_log_id: callLogId, advisor_id: advisor.id, mock });
+    res.json({ ok: true, call_log_id: callLogId, to: phone, mock, call_sid: mock ? ('CA' + Date.now()) : null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Advisor SMS ---
+app.get('/api/advisors/:id/messages', async (req, res) => {
+  try {
+    const messages = await listAdvisorMessages(req.params.id);
+    res.json({ messages });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/advisors/:id/sms', async (req, res) => {
+  try {
+    const advisor = await getAdvisor(req.params.id);
+    if (!advisor) return res.status(404).json({ error: 'Advisor not found' });
+    const { to, body } = req.body || {};
+    const phone = to || advisor.phone;
+    if (!phone || !body) return res.status(400).json({ error: 'phone and body required' });
+
+    const { nanoid } = require('nanoid');
+    const mock = !process.env.TWILIO_ACCOUNT_SID || process.env.MOCK_CALLS === '1';
+    const fromNumber = req.currentUser?.twilio_phone_number || process.env.TWILIO_PHONE_NUMBER || '+10000000000';
+
+    let twilioSid = null;
+    if (!mock) {
+      const twilio = require('twilio');
+      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      const msg = await client.messages.create({ to: phone, from: fromNumber, body });
+      twilioSid = msg.sid;
+    } else {
+      twilioSid = 'SM_MOCK_' + Date.now();
+    }
+
+    const msgId = nanoid();
+    await execute(
+      `INSERT INTO messages (id, company_id, advisor_id, user_id, direction, to_number, from_number, body, status, twilio_sid)
+       VALUES ($1, NULL, $2, $3, 'outbound', $4, $5, $6, 'sent', $7)`,
+      [msgId, advisor.id, req.currentUser?.id || null, phone, fromNumber, body, twilioSid]
+    );
+
+    res.json({ ok: true, id: msgId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Advisor notes ---
+app.get('/api/advisors/:id/notes', async (req, res) => {
+  try {
+    const notes = await getAdvisorNotes(req.params.id);
+    res.json({ notes });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/advisors/:id/notes', async (req, res) => {
+  try {
+    const note = await addAdvisorNote(req.params.id, req.body.note, req.currentUser?.id || null);
+    res.json({ ok: true, note });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

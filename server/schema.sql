@@ -582,3 +582,18 @@ CREATE TABLE IF NOT EXISTS advisor_owner_links (
 
 CREATE INDEX IF NOT EXISTS idx_advisor_owner_links_advisor ON advisor_owner_links(advisor_id);
 CREATE INDEX IF NOT EXISTS idx_advisor_owner_links_prospect ON advisor_owner_links(prospect_id);
+
+-- Link call_logs and messages to advisors (nullable — a call is either to a company OR an advisor)
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS advisor_id TEXT REFERENCES advisors(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_call_logs_advisor ON call_logs(advisor_id) WHERE advisor_id IS NOT NULL;
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS advisor_id TEXT REFERENCES advisors(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_messages_advisor ON messages(advisor_id) WHERE advisor_id IS NOT NULL;
+
+-- Notes for advisors (reuse existing notes table with nullable advisor_id)
+ALTER TABLE notes ADD COLUMN IF NOT EXISTS advisor_id TEXT REFERENCES advisors(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_notes_advisor ON notes(advisor_id) WHERE advisor_id IS NOT NULL;
+
+-- Activities for advisors
+ALTER TABLE activities ADD COLUMN IF NOT EXISTS advisor_id TEXT REFERENCES advisors(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_activities_advisor ON activities(advisor_id) WHERE advisor_id IS NOT NULL;

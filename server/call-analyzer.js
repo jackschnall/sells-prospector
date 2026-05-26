@@ -11,6 +11,7 @@ const {
   getCallLog,
   updateCallLog,
   getCompany,
+  getAdvisor,
   insertCalendarEvent,
   pool,
   execute,
@@ -52,6 +53,46 @@ function buildAnalysisPrompt(company, transcript) {
       `  "next_action": one concise sentence about what the analyst should do next,\n` +
       `  "outreach_angle_refined": one concise sentence updating the cold-call angle for the next conversation based on what resonated or didn't,\n` +
       `  "key_info": object with business facts EXPLICITLY mentioned in the call. Only include fields that were actually stated. Example: {"revenue":"$10M","employees":"25","trucks":"7","service_type":"residential","owner_age":"65","spouse_name":"Shirley","software_tools":"ServiceTitan"}. Valid keys: revenue, net_income, ebitda, employees, trucks, locations, years_in_business, service_type, services_offered, software_tools, owner_age, spouse_name, family_involved, other. Use null if nothing was mentioned.\n` +
+      `}\n` +
+      `If the call was a voicemail, gatekeeper, or no conversation, use sentiment "No Answer".`,
+  };
+}
+
+function buildAdvisorAnalysisPrompt(advisor, transcript) {
+  const today = new Date().toISOString().slice(0, 10);
+  const ADVISOR_TYPE_LABELS = {
+    cpa: 'CPA/accountant', ria: 'wealth manager/RIA', attorney: 'attorney',
+    lender: 'commercial lender', coach: 'business coach', insurance: 'insurance broker',
+    fractional_cfo: 'fractional CFO',
+  };
+  const typeLabel = ADVISOR_TYPE_LABELS[advisor?.type] || 'advisor';
+  return {
+    system: [
+      'You are an M&A origination analyst assistant for Sells Advisors, a sell-side M&A advisory firm.',
+      `You read phone-call transcripts between an analyst and a ${typeLabel} who is a potential referral partner.`,
+      'The goal is to build a reciprocal referral relationship: they send us business owners considering a sale,',
+      'we send them post-sale work (tax, wealth, estate, financing).',
+      'Extract structured JSON. Be concise and accurate. Resolve relative time phrases',
+      `("next Tuesday", "after the holidays", "in two weeks") to absolute dates using today = ${today}.`,
+      'Output ONLY valid JSON — no prose, no code fences.',
+    ].join(' '),
+    user:
+      `Today's date: ${today}\n` +
+      `Advisor: ${advisor?.name || 'Unknown'} (${advisor?.city || ''}, ${advisor?.state || ''})\n` +
+      `Firm: ${advisor?.firm || 'Unknown'}\n` +
+      `Type: ${typeLabel}\n` +
+      `Relationship stage: ${advisor?.relationship_stage || 'unknown'}\n\n` +
+      `Transcript:\n"""\n${transcript}\n"""\n\n` +
+      `Return a JSON object with EXACTLY these keys:\n` +
+      `{\n` +
+      `  "summary_bullets": [3 to 4 short bullet strings, each a concrete fact or dynamic from the call],\n` +
+      `  "sentiment": one of ["Receptive","Neutral","Not Interested","No Answer","Callback Requested"],\n` +
+      `  "scheduling_detected": true|false,\n` +
+      `  "scheduled_callback_date": "YYYY-MM-DD" or null,\n` +
+      `  "scheduling_quote": the exact short quote where scheduling was raised, or null,\n` +
+      `  "next_action": one concise sentence about what the analyst should do next,\n` +
+      `  "outreach_angle_refined": one concise sentence updating the approach for the next conversation based on what resonated or didn't,\n` +
+      `  "relationship_signals": object with referral-partnership facts EXPLICITLY mentioned. Only include fields stated. Example: {"interested_in_partnership":true,"has_business_owner_clients":true,"compliance_concerns":"firm restricts referral fees","preferred_meeting_format":"lunch","referral_potential":"high"}. Valid keys: interested_in_partnership, has_business_owner_clients, serves_trades_homeservices, compliance_concerns, preferred_meeting_format, referral_potential, existing_referral_partners, client_count_estimate, other. Use null if nothing was mentioned.\n` +
       `}\n` +
       `If the call was a voicemail, gatekeeper, or no conversation, use sentiment "No Answer".`,
   };
@@ -170,11 +211,17 @@ async function analyzeCall(callLogId) {
     return fallback;
   }
 
-  const company = await getCompany(call.company_id);
+  // Determine if this is a company call or advisor call
+  const isAdvisorCall = !call.company_id && call.advisor_id;
+  const company = call.company_id ? await getCompany(call.company_id) : null;
+  const advisor = isAdvisorCall ? await getAdvisor(call.advisor_id) : null;
+
   let analysis;
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      const { system, user } = buildAnalysisPrompt(company, transcript);
+      const { system, user } = isAdvisorCall
+        ? buildAdvisorAnalysisPrompt(advisor, transcript)
+        : buildAnalysisPrompt(company, transcript);
       const { parsed } = await callJson({
         model: MODELS.worker,
         system,
@@ -203,6 +250,18 @@ async function analyzeCall(callLogId) {
     next_action: analysis.next_action,
     outreach_angle_refined: analysis.outreach_angle_refined,
   });
+
+  // For advisor calls, store relationship_signals in dossier
+  if (isAdvisorCall && analysis.relationship_signals && advisor) {
+    try {
+      const dossier = advisor.dossier_json || {};
+      dossier.relationship_signals_from_calls = analysis.relationship_signals;
+      await execute('UPDATE advisors SET dossier_json = $1, updated_at = NOW() WHERE id = $2',
+        [JSON.stringify(dossier), advisor.id]);
+    } catch (err) {
+      console.warn('[call-analyzer] Failed to save advisor relationship_signals:', err.message);
+    }
+  }
 
   // Mark company as warm on positive sentiment
   if (['Receptive', 'Callback Requested'].includes(analysis.sentiment) && call.company_id) {

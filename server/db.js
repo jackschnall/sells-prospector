@@ -1462,6 +1462,49 @@ async function getAdvisorQueue() {
   );
 }
 
+// ─── Advisor Call Logs, Messages, Notes ──────────────────────────────────────
+
+async function listCallLogsByAdvisor(advisorId, { limit = 100 } = {}) {
+  return query(
+    `SELECT cl.*, u.name AS user_name
+     FROM call_logs cl
+     LEFT JOIN users u ON cl.user_id = u.id
+     WHERE cl.advisor_id = $1
+     ORDER BY cl.called_at DESC
+     LIMIT $2`,
+    [advisorId, limit]
+  );
+}
+
+async function listAdvisorMessages(advisorId, limit = 50) {
+  return query(
+    `SELECT m.*, u.name AS user_name
+     FROM messages m
+     LEFT JOIN users u ON u.id = m.user_id
+     WHERE m.advisor_id = $1
+     ORDER BY m.created_at DESC
+     LIMIT $2`,
+    [advisorId, limit]
+  );
+}
+
+async function addAdvisorNote(advisorId, text, userId = null) {
+  const { nanoid } = require('nanoid');
+  const id = nanoid();
+  await execute(
+    'INSERT INTO notes (id, company_id, advisor_id, note) VALUES ($1, NULL, $2, $3)',
+    [id, advisorId, text]
+  );
+  return { id, advisor_id: advisorId, note: text };
+}
+
+async function getAdvisorNotes(advisorId) {
+  return query(
+    'SELECT * FROM notes WHERE advisor_id = $1 ORDER BY created_at DESC',
+    [advisorId]
+  );
+}
+
 // ─── Exports ─────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -1582,4 +1625,8 @@ module.exports = {
   listAdvisorOwnerLinks,
   listOwnerAdvisorLinks,
   getAdvisorQueue,
+  listCallLogsByAdvisor,
+  listAdvisorMessages,
+  addAdvisorNote,
+  getAdvisorNotes,
 };

@@ -7179,14 +7179,22 @@ function renderAdvisorCallQueue() {
 
 async function selectAdvisorQueueRow(id) {
   advisorState.queueActiveId = id;
+  advisorState.queueCallLogId = null;
   // Highlight selected row
   $$('.queue-row', $('#adv-queue-list')).forEach(r => r.classList.toggle('selected', r.dataset.id === id));
+  // Reset call UI
+  $('#aqp-call-btn').hidden = false;
+  $('#aqp-call-active').hidden = true;
+  $('#aqp-processing').hidden = true;
   // Load full advisor detail into panel
   try {
     const res = await fetch(`/api/advisors/${id}`);
     if (!res.ok) return;
     const data = await res.json();
     renderAdvisorQueuePanel(data);
+    loadAdvisorQueueMessages(id);
+    loadAdvisorQueueNotes(id);
+    loadAdvisorQueueCallHistory(id);
   } catch {}
 }
 
@@ -7196,6 +7204,9 @@ function renderAdvisorQueuePanel({ advisor, credentials, contacts, referrals }) 
 
   const d = advisor.dossier_json || {};
   const score = advisor.fit_score != null ? Number(advisor.fit_score).toFixed(1) : '—';
+
+  // Store phone for calling
+  advisorState.queueActivePhone = advisor.phone || null;
 
   $('#aqp-score').textContent = score;
   $('#aqp-name').textContent = advisor.name;
@@ -7241,6 +7252,213 @@ function renderAdvisorQueuePanel({ advisor, credentials, contacts, referrals }) 
     contactsEl.innerHTML = '<div style="font-size:0.8rem;color:var(--text-dim)">No contacts logged yet.</div>';
     $('#aqp-contacts-section').hidden = false;
   }
+}
+
+// ─── Advisor Queue: Call, SMS, Notes, Call History ───────────────────────
+
+async function startAdvisorCall() {
+  const id = advisorState.queueActiveId;
+  if (!id) return;
+  const phone = advisorState.queueActivePhone;
+  if (!phone) return toast('No phone number available', 'error');
+
+  try {
+    const res = await fetch(`/api/advisors/${id}/call`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: phone }),
+    });
+    const data = await res.json();
+    if (!data.ok) return toast(data.error || 'Failed to start call', 'error');
+
+    advisorState.queueCallLogId = data.call_log_id;
+    advisorState.queueCallStart = Date.now();
+
+    // Show call UI
+    $('#aqp-call-btn').hidden = true;
+    $('#aqp-call-active').hidden = false;
+    $('#aqp-call-status').textContent = 'Ringing…';
+
+    // Timer
+    clearInterval(advisorState.queueCallTimer);
+    advisorState.queueCallTimer = setInterval(() => {
+      const secs = Math.floor((Date.now() - advisorState.queueCallStart) / 1000);
+      const mm = String(Math.floor(secs / 60)).padStart(2, '0');
+      const ss = String(secs % 60).padStart(2, '0');
+      $('#aqp-timer').textContent = `${mm}:${ss}`;
+    }, 500);
+
+    if (data.mock) {
+      // Mock mode — show connected after 2s
+      setTimeout(() => { if ($('#aqp-call-active') && !$('#aqp-call-active').hidden) $('#aqp-call-status').textContent = 'Connected (Mock)'; }, 2000);
+    } else if (state.twilioDevice) {
+      // Live Twilio
+      const e164 = phone.replace(/\D/g, '').replace(/^1?(\d{10})$/, '+1$1');
+      const call = await state.twilioDevice.connect({ params: { To: e164, callLogId: data.call_log_id } });
+      advisorState.twilioActiveCall = call;
+      call.on('accept', () => { $('#aqp-call-status').textContent = 'Connected'; $('#aqp-mute-btn').hidden = false; });
+      call.on('disconnect', () => onAdvisorCallEnded());
+      call.on('cancel', () => onAdvisorCallEnded());
+      call.on('error', () => onAdvisorCallEnded());
+    }
+  } catch (err) {
+    toast('Call failed: ' + err.message, 'error');
+  }
+}
+
+function onAdvisorCallEnded() {
+  clearInterval(advisorState.queueCallTimer);
+  $('#aqp-call-active').hidden = true;
+  $('#aqp-mute-btn').hidden = true;
+  $('#aqp-processing').hidden = false;
+  // Poll for debrief
+  if (advisorState.queueCallLogId) pollForAdvisorDebrief(advisorState.queueCallLogId);
+}
+
+async function endAdvisorCall() {
+  clearInterval(advisorState.queueCallTimer);
+  const dur = Math.max(5, Math.floor((Date.now() - (advisorState.queueCallStart || Date.now())) / 1000));
+
+  if (advisorState.twilioActiveCall) {
+    advisorState.twilioActiveCall.disconnect();
+    advisorState.twilioActiveCall = null;
+  } else if (advisorState.queueCallLogId) {
+    // Mock mode — trigger mock-complete
+    await fetch('/api/twilio/mock-complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ call_log_id: advisorState.queueCallLogId, duration_sec: dur }),
+    });
+    onAdvisorCallEnded();
+  }
+}
+
+function pollForAdvisorDebrief(callLogId) {
+  let attempts = 0;
+  clearInterval(advisorState.debriefPollTimer);
+  advisorState.debriefPollTimer = setInterval(async () => {
+    attempts++;
+    if (attempts > 60) { clearInterval(advisorState.debriefPollTimer); $('#aqp-processing').hidden = true; $('#aqp-call-btn').hidden = false; return; }
+    try {
+      const res = await fetch(`/api/calls/${callLogId}/debrief-questions`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ready) {
+          clearInterval(advisorState.debriefPollTimer);
+          $('#aqp-processing').hidden = true;
+          $('#aqp-call-btn').hidden = false;
+          // Open the global debrief modal (same one used by company queue)
+          openDebriefModal(callLogId, data);
+          // Auto-log this as a contact on the advisor
+          const advisorId = advisorState.queueActiveId;
+          if (advisorId) {
+            fetch(`/api/advisors/${advisorId}/contacts`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ channel: 'call', direction: 'outbound', summary: (data.ai_summary?.bullets || []).join('; ') || 'Phone call' }),
+            }).catch(() => {});
+          }
+          loadAdvisorQueueCallHistory(advisorId);
+        }
+      }
+    } catch {}
+  }, 1500);
+}
+
+async function loadAdvisorQueueMessages(advisorId) {
+  const thread = $('#aqp-messages-thread');
+  const count = $('#aqp-messages-count');
+  if (!thread) return;
+  try {
+    const res = await fetch(`/api/advisors/${advisorId}/messages`);
+    const { messages } = await res.json();
+    count.textContent = messages.length;
+    if (!messages.length) { thread.innerHTML = '<div class="sms-empty">No messages yet.</div>'; return; }
+    thread.innerHTML = messages.reverse().map(m => `
+      <div class="sms-bubble sms-${m.direction}">
+        <div class="sms-body">${escapeHtml(m.body)}</div>
+        <div class="sms-meta">${new Date(m.created_at).toLocaleString()}</div>
+      </div>
+    `).join('');
+    thread.scrollTop = thread.scrollHeight;
+  } catch { thread.innerHTML = ''; }
+}
+
+async function sendAdvisorSms() {
+  const id = advisorState.queueActiveId;
+  if (!id) return;
+  const input = $('#aqp-sms-input');
+  const body = input?.value?.trim();
+  if (!body) return;
+  const phone = advisorState.queueActivePhone;
+  if (!phone) return toast('No phone number', 'error');
+  await fetch(`/api/advisors/${id}/sms`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to: phone, body }),
+  });
+  input.value = '';
+  toast('SMS sent');
+  loadAdvisorQueueMessages(id);
+}
+
+async function loadAdvisorQueueNotes(advisorId) {
+  const list = $('#aqp-notes-list');
+  const count = $('#aqp-notes-count');
+  if (!list) return;
+  try {
+    const res = await fetch(`/api/advisors/${advisorId}/notes`);
+    const { notes } = await res.json();
+    count.textContent = notes.length;
+    list.innerHTML = notes.map(n => `
+      <div class="d-note-item">
+        <div class="d-note-date">${new Date(n.created_at).toLocaleString()}</div>
+        <div class="d-note-text">${escapeHtml(n.note)}</div>
+      </div>
+    `).join('') || '<div class="d-note-empty">No notes yet.</div>';
+  } catch { list.innerHTML = ''; }
+}
+
+async function saveAdvisorNote() {
+  const id = advisorState.queueActiveId;
+  if (!id) return;
+  const input = $('#aqp-notes-input');
+  const note = input?.value?.trim();
+  if (!note) return;
+  await fetch(`/api/advisors/${id}/notes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note }),
+  });
+  input.value = '';
+  toast('Note saved');
+  loadAdvisorQueueNotes(id);
+}
+
+async function loadAdvisorQueueCallHistory(advisorId) {
+  const el = $('#aqp-call-history');
+  const section = $('#aqp-call-history-section');
+  if (!el) return;
+  try {
+    const res = await fetch(`/api/advisors/${advisorId}/calls`);
+    const { calls } = await res.json();
+    if (!calls.length) { section.hidden = true; return; }
+    section.hidden = false;
+    el.innerHTML = calls.slice(0, 10).map(c => {
+      const dur = c.duration_sec ? `${Math.floor(c.duration_sec / 60)}:${String(c.duration_sec % 60).padStart(2, '0')}` : '—';
+      const sentimentClass = { Receptive: 'sentiment-receptive', 'Not Interested': 'sentiment-negative', 'Callback Requested': 'sentiment-callback', 'No Answer': 'sentiment-noanswer' }[c.sentiment] || '';
+      const bullets = c.ai_summary?.bullets || [];
+      return `
+        <div class="call-history-item" style="padding:6px 0;border-bottom:1px solid var(--border-subtle, rgba(255,255,255,0.04));font-size:0.8rem">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span>${new Date(c.called_at).toLocaleDateString()} &middot; ${dur}</span>
+            ${c.sentiment ? `<span class="sentiment-badge ${sentimentClass}">${escapeHtml(c.sentiment)}</span>` : ''}
+          </div>
+          ${bullets.length ? `<ul style="margin:4px 0 0 16px;padding:0;color:var(--text-dim)">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
+          ${c.next_action ? `<div style="margin-top:2px;color:var(--accent);font-size:0.75rem">Next: ${escapeHtml(c.next_action)}</div>` : ''}
+        </div>`;
+    }).join('');
+  } catch { section.hidden = true; }
 }
 
 async function openAdvisorDetail(id) {
@@ -7615,6 +7833,35 @@ function initAdvisorBindings() {
     $('#adv-queue-panel-empty').hidden = false;
     renderAdvisorCallQueue();
     toast('Skipped for today', 'info');
+  });
+
+  // Advisor call controls
+  $('#aqp-call-btn')?.addEventListener('click', startAdvisorCall);
+  $('#aqp-end-btn')?.addEventListener('click', endAdvisorCall);
+  $('#aqp-mute-btn')?.addEventListener('click', () => {
+    if (advisorState.twilioActiveCall) {
+      const muted = advisorState.twilioActiveCall.isMuted();
+      advisorState.twilioActiveCall.mute(!muted);
+      $('#aqp-mute-btn').textContent = muted ? 'Mute' : 'Unmute';
+      $('#aqp-mute-btn').classList.toggle('active', !muted);
+    }
+  });
+
+  // Advisor SMS
+  $('#aqp-sms-send')?.addEventListener('click', sendAdvisorSms);
+  $('#aqp-sms-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAdvisorSms(); }
+  });
+
+  // Advisor notes
+  $('#aqp-notes-save')?.addEventListener('click', saveAdvisorNote);
+  $('#aqp-notes-stamp')?.addEventListener('click', () => {
+    const input = $('#aqp-notes-input');
+    if (!input) return;
+    const now = new Date();
+    const stamp = `[${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${state.user ? ' — ' + state.user.name : ''}] `;
+    input.value = stamp + input.value;
+    input.focus();
   });
 
   // Close detail

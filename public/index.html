@@ -1409,19 +1409,61 @@
                     <div class="qp-section-title">Outreach Angles</div>
                     <div class="qp-section-body" id="aqp-angles"></div>
                   </div>
-                  <div class="qp-section" id="aqp-contacts-section">
-                    <div class="qp-section-title">Contact Log</div>
-                    <div class="qp-section-body" id="aqp-contacts"></div>
+                  <div class="qp-section" id="aqp-call-history-section" hidden>
+                    <div class="qp-section-title">Call History</div>
+                    <div class="qp-section-body" id="aqp-call-history"></div>
                   </div>
+                  <!-- Dialpad (mirrors main queue) -->
+                  <div class="qp-dialpad" id="aqp-dialpad">
+                    <button type="button" class="qp-call-btn" id="aqp-call-btn">
+                      <span class="qp-call-icon">&#9743;</span>
+                      <span>Call</span>
+                    </button>
+                    <div class="qp-call-active" id="aqp-call-active" hidden>
+                      <div class="qp-timer" id="aqp-timer">00:00</div>
+                      <div class="qp-call-status" id="aqp-call-status">Ringing&hellip;</div>
+                      <div class="qp-call-controls">
+                        <button type="button" class="qp-mute-btn" id="aqp-mute-btn" hidden title="Mute">Mute</button>
+                        <button type="button" class="qp-end-btn" id="aqp-end-btn">End Call</button>
+                      </div>
+                    </div>
+                    <div class="qp-processing" id="aqp-processing" hidden>
+                      <div class="qp-spinner"></div>
+                      <div class="qp-processing-text">Processing call&hellip; analyzing transcript.</div>
+                    </div>
+                  </div>
+                  <!-- SMS -->
+                  <div class="qp-sms">
+                    <div class="qp-section-title">Messages <span class="d-section-count" id="aqp-messages-count">0</span></div>
+                    <div id="aqp-messages-thread" class="sms-thread"></div>
+                    <div class="qp-sms-compose">
+                      <textarea id="aqp-sms-input" class="cf-input" rows="2" placeholder="Send a text message&hellip;"></textarea>
+                      <button type="button" class="btn-primary btn-xs" id="aqp-sms-send">Send SMS</button>
+                    </div>
+                  </div>
+                  <!-- Notes -->
                   <div class="qp-notes">
-                    <div class="qp-section-title">Log Contact</div>
+                    <div class="qp-section-title">Notes <span class="d-section-count" id="aqp-notes-count">0</span></div>
+                    <div class="qp-notes-compose">
+                      <textarea id="aqp-notes-input" class="cf-input d-notes-input" placeholder="Write a note&hellip;" rows="3"></textarea>
+                      <div class="d-notes-actions">
+                        <button type="button" class="btn-ghost btn-xs" id="aqp-notes-stamp" title="Insert date/time + your initials">&#9654; Timestamp</button>
+                        <div class="d-notes-spacer"></div>
+                        <button type="button" class="btn-primary btn-xs" id="aqp-notes-save">Save</button>
+                      </div>
+                    </div>
+                    <div id="aqp-notes-list" class="d-notes-list"></div>
+                  </div>
+                  <!-- Log Contact (manual, for non-call interactions) -->
+                  <div class="qp-notes" style="border-top:1px solid var(--border)">
+                    <div class="qp-section-title">Log Non-Call Contact</div>
                     <div class="qp-notes-compose">
                       <div style="display:flex;gap:6px;margin-bottom:6px">
                         <select id="aqp-channel" class="cf-input cf-input-sm" style="width:110px">
-                          <option value="call">Call</option>
                           <option value="email">Email</option>
                           <option value="linkedin">LinkedIn</option>
                           <option value="in_person">In Person</option>
+                          <option value="event">Event</option>
                         </select>
                         <select id="aqp-direction" class="cf-input cf-input-sm" style="width:110px">
                           <option value="outbound">Outbound</option>
@@ -1432,7 +1474,7 @@
                       <input type="text" id="aqp-next" class="cf-input cf-input-sm" placeholder="Next action (optional)" style="margin-top:4px" />
                       <input type="date" id="aqp-next-date" class="cf-input cf-input-sm" style="margin-top:4px" />
                       <div class="d-notes-actions" style="margin-top:6px">
-                        <button type="button" class="btn-primary btn-xs" id="aqp-log-btn">Log &amp; Advance</button>
+                        <button type="button" class="btn-primary btn-xs" id="aqp-log-btn">Log Contact</button>
                         <button type="button" class="btn-ghost btn-xs" id="aqp-skip-btn">Skip for Today</button>
                       </div>
                     </div>
