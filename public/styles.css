@@ -5720,11 +5720,8 @@ body.detail-fullscreen { overflow: hidden; }
 .advisor-row:hover { background: var(--hover-bg, rgba(255,255,255,0.03)); }
 .advisor-name-cell { font-weight: 600; color: var(--text-primary); }
 
-/* Advisor pipeline board */
-.advisor-pipeline-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 16px; min-height: 300px; }
-.advisor-pipeline-board .pipeline-col { min-width: 180px; flex: 1; }
-.advisor-pipeline-card { cursor: pointer; }
-.advisor-pipeline-card .pipeline-card-meta { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+/* Advisor pipeline — reuses .kanban-col / .kanban-card from main pipeline */
+.advisor-kanban-card { cursor: pointer; }
 
 /* Advisor queue view */
 .advisor-queue-card {

@@ -7155,29 +7155,44 @@ function renderAdvisorPipeline() {
     if (byStage[s]) byStage[s].push(a);
     else if (s !== 'dormant' && s !== 'declined') byStage.identified.push(a);
   }
-  el.innerHTML = `<div class="pipeline-board advisor-pipeline-board">
-    ${stages.map(s => `
-      <div class="pipeline-col" data-stage="${s}">
-        <div class="pipeline-col-header" style="border-color:${ADVISOR_STAGE_COLORS[s]}">
-          <span>${ADVISOR_STAGE_LABELS[s]}</span>
-          <span class="pipeline-count">${byStage[s].length}</span>
+  el.innerHTML = stages.map(s => {
+    const cards = byStage[s];
+    return `
+      <div class="kanban-col" data-stage="${s}">
+        <div class="kanban-col-header" style="border-bottom-color:${ADVISOR_STAGE_COLORS[s]}">
+          <span class="kanban-col-title">${ADVISOR_STAGE_LABELS[s]}</span>
+          <span class="kanban-col-count">${cards.length}</span>
         </div>
-        <div class="pipeline-cards">
-          ${byStage[s].map(a => `
-            <div class="pipeline-card advisor-pipeline-card" data-id="${a.id}">
-              <div class="pipeline-card-name">${escapeHtml(a.name)}</div>
-              <div class="pipeline-card-sub">${escapeHtml(a.firm || '')}</div>
-              <div class="pipeline-card-meta">
-                <span class="advisor-type-badge advisor-type-${a.type}">${ADVISOR_TYPE_LABELS[a.type] || a.type}</span>
-                ${a.fit_score != null ? `<span class="tier-pill ${advisorTierClass(a.fit_score)}">${Number(a.fit_score).toFixed(1)}</span>` : ''}
-              </div>
-            </div>
-          `).join('')}
+        <div class="kanban-col-body">
+          ${cards.length === 0
+            ? '<div class="kanban-empty">None</div>'
+            : cards.map(a => {
+              const score = a.fit_score != null ? Number(a.fit_score).toFixed(1) : '—';
+              const tierCls = a.fit_score != null ? advisorTierClass(a.fit_score) : 'pending';
+              const loc = [a.city, a.state].filter(Boolean).join(', ');
+              const lastContact = a.last_contact_date
+                ? Math.floor((Date.now() - new Date(a.last_contact_date).getTime()) / 86400000) + 'd ago'
+                : '';
+              return `
+                <div class="kanban-card ${tierCls} advisor-kanban-card" data-id="${a.id}">
+                  <div class="kc-top">
+                    <span class="kc-score ${tierCls}">${score}</span>
+                    <span class="kc-name">${escapeHtml(a.name)}</span>
+                  </div>
+                  <div class="kc-meta">
+                    <span class="advisor-type-badge advisor-type-${a.type}" style="font-size:0.5rem;padding:1px 5px">${ADVISOR_TYPE_LABELS[a.type] || a.type}</span>
+                    ${a.firm ? escapeHtml(a.firm) : ''}
+                  </div>
+                  ${loc ? `<div class="kc-meta">${escapeHtml(loc)}</div>` : ''}
+                  ${a.phone || a.email ? `<div class="kc-meta" style="font-size:0.7rem">${a.phone ? escapeHtml(a.phone) : ''}${a.phone && a.email ? ' · ' : ''}${a.email ? escapeHtml(a.email) : ''}</div>` : ''}
+                  ${lastContact ? `<div class="kc-days">${lastContact}</div>` : ''}
+                </div>`;
+            }).join('')}
         </div>
-      </div>
-    `).join('')}
-  </div>`;
-  $$('.advisor-pipeline-card', el).forEach(card => {
+      </div>`;
+  }).join('');
+
+  $$('.advisor-kanban-card', el).forEach(card => {
     card.addEventListener('click', () => openAdvisorDetail(card.dataset.id));
   });
 }
