@@ -7027,11 +7027,9 @@ function renderAdvisorView() {
   const mode = advisorState.viewMode;
   $('#advisor-list').hidden = mode !== 'list';
   $('#advisor-pipeline').hidden = mode !== 'pipeline';
-  $('#advisor-queue-view').hidden = mode !== 'queue';
 
   if (mode === 'list') renderAdvisorList();
   else if (mode === 'pipeline') renderAdvisorPipeline();
-  else if (mode === 'queue') loadAdvisorQueue();
 }
 
 function renderAdvisorList() {
@@ -7107,38 +7105,141 @@ function renderAdvisorPipeline() {
   });
 }
 
-async function loadAdvisorQueue() {
-  const el = $('#advisor-queue-view');
-  if (!el) return;
+// ─── Advisor Call Queue (subtab) ─────────────────────────────────────────
+
+async function loadAdvisorCallQueue() {
+  const list = $('#adv-queue-list');
+  if (!list) return;
+  list.innerHTML = '<div class="queue-empty">Loading queue&hellip;</div>';
   try {
     const res = await fetch('/api/advisors/queue');
     const data = await res.json();
-    const advisors = data.advisors || [];
-    if (advisors.length === 0) {
-      el.innerHTML = '<div class="empty-state">No advisors due for follow-up today.</div>';
-      return;
-    }
-    el.innerHTML = advisors.map(a => `
-      <div class="advisor-queue-card" data-id="${a.id}">
-        <div class="advisor-queue-left">
-          <div class="advisor-queue-name">${escapeHtml(a.name)}</div>
-          <div class="advisor-queue-meta">
-            <span class="advisor-type-badge advisor-type-${a.type}">${ADVISOR_TYPE_LABELS[a.type] || a.type}</span>
-            ${escapeHtml(a.firm || '')} &mdash; ${escapeHtml([a.city, a.state].filter(Boolean).join(', '))}
+    advisorState.queueAdvisors = data.advisors || [];
+    renderAdvisorCallQueue();
+  } catch (err) {
+    list.innerHTML = `<div class="queue-empty">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderAdvisorCallQueue() {
+  const list = $('#adv-queue-list');
+  if (!list) return;
+  const typeFilter = $('#adv-queue-type-filter')?.value || '';
+  let rows = advisorState.queueAdvisors || [];
+  if (typeFilter) rows = rows.filter(a => a.type === typeFilter);
+
+  if (!rows.length) {
+    list.innerHTML = '<div class="queue-empty">No advisors due for follow-up. All caught up.</div>';
+    return;
+  }
+
+  list.innerHTML = rows.map((a, i) => {
+    const selected = advisorState.queueActiveId === a.id ? 'selected' : '';
+    const score = a.fit_score != null ? Number(a.fit_score).toFixed(1) : '—';
+    const meta = [a.firm, [a.city, a.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
+    return `
+      <div class="queue-row ${selected}" data-id="${a.id}">
+        <div class="queue-rank">${i + 1}</div>
+        <div class="queue-row-score">${score}</div>
+        <div class="queue-row-main">
+          <div class="queue-row-name">
+            <span class="advisor-type-badge advisor-type-${a.type}" style="margin-right:6px;font-size:0.55rem">${ADVISOR_TYPE_LABELS[a.type] || a.type}</span>
+            ${escapeHtml(a.name)}
           </div>
-          ${a.next_action ? `<div class="advisor-queue-action">Next: ${escapeHtml(a.next_action)}</div>` : ''}
+          <div class="queue-row-meta">${escapeHtml(meta)}</div>
+          ${a.next_action ? `<div class="queue-row-reason">Next: ${escapeHtml(a.next_action)}</div>` : ''}
         </div>
-        <div class="advisor-queue-right">
-          ${a.fit_score != null ? `<span class="tier-pill ${advisorTierClass(a.fit_score)}">${Number(a.fit_score).toFixed(1)}</span>` : ''}
-          <span class="advisor-stage-pill" style="background:${ADVISOR_STAGE_COLORS[a.relationship_stage] || '#6b7280'}">${ADVISOR_STAGE_LABELS[a.relationship_stage] || a.relationship_stage}</span>
+        <div class="queue-row-actions">
+          <button type="button" class="queue-skip-btn" data-skip="${a.id}">Skip</button>
         </div>
+      </div>`;
+  }).join('');
+
+  $$('.queue-row', list).forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.matches('.queue-skip-btn')) return;
+      selectAdvisorQueueRow(el.dataset.id);
+    });
+  });
+  $$('.queue-skip-btn', list).forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Remove from local queue for today
+      advisorState.queueAdvisors = advisorState.queueAdvisors.filter(a => a.id !== btn.dataset.skip);
+      if (advisorState.queueActiveId === btn.dataset.skip) {
+        advisorState.queueActiveId = null;
+        $('#adv-queue-panel-active').hidden = true;
+        $('#adv-queue-panel-empty').hidden = false;
+      }
+      renderAdvisorCallQueue();
+      toast('Skipped for today', 'info');
+    });
+  });
+}
+
+async function selectAdvisorQueueRow(id) {
+  advisorState.queueActiveId = id;
+  // Highlight selected row
+  $$('.queue-row', $('#adv-queue-list')).forEach(r => r.classList.toggle('selected', r.dataset.id === id));
+  // Load full advisor detail into panel
+  try {
+    const res = await fetch(`/api/advisors/${id}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    renderAdvisorQueuePanel(data);
+  } catch {}
+}
+
+function renderAdvisorQueuePanel({ advisor, credentials, contacts, referrals }) {
+  $('#adv-queue-panel-empty').hidden = true;
+  $('#adv-queue-panel-active').hidden = false;
+
+  const d = advisor.dossier_json || {};
+  const score = advisor.fit_score != null ? Number(advisor.fit_score).toFixed(1) : '—';
+
+  $('#aqp-score').textContent = score;
+  $('#aqp-name').textContent = advisor.name;
+  $('#aqp-sub').textContent = [advisor.city, advisor.state].filter(Boolean).join(', ');
+  $('#aqp-tier').innerHTML = advisor.fit_score != null
+    ? `<span class="tier-pill ${advisorTierClass(advisor.fit_score)}">${advisorTierLabel(advisor.fit_score)}</span>`
+    : '—';
+  $('#aqp-type').innerHTML = `<span class="advisor-type-badge advisor-type-${advisor.type}">${ADVISOR_TYPE_LABELS[advisor.type] || advisor.type}</span>`;
+  $('#aqp-firm').textContent = advisor.firm || '—';
+  $('#aqp-phone').innerHTML = advisor.phone ? `<a href="tel:${escapeHtml(advisor.phone)}">${escapeHtml(advisor.phone)}</a>` : '—';
+  $('#aqp-email').innerHTML = advisor.email ? `<a href="mailto:${escapeHtml(advisor.email)}">${escapeHtml(advisor.email)}</a>` : '—';
+  $('#aqp-linkedin').innerHTML = advisor.linkedin_url ? `<a href="${escapeHtml(advisor.linkedin_url)}" target="_blank">Profile</a>` : '—';
+  $('#aqp-stage').innerHTML = `<span class="advisor-stage-pill" style="background:${ADVISOR_STAGE_COLORS[advisor.relationship_stage] || '#6b7280'}">${ADVISOR_STAGE_LABELS[advisor.relationship_stage] || advisor.relationship_stage}</span>`;
+
+  // Next action from queue data
+  const queueRow = (advisorState.queueAdvisors || []).find(a => a.id === advisor.id);
+  $('#aqp-next-action').textContent = queueRow?.next_action || 'No next action set';
+
+  // Outreach angles
+  const angles = d.outreach_angles || [];
+  const anglesEl = $('#aqp-angles');
+  if (angles.length) {
+    anglesEl.innerHTML = angles.map(a => {
+      if (typeof a === 'string') return `<div style="margin-bottom:6px">${escapeHtml(a)}</div>`;
+      return `<div style="margin-bottom:8px"><div>${escapeHtml(a.hook || '')}</div>${a.grounded_in_fact ? `<div style="font-size:0.75rem;color:var(--text-dim);font-style:italic">Based on: ${escapeHtml(typeof a.grounded_in_fact === 'string' ? a.grounded_in_fact : '')}</div>` : ''}</div>`;
+    }).join('');
+    $('#aqp-angles-section').hidden = false;
+  } else {
+    $('#aqp-angles-section').hidden = true;
+  }
+
+  // Contact log
+  const contactsEl = $('#aqp-contacts');
+  if (contacts && contacts.length) {
+    contactsEl.innerHTML = contacts.slice(0, 5).map(c => `
+      <div style="padding:4px 0;border-bottom:1px solid var(--border-subtle, rgba(255,255,255,0.04));font-size:0.8rem">
+        <div style="color:var(--text-dim)">${new Date(c.contact_date).toLocaleDateString()} via ${escapeHtml(c.channel)} (${c.direction})</div>
+        <div>${escapeHtml(c.summary || '')}</div>
       </div>
     `).join('');
-    $$('.advisor-queue-card', el).forEach(card => {
-      card.addEventListener('click', () => openAdvisorDetail(card.dataset.id));
-    });
-  } catch (err) {
-    el.innerHTML = '<div class="empty-state">Failed to load queue.</div>';
+    $('#aqp-contacts-section').hidden = false;
+  } else {
+    contactsEl.innerHTML = '<div style="font-size:0.8rem;color:var(--text-dim)">No contacts logged yet.</div>';
+    $('#aqp-contacts-section').hidden = false;
   }
 }
 
@@ -7451,6 +7552,16 @@ function showReferralForm(advisorId) {
 }
 
 function initAdvisorBindings() {
+  // Subtab switching
+  $$('.advisor-subtab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.subtab;
+      $$('.advisor-subtab').forEach(t => t.classList.toggle('active', t === tab));
+      $$('.advisor-subpanel').forEach(p => p.hidden = p.id !== `advisor-sub-${target}`);
+      if (target === 'advisor-call-queue') loadAdvisorCallQueue();
+    });
+  });
+
   // Filters
   $('#advisor-type-filter')?.addEventListener('change', loadAdvisors);
   $('#advisor-stage-filter')?.addEventListener('change', loadAdvisors);
@@ -7462,6 +7573,48 @@ function initAdvisorBindings() {
   $('#advisor-view-mode')?.addEventListener('change', (e) => {
     advisorState.viewMode = e.target.value;
     renderAdvisorView();
+  });
+
+  // Advisor call queue bindings
+  $('#adv-queue-type-filter')?.addEventListener('change', renderAdvisorCallQueue);
+  $('#adv-queue-refresh')?.addEventListener('click', loadAdvisorCallQueue);
+  $('#aqp-log-btn')?.addEventListener('click', async () => {
+    const id = advisorState.queueActiveId;
+    if (!id) return;
+    const summary = $('#aqp-summary')?.value?.trim();
+    if (!summary) return toast('Please enter a summary', 'error');
+    await fetch(`/api/advisors/${id}/contacts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        channel: $('#aqp-channel')?.value || 'call',
+        direction: $('#aqp-direction')?.value || 'outbound',
+        summary,
+        next_action: $('#aqp-next')?.value?.trim() || null,
+        next_action_date: $('#aqp-next-date')?.value || null,
+      }),
+    });
+    // Clear form
+    if ($('#aqp-summary')) $('#aqp-summary').value = '';
+    if ($('#aqp-next')) $('#aqp-next').value = '';
+    if ($('#aqp-next-date')) $('#aqp-next-date').value = '';
+    toast('Contact logged');
+    // Remove from queue for today and reload panel
+    advisorState.queueAdvisors = advisorState.queueAdvisors.filter(a => a.id !== id);
+    advisorState.queueActiveId = null;
+    $('#adv-queue-panel-active').hidden = true;
+    $('#adv-queue-panel-empty').hidden = false;
+    renderAdvisorCallQueue();
+  });
+  $('#aqp-skip-btn')?.addEventListener('click', () => {
+    const id = advisorState.queueActiveId;
+    if (!id) return;
+    advisorState.queueAdvisors = advisorState.queueAdvisors.filter(a => a.id !== id);
+    advisorState.queueActiveId = null;
+    $('#adv-queue-panel-active').hidden = true;
+    $('#adv-queue-panel-empty').hidden = false;
+    renderAdvisorCallQueue();
+    toast('Skipped for today', 'info');
   });
 
   // Close detail

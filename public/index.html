@@ -1290,14 +1290,66 @@
 
         <!-- ADVISORS TAB -->
         <div id="tab-advisors" class="tab-panel">
-          <div class="advisors-header">
-            <div class="advisors-title-row">
-              <div class="advisors-title">Advisor Network</div>
-              <div class="advisors-stats" id="advisor-stats-bar"></div>
+          <!-- Subtabs -->
+          <div class="advisor-subtabs">
+            <button type="button" class="advisor-subtab active" data-subtab="network">Network</button>
+            <button type="button" class="advisor-subtab" data-subtab="advisor-call-queue">Call Queue</button>
+          </div>
+
+          <!-- SUBTAB: Network -->
+          <div id="advisor-sub-network" class="advisor-subpanel">
+            <div class="advisors-header">
+              <div class="advisors-title-row">
+                <div class="advisors-title">Advisor Network</div>
+                <div class="advisors-stats" id="advisor-stats-bar"></div>
+              </div>
+              <div class="advisors-controls">
+                <div class="advisors-filters">
+                  <select id="advisor-type-filter" class="cf-input cf-input-sm">
+                    <option value="">All Types</option>
+                    <option value="cpa">CPA</option>
+                    <option value="ria">RIA / Wealth</option>
+                    <option value="attorney">Attorney</option>
+                    <option value="lender">Lender</option>
+                    <option value="coach">Coach</option>
+                    <option value="insurance">Insurance</option>
+                    <option value="fractional_cfo">Fractional CFO</option>
+                  </select>
+                  <select id="advisor-stage-filter" class="cf-input cf-input-sm">
+                    <option value="">All Stages</option>
+                    <option value="identified">Identified</option>
+                    <option value="researched">Researched</option>
+                    <option value="queued">Queued</option>
+                    <option value="outreach_sent">Outreach Sent</option>
+                    <option value="first_response">First Response</option>
+                    <option value="intro_meeting_booked">Meeting Booked</option>
+                    <option value="intro_meeting_done">Meeting Done</option>
+                    <option value="active_partner">Active Partner</option>
+                    <option value="dormant">Dormant</option>
+                    <option value="declined">Declined</option>
+                  </select>
+                  <input type="text" id="advisor-search" class="cf-input cf-input-sm" placeholder="Search advisors&hellip;" style="width:200px" />
+                  <select id="advisor-view-mode" class="cf-input cf-input-sm">
+                    <option value="list">List View</option>
+                    <option value="pipeline">Pipeline View</option>
+                  </select>
+                </div>
+                <button type="button" class="btn-primary btn-sm" id="btn-add-advisor-manual">+ Add Advisor</button>
+              </div>
             </div>
-            <div class="advisors-controls">
-              <div class="advisors-filters">
-                <select id="advisor-type-filter" class="cf-input cf-input-sm">
+            <div id="advisor-list" class="advisor-list"></div>
+            <div id="advisor-pipeline" class="advisor-pipeline" hidden></div>
+          </div>
+
+          <!-- SUBTAB: Call Queue -->
+          <div id="advisor-sub-advisor-call-queue" class="advisor-subpanel" hidden>
+            <div class="queue-header">
+              <div>
+                <div class="queue-title">Advisor Call Queue</div>
+                <div class="queue-sub">Advisors due for follow-up, ranked by score and overdue actions.</div>
+              </div>
+              <div class="queue-header-right">
+                <select id="adv-queue-type-filter" class="cf-input cf-input-sm">
                   <option value="">All Types</option>
                   <option value="cpa">CPA</option>
                   <option value="ria">RIA / Wealth</option>
@@ -1307,32 +1359,88 @@
                   <option value="insurance">Insurance</option>
                   <option value="fractional_cfo">Fractional CFO</option>
                 </select>
-                <select id="advisor-stage-filter" class="cf-input cf-input-sm">
-                  <option value="">All Stages</option>
-                  <option value="identified">Identified</option>
-                  <option value="researched">Researched</option>
-                  <option value="queued">Queued</option>
-                  <option value="outreach_sent">Outreach Sent</option>
-                  <option value="first_response">First Response</option>
-                  <option value="intro_meeting_booked">Meeting Booked</option>
-                  <option value="intro_meeting_done">Meeting Done</option>
-                  <option value="active_partner">Active Partner</option>
-                  <option value="dormant">Dormant</option>
-                  <option value="declined">Declined</option>
-                </select>
-                <input type="text" id="advisor-search" class="cf-input cf-input-sm" placeholder="Search advisors&hellip;" style="width:200px" />
-                <select id="advisor-view-mode" class="cf-input cf-input-sm">
-                  <option value="list">List View</option>
-                  <option value="pipeline">Pipeline View</option>
-                  <option value="queue">Daily Queue</option>
-                </select>
+                <button type="button" class="btn-ghost btn-xs" id="adv-queue-refresh">Refresh</button>
               </div>
-              <button type="button" class="btn-primary btn-sm" id="btn-add-advisor-manual">+ Add Advisor</button>
+            </div>
+            <div class="queue-layout">
+              <div class="queue-list" id="adv-queue-list">
+                <div class="queue-empty">Loading queue&hellip;</div>
+              </div>
+              <aside class="queue-panel" id="adv-queue-panel">
+                <div class="queue-panel-empty" id="adv-queue-panel-empty">Select an advisor to view details.</div>
+                <div class="queue-panel-active" id="adv-queue-panel-active" hidden>
+                  <div class="qp-score-row">
+                    <div class="qp-score" id="aqp-score">&mdash;</div>
+                    <div class="qp-name-block">
+                      <div class="qp-name" id="aqp-name">&mdash;</div>
+                      <div class="qp-sub" id="aqp-sub">&mdash;</div>
+                    </div>
+                    <div class="qp-tier" id="aqp-tier">&mdash;</div>
+                  </div>
+                  <div class="qp-row">
+                    <div class="qp-label">Type</div>
+                    <div class="qp-value" id="aqp-type">&mdash;</div>
+                  </div>
+                  <div class="qp-row">
+                    <div class="qp-label">Firm</div>
+                    <div class="qp-value" id="aqp-firm">&mdash;</div>
+                  </div>
+                  <div class="qp-row">
+                    <div class="qp-label">Phone</div>
+                    <div class="qp-value" id="aqp-phone">&mdash;</div>
+                  </div>
+                  <div class="qp-row">
+                    <div class="qp-label">Email</div>
+                    <div class="qp-value" id="aqp-email">&mdash;</div>
+                  </div>
+                  <div class="qp-row">
+                    <div class="qp-label">LinkedIn</div>
+                    <div class="qp-value" id="aqp-linkedin">&mdash;</div>
+                  </div>
+                  <div class="qp-row">
+                    <div class="qp-label">Stage</div>
+                    <div class="qp-value" id="aqp-stage">&mdash;</div>
+                  </div>
+                  <div class="qp-section" id="aqp-next-action-section">
+                    <div class="qp-section-title">Next Action</div>
+                    <div class="qp-section-body" id="aqp-next-action">&mdash;</div>
+                  </div>
+                  <div class="qp-section" id="aqp-angles-section">
+                    <div class="qp-section-title">Outreach Angles</div>
+                    <div class="qp-section-body" id="aqp-angles"></div>
+                  </div>
+                  <div class="qp-section" id="aqp-contacts-section">
+                    <div class="qp-section-title">Contact Log</div>
+                    <div class="qp-section-body" id="aqp-contacts"></div>
+                  </div>
+                  <div class="qp-notes">
+                    <div class="qp-section-title">Log Contact</div>
+                    <div class="qp-notes-compose">
+                      <div style="display:flex;gap:6px;margin-bottom:6px">
+                        <select id="aqp-channel" class="cf-input cf-input-sm" style="width:110px">
+                          <option value="call">Call</option>
+                          <option value="email">Email</option>
+                          <option value="linkedin">LinkedIn</option>
+                          <option value="in_person">In Person</option>
+                        </select>
+                        <select id="aqp-direction" class="cf-input cf-input-sm" style="width:110px">
+                          <option value="outbound">Outbound</option>
+                          <option value="inbound">Inbound</option>
+                        </select>
+                      </div>
+                      <textarea id="aqp-summary" class="cf-input" rows="2" placeholder="What happened&hellip;"></textarea>
+                      <input type="text" id="aqp-next" class="cf-input cf-input-sm" placeholder="Next action (optional)" style="margin-top:4px" />
+                      <input type="date" id="aqp-next-date" class="cf-input cf-input-sm" style="margin-top:4px" />
+                      <div class="d-notes-actions" style="margin-top:6px">
+                        <button type="button" class="btn-primary btn-xs" id="aqp-log-btn">Log &amp; Advance</button>
+                        <button type="button" class="btn-ghost btn-xs" id="aqp-skip-btn">Skip for Today</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </aside>
             </div>
           </div>
-          <div id="advisor-list" class="advisor-list"></div>
-          <div id="advisor-pipeline" class="advisor-pipeline" hidden></div>
-          <div id="advisor-queue-view" class="advisor-queue-view" hidden></div>
         </div>
 
         <!-- ADVISOR DETAIL PANEL (slides in from right) -->
