@@ -7155,7 +7155,7 @@ function renderAdvisorPipeline() {
     if (byStage[s]) byStage[s].push(a);
     else if (s !== 'dormant' && s !== 'declined') byStage.identified.push(a);
   }
-  el.innerHTML = stages.map(s => {
+  el.innerHTML = `<div class="kanban">${stages.map(s => {
     const cards = byStage[s];
     return `
       <div class="kanban-col" data-stage="${s}">
@@ -7190,7 +7190,7 @@ function renderAdvisorPipeline() {
             }).join('')}
         </div>
       </div>`;
-  }).join('');
+  }).join('')}</div>`;
 
   $$('.advisor-kanban-card', el).forEach(card => {
     card.addEventListener('click', () => openAdvisorDetail(card.dataset.id));
