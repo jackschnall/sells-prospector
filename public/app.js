@@ -3760,6 +3760,20 @@ function bindPhase2() {
   $('#ctm-company')?.addEventListener('input', updateContactCompanyMatches);
 
   $('#contacts-search')?.addEventListener('input', debounce(() => loadAllContacts(), 250));
+
+  // Contacts subtab switching
+  $$('.contacts-subtab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.subtab;
+      $$('.contacts-subtab').forEach(t => t.classList.toggle('active', t === tab));
+      $$('.contacts-subpanel').forEach(p => p.hidden = p.id !== `contacts-sub-${target}`);
+      if (target === 'advisor-contacts') loadAdvisorContacts();
+    });
+  });
+
+  // Advisor contacts search + filter
+  $('#adv-contacts-search')?.addEventListener('input', debounce(() => loadAdvisorContacts(), 250));
+  $('#adv-contacts-type-filter')?.addEventListener('change', () => loadAdvisorContacts());
 }
 
 // ---------- init ----------
@@ -3981,6 +3995,69 @@ function renderContactRow(c) {
       <div class="contact-row-actions">
         <button type="button" class="contact-row-btn contact-row-edit" data-contact-id="${escapeHtml(c.id)}">Edit</button>
         <button type="button" class="contact-row-btn danger contact-row-delete" data-contact-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name || '')}">Delete</button>
+      </div>
+    </div>
+  `;
+}
+
+// ─── Advisor Contacts subtab ─────────────────────────────────────────────
+async function loadAdvisorContacts() {
+  const search = ($('#adv-contacts-search')?.value || '').trim();
+  const type = $('#adv-contacts-type-filter')?.value || '';
+  const host = $('#adv-contacts-list');
+  const empty = $('#adv-contacts-empty');
+  const count = $('#adv-contacts-count');
+  if (!host) return;
+  try {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (type) params.set('type', type);
+    const res = await fetch(`/api/advisors?${params}`);
+    const { advisors } = await res.json();
+    count.textContent = `${advisors.length} advisor${advisors.length === 1 ? '' : 's'}`;
+    if (!advisors.length) { host.innerHTML = ''; empty.hidden = false; return; }
+    empty.hidden = true;
+    host.innerHTML = advisors.map(renderAdvisorContactRow).join('');
+    $$('.adv-contact-row-link', host).forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const advisorTab = document.querySelector('.tab[data-tab="advisors"]');
+        if (advisorTab) advisorTab.click();
+        setTimeout(() => openAdvisorDetail(el.dataset.advisorId), 50);
+      });
+    });
+  } catch (err) {
+    host.innerHTML = ''; empty.hidden = false;
+  }
+}
+
+function renderAdvisorContactRow(a) {
+  const name = escapeHtml(a.name || 'Unnamed');
+  const title = a.title ? escapeHtml(a.title) : '';
+  const phone = a.phone ? `<span>${escapeHtml(a.phone)}</span>` : '';
+  const email = a.email ? `<span>${escapeHtml(a.email)}</span>` : '';
+  const linkedin = a.linkedin_url ? `<span><a href="${escapeHtml(a.linkedin_url)}" target="_blank" rel="noopener">LinkedIn</a></span>` : '';
+  const contactInfo = [phone, email, linkedin].filter(Boolean).join('') ||
+    '<span style="color: rgba(13,27,42,0.35)">No contact info</span>';
+  const firm = escapeHtml(a.firm || 'No firm');
+  const loc = [a.city, a.state].filter(Boolean).map(escapeHtml).join(', ');
+  const typeBadge = `<span class="advisor-type-badge advisor-type-${a.type}" style="font-size:0.55rem">${(typeof ADVISOR_TYPE_LABELS !== 'undefined' ? ADVISOR_TYPE_LABELS : {})[a.type] || a.type}</span>`;
+  const stagePill = `<span class="advisor-stage-pill" style="background:${(typeof ADVISOR_STAGE_COLORS !== 'undefined' ? ADVISOR_STAGE_COLORS : {})[a.relationship_stage] || '#6b7280'};font-size:0.6rem">${(typeof ADVISOR_STAGE_LABELS !== 'undefined' ? ADVISOR_STAGE_LABELS : {})[a.relationship_stage] || a.relationship_stage}</span>`;
+  const score = a.fit_score != null ? `<span class="tier-pill ${advisorTierClass(a.fit_score)}" style="font-size:0.7rem">${Number(a.fit_score).toFixed(1)}</span>` : '';
+
+  return `
+    <div class="contact-row">
+      <div class="contact-row-main">
+        <div class="contact-row-name">${name} ${typeBadge}</div>
+        ${title ? `<div class="contact-row-title">${title}</div>` : ''}
+      </div>
+      <div class="contact-row-contactinfo">${contactInfo}</div>
+      <div class="contact-row-company">
+        <button type="button" class="contact-row-company-link adv-contact-row-link" data-advisor-id="${a.id}" title="Open advisor">${firm}</button>
+        ${loc ? `<div class="contact-row-company-meta">${loc}</div>` : ''}
+      </div>
+      <div class="contact-row-actions" style="gap:4px">
+        ${score} ${stagePill}
       </div>
     </div>
   `;

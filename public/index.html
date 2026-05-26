@@ -73,12 +73,12 @@
           <button type="button" class="tab" data-tab="companies" role="tab">Companies</button>
           <button type="button" class="tab" data-tab="contacts" role="tab">Contacts</button>
           <button type="button" class="tab" data-tab="queue" role="tab" data-requires-user="1" hidden>Call Queue</button>
+          <button type="button" class="tab" data-tab="advisors" role="tab">Advisors</button>
           <button type="button" class="tab" data-tab="calendar" role="tab" data-requires-user="1" hidden>Calendar</button>
           <button type="button" class="tab" data-tab="inbox" role="tab" data-requires-user="1" hidden>Inbox</button>
           <button type="button" class="tab" data-tab="campaigns" role="tab" data-requires-user="1" hidden>Campaigns</button>
           <button type="button" class="tab" data-tab="reports" role="tab" data-requires-user="1" hidden>Buyside Reports</button>
           <button type="button" class="tab" data-tab="documents" role="tab" data-requires-user="1" hidden>Documents</button>
-          <button type="button" class="tab" data-tab="advisors" role="tab">Advisors</button>
           <button type="button" class="tab" data-tab="markets" role="tab">Markets</button>
           <button type="button" class="tab" data-tab="agent" role="tab">Agent</button>
           <button type="button" class="tab" data-tab="export" role="tab">Export</button>
@@ -274,17 +274,51 @@
 
         <!-- CONTACTS TAB -->
         <div id="tab-contacts" class="tab-panel">
-          <div class="toolbar">
-            <input type="search" id="contacts-search" class="search" placeholder="Search contacts by name, email, phone, company&hellip;" />
-            <div class="toolbar-spacer"></div>
-            <div class="contacts-count" id="contacts-count">0 contacts</div>
-            <button type="button" id="btn-add-contact" class="btn-primary btn-add" title="Add new contact">+ Add Contact</button>
+          <!-- Subtabs -->
+          <div class="advisor-subtabs">
+            <button type="button" class="contacts-subtab active" data-subtab="company-contacts">Company Contacts</button>
+            <button type="button" class="contacts-subtab" data-subtab="advisor-contacts">Advisor Contacts</button>
           </div>
-          <div id="contacts-list" class="contacts-list"></div>
-          <div id="contacts-empty" class="empty-state" hidden>
-            <div class="empty-icon">&#9675;</div>
-            <div class="empty-title">No contacts yet</div>
-            <div class="empty-sub">Click "+ Add Contact" to add one manually, or add contacts from a company's detail panel.</div>
+
+          <!-- Company Contacts subtab -->
+          <div id="contacts-sub-company-contacts" class="contacts-subpanel">
+            <div class="toolbar">
+              <input type="search" id="contacts-search" class="search" placeholder="Search contacts by name, email, phone, company&hellip;" />
+              <div class="toolbar-spacer"></div>
+              <div class="contacts-count" id="contacts-count">0 contacts</div>
+              <button type="button" id="btn-add-contact" class="btn-primary btn-add" title="Add new contact">+ Add Contact</button>
+            </div>
+            <div id="contacts-list" class="contacts-list"></div>
+            <div id="contacts-empty" class="empty-state" hidden>
+              <div class="empty-icon">&#9675;</div>
+              <div class="empty-title">No contacts yet</div>
+              <div class="empty-sub">Click "+ Add Contact" to add one manually, or add contacts from a company's detail panel.</div>
+            </div>
+          </div>
+
+          <!-- Advisor Contacts subtab -->
+          <div id="contacts-sub-advisor-contacts" class="contacts-subpanel" hidden>
+            <div class="toolbar">
+              <input type="search" id="adv-contacts-search" class="search" placeholder="Search advisors by name, firm, email, phone&hellip;" />
+              <div class="toolbar-spacer"></div>
+              <select id="adv-contacts-type-filter" class="cf-input cf-input-sm">
+                <option value="">All Types</option>
+                <option value="cpa">CPA</option>
+                <option value="ria">RIA / Wealth</option>
+                <option value="attorney">Attorney</option>
+                <option value="lender">Lender</option>
+                <option value="coach">Coach</option>
+                <option value="insurance">Insurance</option>
+                <option value="fractional_cfo">Fractional CFO</option>
+              </select>
+              <div class="contacts-count" id="adv-contacts-count">0 advisors</div>
+            </div>
+            <div id="adv-contacts-list" class="contacts-list"></div>
+            <div id="adv-contacts-empty" class="empty-state" hidden>
+              <div class="empty-icon">&#9675;</div>
+              <div class="empty-title">No advisor contacts yet</div>
+              <div class="empty-sub">Add advisors from the Advisors tab or run research via Claude Code.</div>
+            </div>
           </div>
         </div>
 
