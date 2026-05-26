@@ -5672,22 +5672,8 @@ body.detail-fullscreen { overflow: hidden; }
    ADVISOR NETWORK STYLES
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Advisor subtabs */
-.advisor-subtabs {
-  display: flex; gap: 0; border-bottom: 1px solid var(--border);
-  margin-bottom: 0; padding: 0;
-}
-.advisor-subtab {
-  padding: 10px 20px; font-size: 0.85rem; font-weight: 600;
-  color: var(--text-dim); background: none; border: none;
-  border-bottom: 2px solid transparent; cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-}
-.advisor-subtab:hover { color: var(--text-primary); }
-.advisor-subtab.active {
-  color: var(--accent, #c9a227); border-bottom-color: var(--accent, #c9a227);
-}
 .advisor-subpanel { padding-top: 4px; }
+.contacts-subpanel { padding-top: 4px; }
 
 .advisors-header { padding: 16px 0; }
 .advisors-title-row { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }

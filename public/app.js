@@ -3762,10 +3762,10 @@ function bindPhase2() {
   $('#contacts-search')?.addEventListener('input', debounce(() => loadAllContacts(), 250));
 
   // Contacts subtab switching
-  $$('.contacts-subtab').forEach(tab => {
+  $$('#tab-contacts .pipeline-subtab').forEach(tab => {
     tab.addEventListener('click', () => {
       const target = tab.dataset.subtab;
-      $$('.contacts-subtab').forEach(t => t.classList.toggle('active', t === tab));
+      $$('#tab-contacts .pipeline-subtab').forEach(t => t.classList.toggle('active', t === tab));
       $$('.contacts-subpanel').forEach(p => p.hidden = p.id !== `contacts-sub-${target}`);
       if (target === 'advisor-contacts') loadAdvisorContacts();
     });
@@ -7848,10 +7848,10 @@ function showReferralForm(advisorId) {
 
 function initAdvisorBindings() {
   // Subtab switching
-  $$('.advisor-subtab').forEach(tab => {
+  $$('#tab-advisors .pipeline-subtab').forEach(tab => {
     tab.addEventListener('click', () => {
       const target = tab.dataset.subtab;
-      $$('.advisor-subtab').forEach(t => t.classList.toggle('active', t === tab));
+      $$('#tab-advisors .pipeline-subtab').forEach(t => t.classList.toggle('active', t === tab));
       $$('.advisor-subpanel').forEach(p => p.hidden = p.id !== `advisor-sub-${target}`);
       if (target === 'advisor-call-queue') loadAdvisorCallQueue();
     });
