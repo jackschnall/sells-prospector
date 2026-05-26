@@ -747,6 +747,7 @@ function bindTabs() {
       if (target === 'deleted') loadDeletedItems();
       if (target === 'actlog') loadActivityLog();
       if (target === 'inbox') loadInbox();
+      if (target === 'advisors') loadAdvisors();
       // Disable tier filter sidebar on tabs where it doesn't apply
       const tierApplies = ['companies', 'dashboard', 'pipeline'].includes(target);
       const sidebar = $('#tier-filters');
@@ -6946,4 +6947,561 @@ function initDealPopupBindings() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); initMandateBindings(); initNewFeatures(); initDealPopupBindings(); });
+// ═══════════════════════════════════════════════════════════════════════════
+// ADVISOR NETWORK MODULE
+// ═══════════════════════════════════════════════════════════════════════════
+
+const advisorState = {
+  advisors: [],
+  activeAdvisorId: null,
+  viewMode: 'list', // list | pipeline | queue
+};
+
+const ADVISOR_TYPE_LABELS = {
+  cpa: 'CPA', ria: 'RIA / Wealth', attorney: 'Attorney', lender: 'Lender',
+  coach: 'Coach', insurance: 'Insurance', fractional_cfo: 'Fractional CFO',
+};
+
+const ADVISOR_STAGE_LABELS = {
+  identified: 'Identified', researched: 'Researched', queued: 'Queued',
+  outreach_sent: 'Outreach Sent', first_response: 'First Response',
+  intro_meeting_booked: 'Meeting Booked', intro_meeting_done: 'Meeting Done',
+  active_partner: 'Active Partner', dormant: 'Dormant', declined: 'Declined',
+};
+
+const ADVISOR_STAGE_COLORS = {
+  identified: '#6b7280', researched: '#3b82f6', queued: '#8b5cf6',
+  outreach_sent: '#f59e0b', first_response: '#10b981', intro_meeting_booked: '#06b6d4',
+  intro_meeting_done: '#0ea5e9', active_partner: '#22c55e', dormant: '#9ca3af', declined: '#ef4444',
+};
+
+function advisorTierClass(score) {
+  if (score >= 7.5) return 'strong-buy';
+  if (score >= 5.0) return 'watchlist';
+  return 'pass';
+}
+
+function advisorTierLabel(score) {
+  if (score >= 7.5) return 'Strong Fit';
+  if (score >= 5.0) return 'Moderate Fit';
+  return 'Low Fit';
+}
+
+async function loadAdvisors() {
+  const type = $('#advisor-type-filter')?.value || '';
+  const stage = $('#advisor-stage-filter')?.value || '';
+  const search = $('#advisor-search')?.value || '';
+  const params = new URLSearchParams();
+  if (type) params.set('type', type);
+  if (stage) params.set('relationshipStage', stage);
+  if (search) params.set('search', search);
+
+  try {
+    const [listRes, statsRes] = await Promise.all([
+      fetch(`/api/advisors?${params}`),
+      fetch('/api/advisors/stats'),
+    ]);
+    const listData = await listRes.json();
+    const statsData = await statsRes.json();
+    advisorState.advisors = listData.advisors || [];
+    renderAdvisorStats(statsData);
+    renderAdvisorView();
+  } catch (err) {
+    console.error('Failed to load advisors:', err);
+  }
+}
+
+function renderAdvisorStats(stats) {
+  const el = $('#advisor-stats-bar');
+  if (!el) return;
+  el.innerHTML = `
+    <span class="advisor-stat">Total: <strong>${stats.total || 0}</strong></span>
+    <span class="advisor-stat">Researched: <strong>${stats.researched || 0}</strong></span>
+    <span class="advisor-stat tier-strong-buy">Strong Fit: <strong>${stats.strongFit || 0}</strong></span>
+    <span class="advisor-stat">Active Partners: <strong>${stats.activePartners || 0}</strong></span>
+    <span class="advisor-stat">In Outreach: <strong>${stats.inOutreach || 0}</strong></span>
+  `;
+}
+
+function renderAdvisorView() {
+  const mode = advisorState.viewMode;
+  $('#advisor-list').hidden = mode !== 'list';
+  $('#advisor-pipeline').hidden = mode !== 'pipeline';
+  $('#advisor-queue-view').hidden = mode !== 'queue';
+
+  if (mode === 'list') renderAdvisorList();
+  else if (mode === 'pipeline') renderAdvisorPipeline();
+  else if (mode === 'queue') loadAdvisorQueue();
+}
+
+function renderAdvisorList() {
+  const el = $('#advisor-list');
+  if (!el) return;
+  if (advisorState.advisors.length === 0) {
+    el.innerHTML = '<div class="empty-state">No advisors yet. Click "+ Identify Advisors" to find candidates.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <table class="advisor-table">
+      <thead>
+        <tr>
+          <th>Name</th><th>Type</th><th>Firm</th><th>Location</th>
+          <th>Fit Score</th><th>Stage</th><th>Last Contact</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${advisorState.advisors.map(a => `
+          <tr class="advisor-row" data-id="${a.id}">
+            <td class="advisor-name-cell">${esc(a.name)}</td>
+            <td><span class="advisor-type-badge advisor-type-${a.type}">${ADVISOR_TYPE_LABELS[a.type] || a.type}</span></td>
+            <td>${esc(a.firm || '-')}</td>
+            <td>${esc([a.city, a.state].filter(Boolean).join(', ') || '-')}</td>
+            <td>${a.fit_score != null ? `<span class="tier-pill ${advisorTierClass(a.fit_score)}">${Number(a.fit_score).toFixed(1)}</span>` : '-'}</td>
+            <td><span class="advisor-stage-pill" style="background:${ADVISOR_STAGE_COLORS[a.relationship_stage] || '#6b7280'}">${ADVISOR_STAGE_LABELS[a.relationship_stage] || a.relationship_stage}</span></td>
+            <td>${a.last_contact_date ? new Date(a.last_contact_date).toLocaleDateString() : '-'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  $$('.advisor-row', el).forEach(row => {
+    row.addEventListener('click', () => openAdvisorDetail(row.dataset.id));
+  });
+}
+
+function renderAdvisorPipeline() {
+  const el = $('#advisor-pipeline');
+  if (!el) return;
+  const stages = ['identified','researched','queued','outreach_sent','first_response','intro_meeting_booked','intro_meeting_done','active_partner'];
+  const byStage = {};
+  stages.forEach(s => byStage[s] = []);
+  for (const a of advisorState.advisors) {
+    const s = a.relationship_stage || 'identified';
+    if (byStage[s]) byStage[s].push(a);
+    else if (s !== 'dormant' && s !== 'declined') byStage.identified.push(a);
+  }
+  el.innerHTML = `<div class="pipeline-board advisor-pipeline-board">
+    ${stages.map(s => `
+      <div class="pipeline-col" data-stage="${s}">
+        <div class="pipeline-col-header" style="border-color:${ADVISOR_STAGE_COLORS[s]}">
+          <span>${ADVISOR_STAGE_LABELS[s]}</span>
+          <span class="pipeline-count">${byStage[s].length}</span>
+        </div>
+        <div class="pipeline-cards">
+          ${byStage[s].map(a => `
+            <div class="pipeline-card advisor-pipeline-card" data-id="${a.id}">
+              <div class="pipeline-card-name">${esc(a.name)}</div>
+              <div class="pipeline-card-sub">${esc(a.firm || '')}</div>
+              <div class="pipeline-card-meta">
+                <span class="advisor-type-badge advisor-type-${a.type}">${ADVISOR_TYPE_LABELS[a.type] || a.type}</span>
+                ${a.fit_score != null ? `<span class="tier-pill ${advisorTierClass(a.fit_score)}">${Number(a.fit_score).toFixed(1)}</span>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('')}
+  </div>`;
+  $$('.advisor-pipeline-card', el).forEach(card => {
+    card.addEventListener('click', () => openAdvisorDetail(card.dataset.id));
+  });
+}
+
+async function loadAdvisorQueue() {
+  const el = $('#advisor-queue-view');
+  if (!el) return;
+  try {
+    const res = await fetch('/api/advisors/queue');
+    const data = await res.json();
+    const advisors = data.advisors || [];
+    if (advisors.length === 0) {
+      el.innerHTML = '<div class="empty-state">No advisors due for follow-up today.</div>';
+      return;
+    }
+    el.innerHTML = advisors.map(a => `
+      <div class="advisor-queue-card" data-id="${a.id}">
+        <div class="advisor-queue-left">
+          <div class="advisor-queue-name">${esc(a.name)}</div>
+          <div class="advisor-queue-meta">
+            <span class="advisor-type-badge advisor-type-${a.type}">${ADVISOR_TYPE_LABELS[a.type] || a.type}</span>
+            ${esc(a.firm || '')} &mdash; ${esc([a.city, a.state].filter(Boolean).join(', '))}
+          </div>
+          ${a.next_action ? `<div class="advisor-queue-action">Next: ${esc(a.next_action)}</div>` : ''}
+        </div>
+        <div class="advisor-queue-right">
+          ${a.fit_score != null ? `<span class="tier-pill ${advisorTierClass(a.fit_score)}">${Number(a.fit_score).toFixed(1)}</span>` : ''}
+          <span class="advisor-stage-pill" style="background:${ADVISOR_STAGE_COLORS[a.relationship_stage] || '#6b7280'}">${ADVISOR_STAGE_LABELS[a.relationship_stage] || a.relationship_stage}</span>
+        </div>
+      </div>
+    `).join('');
+    $$('.advisor-queue-card', el).forEach(card => {
+      card.addEventListener('click', () => openAdvisorDetail(card.dataset.id));
+    });
+  } catch (err) {
+    el.innerHTML = '<div class="empty-state">Failed to load queue.</div>';
+  }
+}
+
+async function openAdvisorDetail(id) {
+  advisorState.activeAdvisorId = id;
+  try {
+    const res = await fetch(`/api/advisors/${id}`);
+    if (!res.ok) return toast('Advisor not found', 'error');
+    const data = await res.json();
+    renderAdvisorDetail(data);
+    $('#advisor-detail-panel').hidden = false;
+    document.body.classList.add('detail-open');
+  } catch (err) {
+    toast('Failed to load advisor', 'error');
+  }
+}
+
+function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerLinks }) {
+  const d = advisor.dossier_json || {};
+  const b = advisor.fit_score_breakdown_json || {};
+
+  // Header
+  $('#advisor-detail-header').innerHTML = `
+    <div class="advisor-detail-name">${esc(advisor.name)}</div>
+    <div class="advisor-detail-sub">
+      <span class="advisor-type-badge advisor-type-${advisor.type}">${ADVISOR_TYPE_LABELS[advisor.type] || advisor.type}</span>
+      ${advisor.firm ? `<span>${esc(advisor.firm)}</span>` : ''}
+      ${advisor.title ? `<span>&mdash; ${esc(advisor.title)}</span>` : ''}
+    </div>
+    <div class="advisor-detail-loc">${esc([advisor.city, advisor.state].filter(Boolean).join(', '))}</div>
+    <div class="advisor-detail-score-row">
+      ${advisor.fit_score != null ? `<span class="tier-pill ${advisorTierClass(advisor.fit_score)}" style="font-size:14px">${advisorTierLabel(advisor.fit_score)} (${Number(advisor.fit_score).toFixed(1)})</span>` : ''}
+      <span class="advisor-stage-pill" style="background:${ADVISOR_STAGE_COLORS[advisor.relationship_stage] || '#6b7280'};font-size:12px">${ADVISOR_STAGE_LABELS[advisor.relationship_stage] || advisor.relationship_stage}</span>
+    </div>
+    <div class="advisor-detail-actions">
+      <select id="advisor-stage-select" class="cf-input cf-input-sm" style="width:180px">
+        ${Object.entries(ADVISOR_STAGE_LABELS).map(([k, v]) => `<option value="${k}" ${k === advisor.relationship_stage ? 'selected' : ''}>${v}</option>`).join('')}
+      </select>
+      <button type="button" class="btn-ghost btn-xs" id="btn-advisor-stage-save">Update Stage</button>
+      <button type="button" class="btn-ghost btn-xs" id="btn-advisor-reresearch">Re-Research</button>
+    </div>
+  `;
+
+  // Body
+  const hs = d.hunger_signals || {};
+  const ss = d.specialty_signals || {};
+  const ns = d.network_signals || {};
+  const reach = d.reachability || {};
+  const hooks = d.personal_rapport_hooks || {};
+
+  let bodyHtml = '';
+
+  // Contact info
+  bodyHtml += `<div class="advisor-section">
+    <div class="advisor-section-title">Contact Info</div>
+    <div class="advisor-info-grid">
+      ${advisor.email ? `<div><strong>Email:</strong> <a href="mailto:${esc(advisor.email)}">${esc(advisor.email)}</a></div>` : ''}
+      ${advisor.phone ? `<div><strong>Phone:</strong> ${esc(advisor.phone)}</div>` : ''}
+      ${advisor.linkedin_url ? `<div><strong>LinkedIn:</strong> <a href="${esc(advisor.linkedin_url)}" target="_blank">Profile</a></div>` : ''}
+      ${advisor.website ? `<div><strong>Website:</strong> <a href="${esc(advisor.website)}" target="_blank">${esc(advisor.website)}</a></div>` : ''}
+    </div>
+  </div>`;
+
+  // Fit score breakdown
+  if (b && Object.keys(b).length) {
+    bodyHtml += `<div class="advisor-section">
+      <div class="advisor-section-title">Fit Score Breakdown</div>
+      <div class="advisor-score-bars">
+        ${Object.entries(b).map(([k, v]) => `
+          <div class="advisor-score-bar-row">
+            <span class="advisor-score-label">${k.replace(/_/g, ' ')}</span>
+            <div class="advisor-score-bar"><div class="advisor-score-fill" style="width:${(v / 10) * 100}%;background:${v >= 7.5 ? '#22c55e' : v >= 5 ? '#f59e0b' : '#ef4444'}"></div></div>
+            <span class="advisor-score-val">${Number(v).toFixed(1)}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Outreach angles — handle both string[] and object[] formats
+  const angles = d.outreach_angles || [];
+  if (angles.length) {
+    bodyHtml += `<div class="advisor-section">
+      <div class="advisor-section-title">Outreach Angles</div>
+      <div class="advisor-angles-list">${angles.map(a => {
+        if (typeof a === 'string') return `<div class="advisor-angle-item"><div class="advisor-angle-hook">${esc(a)}</div></div>`;
+        return `<div class="advisor-angle-item">
+          <div class="advisor-angle-hook">${esc(a.hook || '')}</div>
+          ${a.grounded_in_fact ? `<div class="advisor-angle-fact">Based on: ${esc(a.grounded_in_fact)}</div>` : ''}
+          ${a.suggested_channel ? `<div class="advisor-angle-channel">Via: ${esc(a.suggested_channel)}</div>` : ''}
+        </div>`;
+      }).join('')}</div>
+    </div>`;
+  }
+
+  // Credentials
+  if (credentials && credentials.length) {
+    bodyHtml += `<div class="advisor-section">
+      <div class="advisor-section-title">Credentials</div>
+      <div class="advisor-creds">${credentials.map(c => `<span class="advisor-cred">${esc(c.credential)}${c.earned_year ? ` (${c.earned_year})` : ''}</span>`).join(' ')}</div>
+    </div>`;
+  }
+
+  // Hunger signals
+  bodyHtml += `<div class="advisor-section">
+    <div class="advisor-section-title">Hunger Signals</div>
+    <div class="advisor-signals">
+      ${hs.newly_independent ? '<span class="signal-tag signal-hot">Newly Independent</span>' : ''}
+      ${hs.growing_team ? '<span class="signal-tag signal-hot">Growing Team</span>' : ''}
+      ${hs.content_output_frequency === 'high' ? '<span class="signal-tag signal-hot">High Content Output</span>' : ''}
+      ${hs.career_stage ? `<div class="signal-detail"><strong>Career Stage:</strong> ${esc(hs.career_stage)}</div>` : ''}
+      ${hs.personal_book_incentive ? `<div class="signal-detail"><strong>Book Incentive:</strong> ${esc(hs.personal_book_incentive)}</div>` : ''}
+      ${hs.growth_signals_summary ? `<div class="signal-detail">${esc(hs.growth_signals_summary)}</div>` : ''}
+    </div>
+  </div>`;
+
+  // Specialty signals
+  bodyHtml += `<div class="advisor-section">
+    <div class="advisor-section-title">Specialty Signals</div>
+    <div class="advisor-signals">
+      ${ss.serves_business_owners ? '<span class="signal-tag signal-good">Serves Business Owners</span>' : ''}
+      ${ss.serves_smb_trades_homeservices ? '<span class="signal-tag signal-hot">Serves Trades / Home Services</span>' : ''}
+      ${ss.does_exit_or_succession_work ? '<span class="signal-tag signal-good">Exit / Succession Work</span>' : ''}
+      ${ss.deal_or_transaction_experience ? '<span class="signal-tag signal-good">Deal Experience</span>' : ''}
+    </div>
+  </div>`;
+
+  // Personal rapport hooks
+  const hasRapportData = hooks.alma_mater || (hooks.hobbies_or_interests && hooks.hobbies_or_interests.length) || hooks.recent_life_events || (hooks.prior_employers && hooks.prior_employers.length);
+  if (hasRapportData) {
+    const lifeEvents = Array.isArray(hooks.recent_life_events) ? hooks.recent_life_events.join(', ') : (hooks.recent_life_events || '');
+    bodyHtml += `<div class="advisor-section">
+      <div class="advisor-section-title">Rapport Hooks</div>
+      <div class="advisor-info-grid">
+        ${hooks.alma_mater ? `<div><strong>Alma Mater:</strong> ${esc(hooks.alma_mater)}</div>` : ''}
+        ${hooks.prior_employers?.length ? `<div><strong>Prior Employers:</strong> ${hooks.prior_employers.map(e => esc(e)).join(', ')}</div>` : ''}
+        ${hooks.hobbies_or_interests?.length ? `<div><strong>Interests:</strong> ${hooks.hobbies_or_interests.map(h => esc(h)).join(', ')}</div>` : ''}
+        ${lifeEvents ? `<div><strong>Recent:</strong> ${esc(lifeEvents)}</div>` : ''}
+        ${hooks.shared_connections_to_jack?.length ? `<div><strong>Shared Connections:</strong> ${hooks.shared_connections_to_jack.map(c => esc(c)).join(', ')}</div>` : ''}
+      </div>
+    </div>`;
+  }
+
+  // Risk flags — handle both string[] and object[] formats
+  const risks = d.risk_flags || [];
+  if (risks.length) {
+    bodyHtml += `<div class="advisor-section">
+      <div class="advisor-section-title">Risk Flags</div>
+      <div class="advisor-risks-list">${risks.map(r => {
+        if (typeof r === 'string') return `<div class="risk-item">${esc(r)}</div>`;
+        return `<div class="risk-item risk-${r.severity || 'low'}">
+          <span class="risk-severity">${(r.severity || 'low').toUpperCase()}</span>
+          <span class="risk-flag">${esc(r.flag || '')}</span>
+          ${r.detail ? `<div class="risk-detail">${esc(r.detail)}</div>` : ''}
+        </div>`;
+      }).join('')}</div>
+    </div>`;
+  }
+
+  // Contact log
+  bodyHtml += `<div class="advisor-section">
+    <div class="advisor-section-title">Contact Log <button type="button" class="btn-ghost btn-xs" id="btn-add-advisor-contact">+ Log Contact</button></div>
+    <div id="advisor-contact-log">
+      ${contacts && contacts.length ? contacts.map(c => `
+        <div class="advisor-contact-entry">
+          <div class="advisor-contact-date">${new Date(c.contact_date).toLocaleDateString()} via ${esc(c.channel)} (${c.direction})</div>
+          <div>${esc(c.summary || '')}</div>
+          ${c.next_action ? `<div class="advisor-contact-next">Next: ${esc(c.next_action)}${c.next_action_date ? ` by ${new Date(c.next_action_date).toLocaleDateString()}` : ''}</div>` : ''}
+        </div>
+      `).join('') : '<div class="empty-sub">No contacts logged yet.</div>'}
+    </div>
+  </div>`;
+
+  // Referrals
+  bodyHtml += `<div class="advisor-section">
+    <div class="advisor-section-title">Referrals <button type="button" class="btn-ghost btn-xs" id="btn-add-referral">+ Log Referral</button></div>
+    <div id="advisor-referral-log">
+      ${referrals && referrals.length ? referrals.map(r => `
+        <div class="advisor-referral-entry">
+          <span class="referral-direction ${r.direction}">${r.direction === 'inbound' ? 'From Advisor' : 'To Advisor'}</span>
+          ${r.prospect_name ? `<span>${esc(r.prospect_name)}</span>` : ''}
+          <span>${esc(r.scope || '')}</span>
+          <span class="referral-status">${esc(r.status)}</span>
+          ${r.estimated_value ? `<span>$${Number(r.estimated_value).toLocaleString()}</span>` : ''}
+        </div>
+      `).join('') : '<div class="empty-sub">No referrals yet.</div>'}
+    </div>
+  </div>`;
+
+  // Linked owners
+  bodyHtml += `<div class="advisor-section">
+    <div class="advisor-section-title">Linked Owners</div>
+    <div id="advisor-owner-links">
+      ${ownerLinks && ownerLinks.length ? ownerLinks.map(l => `
+        <div class="advisor-owner-link">
+          <span class="link-type-badge ${l.link_type}">${l.link_type}</span>
+          <span class="link-owner-name" data-id="${l.prospect_id}" style="cursor:pointer;text-decoration:underline">${esc(l.prospect_name || 'Unknown')}</span>
+          <span>${esc([l.prospect_city, l.prospect_state].filter(Boolean).join(', '))}</span>
+          ${l.confidence ? `<span>(${(l.confidence * 100).toFixed(0)}% confidence)</span>` : ''}
+        </div>
+      `).join('') : '<div class="empty-sub">No linked owners.</div>'}
+    </div>
+  </div>`;
+
+  $('#advisor-detail-body').innerHTML = bodyHtml;
+
+  // Bind events
+  $('#btn-advisor-stage-save')?.addEventListener('click', async () => {
+    const newStage = $('#advisor-stage-select')?.value;
+    if (!newStage) return;
+    await fetch(`/api/advisors/${advisor.id}/stage`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stage: newStage }) });
+    toast('Stage updated');
+    loadAdvisors();
+    openAdvisorDetail(advisor.id);
+  });
+
+  $('#btn-advisor-reresearch')?.addEventListener('click', async () => {
+    await fetch(`/api/advisors/${advisor.id}/re-research`, { method: 'POST' });
+    toast('Re-research started');
+  });
+
+  $('#btn-add-advisor-contact')?.addEventListener('click', () => showAdvisorContactForm(advisor.id));
+  $('#btn-add-referral')?.addEventListener('click', () => showReferralForm(advisor.id));
+
+  $$('.link-owner-name', $('#advisor-owner-links')).forEach(el => {
+    el.addEventListener('click', () => {
+      closeAdvisorDetail();
+      openDetail(el.dataset.id);
+    });
+  });
+}
+
+function closeAdvisorDetail() {
+  $('#advisor-detail-panel').hidden = true;
+  document.body.classList.remove('detail-open');
+  advisorState.activeAdvisorId = null;
+}
+
+function showAdvisorContactForm(advisorId) {
+  const log = $('#advisor-contact-log');
+  if (!log) return;
+  log.insertAdjacentHTML('afterbegin', `
+    <div class="advisor-contact-form" id="advisor-contact-form">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="acf-channel" class="cf-input cf-input-sm" style="width:120px">
+          <option value="email">Email</option><option value="call">Call</option>
+          <option value="linkedin">LinkedIn</option><option value="in_person">In Person</option>
+          <option value="event">Event</option>
+        </select>
+        <select id="acf-direction" class="cf-input cf-input-sm" style="width:120px">
+          <option value="outbound">Outbound</option><option value="inbound">Inbound</option>
+        </select>
+      </div>
+      <textarea id="acf-summary" class="cf-input" rows="2" placeholder="Summary of the interaction&hellip;"></textarea>
+      <input type="text" id="acf-next-action" class="cf-input cf-input-sm" placeholder="Next action (optional)" />
+      <input type="date" id="acf-next-action-date" class="cf-input cf-input-sm" />
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button type="button" class="btn-primary btn-xs" id="acf-save">Save</button>
+        <button type="button" class="btn-ghost btn-xs" id="acf-cancel">Cancel</button>
+      </div>
+    </div>
+  `);
+  $('#acf-cancel').addEventListener('click', () => $('#advisor-contact-form')?.remove());
+  $('#acf-save').addEventListener('click', async () => {
+    const body = {
+      channel: $('#acf-channel').value,
+      direction: $('#acf-direction').value,
+      summary: $('#acf-summary').value,
+      next_action: $('#acf-next-action').value || null,
+      next_action_date: $('#acf-next-action-date').value || null,
+    };
+    await fetch(`/api/advisors/${advisorId}/contacts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    toast('Contact logged');
+    openAdvisorDetail(advisorId);
+  });
+}
+
+function showReferralForm(advisorId) {
+  const log = $('#advisor-referral-log');
+  if (!log) return;
+  log.insertAdjacentHTML('afterbegin', `
+    <div class="advisor-contact-form" id="referral-form">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="ref-direction" class="cf-input cf-input-sm" style="width:150px">
+          <option value="inbound">From Advisor (inbound)</option>
+          <option value="outbound">To Advisor (outbound)</option>
+        </select>
+        <input type="text" id="ref-scope" class="cf-input cf-input-sm" placeholder="Scope (e.g. estate planning)" style="width:180px" />
+      </div>
+      <input type="number" id="ref-value" class="cf-input cf-input-sm" placeholder="Estimated value ($)" />
+      <textarea id="ref-notes" class="cf-input" rows="2" placeholder="Notes&hellip;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button type="button" class="btn-primary btn-xs" id="ref-save">Save</button>
+        <button type="button" class="btn-ghost btn-xs" id="ref-cancel">Cancel</button>
+      </div>
+    </div>
+  `);
+  $('#ref-cancel').addEventListener('click', () => $('#referral-form')?.remove());
+  $('#ref-save').addEventListener('click', async () => {
+    const body = {
+      direction: $('#ref-direction').value,
+      scope: $('#ref-scope').value || null,
+      estimated_value: $('#ref-value').value ? Number($('#ref-value').value) : null,
+      notes: $('#ref-notes').value || null,
+    };
+    await fetch(`/api/advisors/${advisorId}/referrals`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    toast('Referral logged');
+    openAdvisorDetail(advisorId);
+  });
+}
+
+function initAdvisorBindings() {
+  // Filters
+  $('#advisor-type-filter')?.addEventListener('change', loadAdvisors);
+  $('#advisor-stage-filter')?.addEventListener('change', loadAdvisors);
+  let searchTimeout;
+  $('#advisor-search')?.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(loadAdvisors, 300);
+  });
+  $('#advisor-view-mode')?.addEventListener('change', (e) => {
+    advisorState.viewMode = e.target.value;
+    renderAdvisorView();
+  });
+
+  // Close detail
+  $('#advisor-detail-close')?.addEventListener('click', closeAdvisorDetail);
+
+  // Add advisor modal (manual entry)
+  $('#btn-add-advisor-manual')?.addEventListener('click', () => {
+    $('#add-advisor-modal').hidden = false;
+  });
+  $('#add-advisor-modal-close')?.addEventListener('click', () => {
+    $('#add-advisor-modal').hidden = true;
+  });
+  $('#btn-save-advisor')?.addEventListener('click', async () => {
+    const name = $('#add-adv-name')?.value?.trim();
+    const type = $('#add-adv-type')?.value;
+    if (!name) return toast('Name is required', 'error');
+    try {
+      await fetch('/api/advisors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          type,
+          firm: $('#add-adv-firm')?.value?.trim() || null,
+          title: $('#add-adv-title')?.value?.trim() || null,
+          city: $('#add-adv-city')?.value?.trim() || null,
+          state: $('#add-adv-state')?.value?.trim()?.toUpperCase() || null,
+          email: $('#add-adv-email')?.value?.trim() || null,
+          linkedin_url: $('#add-adv-linkedin')?.value?.trim() || null,
+        }),
+      });
+      $('#add-advisor-modal').hidden = true;
+      // Clear form
+      ['add-adv-name','add-adv-firm','add-adv-title','add-adv-city','add-adv-state','add-adv-email','add-adv-linkedin'].forEach(id => { const el = $(`#${id}`); if (el) el.value = ''; });
+      toast('Advisor added');
+      loadAdvisors();
+    } catch (err) {
+      toast('Failed to add advisor', 'error');
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); initMandateBindings(); initNewFeatures(); initDealPopupBindings(); initAdvisorBindings(); });

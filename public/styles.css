@@ -5667,3 +5667,168 @@ body.detail-fullscreen { overflow: hidden; }
 /* Queue filter group labels */
 .queue-filter-group { display: flex; flex-direction: column; gap: 2px; }
 .queue-filter-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); font-weight: 700; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ADVISOR NETWORK STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.advisors-header { padding: 16px 0; }
+.advisors-title-row { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+.advisors-title { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); }
+.advisors-stats { display: flex; gap: 16px; flex-wrap: wrap; }
+.advisor-stat { font-size: 0.8rem; color: var(--text-dim); }
+.advisor-stat strong { color: var(--text-primary); }
+.advisor-stat.tier-strong-buy strong { color: var(--accent); }
+
+.advisors-controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.advisors-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* Advisor type badges */
+.advisor-type-badge {
+  display: inline-block; font-size: 0.65rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 2px 8px; border-radius: 3px;
+  color: #fff;
+}
+.advisor-type-cpa { background: #2563eb; }
+.advisor-type-ria { background: #7c3aed; }
+.advisor-type-attorney { background: #0891b2; }
+.advisor-type-lender { background: #059669; }
+.advisor-type-coach { background: #d97706; }
+.advisor-type-insurance { background: #dc2626; }
+.advisor-type-fractional_cfo { background: #4f46e5; }
+
+/* Advisor stage pill */
+.advisor-stage-pill {
+  display: inline-block; font-size: 0.65rem; font-weight: 600;
+  padding: 2px 8px; border-radius: 10px; color: #fff;
+  white-space: nowrap;
+}
+
+/* Advisor table (list view) */
+.advisor-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.advisor-table th {
+  text-align: left; padding: 8px 12px; font-size: 0.7rem;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-dim); border-bottom: 1px solid var(--border);
+}
+.advisor-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04)); }
+.advisor-row { cursor: pointer; transition: background 0.15s; }
+.advisor-row:hover { background: var(--hover-bg, rgba(255,255,255,0.03)); }
+.advisor-name-cell { font-weight: 600; color: var(--text-primary); }
+
+/* Advisor pipeline board */
+.advisor-pipeline-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 16px; min-height: 300px; }
+.advisor-pipeline-board .pipeline-col { min-width: 180px; flex: 1; }
+.advisor-pipeline-card { cursor: pointer; }
+.advisor-pipeline-card .pipeline-card-meta { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+
+/* Advisor queue view */
+.advisor-queue-card {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04));
+  cursor: pointer; transition: background 0.15s;
+}
+.advisor-queue-card:hover { background: var(--hover-bg, rgba(255,255,255,0.03)); }
+.advisor-queue-left { flex: 1; }
+.advisor-queue-name { font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.advisor-queue-meta { font-size: 0.8rem; color: var(--text-dim); }
+.advisor-queue-action { font-size: 0.8rem; color: var(--accent); margin-top: 4px; }
+.advisor-queue-right { display: flex; gap: 8px; align-items: center; }
+
+/* Advisor detail panel */
+.advisor-detail-name { font-size: 1.2rem; font-weight: 700; color: var(--text-primary); }
+.advisor-detail-sub { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: 0.85rem; color: var(--text-dim); }
+.advisor-detail-loc { font-size: 0.8rem; color: var(--text-dim); margin-top: 2px; }
+.advisor-detail-score-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.advisor-detail-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+
+.advisor-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.06)); }
+.advisor-section-title {
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.advisor-info-grid { display: grid; grid-template-columns: 1fr; gap: 4px; font-size: 0.85rem; color: var(--text-secondary, var(--text-dim)); }
+.advisor-info-grid a { color: var(--accent); }
+
+/* Score bars */
+.advisor-score-bars { display: flex; flex-direction: column; gap: 6px; }
+.advisor-score-bar-row { display: flex; align-items: center; gap: 8px; }
+.advisor-score-label { width: 140px; font-size: 0.75rem; color: var(--text-dim); text-transform: capitalize; }
+.advisor-score-bar { flex: 1; height: 8px; background: var(--bg-elevated, rgba(255,255,255,0.06)); border-radius: 4px; overflow: hidden; }
+.advisor-score-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.advisor-score-val { width: 30px; font-size: 0.75rem; color: var(--text-dim); text-align: right; }
+
+/* Signals and tags */
+.advisor-signals { display: flex; flex-wrap: wrap; gap: 6px; }
+.signal-tag {
+  display: inline-block; font-size: 0.7rem; font-weight: 600;
+  padding: 3px 10px; border-radius: 3px;
+}
+.signal-hot { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.signal-good { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+.signal-detail { font-size: 0.8rem; color: var(--text-dim); margin-top: 4px; }
+
+.advisor-creds { display: flex; flex-wrap: wrap; gap: 4px; }
+.advisor-cred {
+  display: inline-block; font-size: 0.7rem; font-weight: 600;
+  padding: 2px 8px; border-radius: 3px;
+  background: rgba(139, 92, 246, 0.15); color: #8b5cf6;
+}
+
+.advisor-angles { margin: 0; padding-left: 16px; font-size: 0.85rem; color: var(--text-dim); }
+.advisor-angles li { margin-bottom: 4px; }
+
+.advisor-risks { margin: 0; padding-left: 16px; }
+.risk-item { font-size: 0.85rem; color: #ef4444; margin-bottom: 4px; }
+
+/* Contact log entries */
+.advisor-contact-entry { padding: 8px 0; border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04)); font-size: 0.85rem; }
+.advisor-contact-date { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 2px; }
+.advisor-contact-next { font-size: 0.8rem; color: var(--accent); margin-top: 2px; }
+.advisor-contact-form { padding: 12px; background: var(--bg-elevated, rgba(255,255,255,0.03)); border-radius: 6px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
+
+/* Referral entries */
+.advisor-referral-entry {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 8px 0; border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04));
+  font-size: 0.85rem;
+}
+.referral-direction {
+  display: inline-block; font-size: 0.65rem; font-weight: 700;
+  padding: 2px 8px; border-radius: 3px; text-transform: uppercase;
+}
+.referral-direction.inbound { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.referral-direction.outbound { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+.referral-status { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; }
+
+/* Owner links */
+.advisor-owner-link { display: flex; gap: 8px; align-items: center; padding: 6px 0; font-size: 0.85rem; }
+.link-type-badge {
+  font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 3px;
+}
+.link-type-badge.suspected { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.link-type-badge.confirmed_serves { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.link-type-badge.jointly_engaged { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+
+.empty-sub { font-size: 0.8rem; color: var(--text-dim); font-style: italic; }
+
+/* Outreach angles (structured) */
+.advisor-angles-list { display: flex; flex-direction: column; gap: 10px; }
+.advisor-angle-item { padding: 8px 12px; background: var(--bg-elevated, rgba(255,255,255,0.03)); border-radius: 6px; border-left: 3px solid var(--accent); }
+.advisor-angle-hook { font-size: 0.85rem; color: var(--text-primary); margin-bottom: 4px; }
+.advisor-angle-fact { font-size: 0.75rem; color: var(--text-dim); font-style: italic; }
+.advisor-angle-channel { font-size: 0.7rem; color: var(--accent); margin-top: 2px; }
+
+/* Risk flags (structured) */
+.advisor-risks-list { display: flex; flex-direction: column; gap: 6px; }
+.risk-item { font-size: 0.85rem; padding: 6px 10px; border-radius: 4px; display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+.risk-item.risk-high { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+.risk-item.risk-medium { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.risk-item.risk-low { background: rgba(107, 114, 128, 0.08); color: var(--text-dim); }
+.risk-severity { font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: rgba(255,255,255,0.1); white-space: nowrap; }
+.risk-flag { font-weight: 600; }
+.risk-detail { font-size: 0.8rem; color: var(--text-dim); width: 100%; margin-top: 2px; }

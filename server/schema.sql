@@ -487,3 +487,98 @@ CREATE TABLE IF NOT EXISTS call_targets (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Advisor Network (referral partner pipeline)
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS advisors (
+  id TEXT PRIMARY KEY,
+  type TEXT CHECK(type IN ('cpa','ria','attorney','lender','coach','insurance','fractional_cfo')),
+  name TEXT NOT NULL,
+  firm TEXT,
+  title TEXT,
+  city TEXT,
+  state TEXT,
+  email TEXT,
+  phone TEXT,
+  linkedin_url TEXT,
+  website TEXT,
+  dossier_json JSONB,
+  fit_score NUMERIC,
+  fit_score_breakdown_json JSONB,
+  relationship_score NUMERIC DEFAULT 0,
+  relationship_stage TEXT DEFAULT 'identified',
+  last_contact_date TIMESTAMPTZ,
+  last_contact_channel TEXT,
+  notes TEXT,
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  last_researched_at TIMESTAMPTZ,
+  deleted_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_advisors_type ON advisors(type);
+CREATE INDEX IF NOT EXISTS idx_advisors_state ON advisors(state);
+CREATE INDEX IF NOT EXISTS idx_advisors_fit_score ON advisors(fit_score);
+CREATE INDEX IF NOT EXISTS idx_advisors_relationship_stage ON advisors(relationship_stage);
+CREATE INDEX IF NOT EXISTS idx_advisors_deleted ON advisors(deleted_at) WHERE deleted_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS advisor_credentials (
+  id TEXT PRIMARY KEY,
+  advisor_id TEXT NOT NULL REFERENCES advisors(id) ON DELETE CASCADE,
+  credential TEXT NOT NULL,
+  earned_year INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_advisor_credentials_advisor ON advisor_credentials(advisor_id);
+
+CREATE TABLE IF NOT EXISTS advisor_contacts (
+  id TEXT PRIMARY KEY,
+  advisor_id TEXT NOT NULL REFERENCES advisors(id) ON DELETE CASCADE,
+  contact_date TIMESTAMPTZ DEFAULT NOW(),
+  channel TEXT,
+  direction TEXT DEFAULT 'outbound',
+  summary TEXT,
+  next_action TEXT,
+  next_action_date TIMESTAMPTZ,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_advisor_contacts_advisor ON advisor_contacts(advisor_id);
+CREATE INDEX IF NOT EXISTS idx_advisor_contacts_date ON advisor_contacts(contact_date DESC);
+CREATE INDEX IF NOT EXISTS idx_advisor_contacts_next_action ON advisor_contacts(next_action_date) WHERE next_action_date IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS referrals (
+  id TEXT PRIMARY KEY,
+  advisor_id TEXT NOT NULL REFERENCES advisors(id) ON DELETE CASCADE,
+  direction TEXT NOT NULL,
+  prospect_id TEXT REFERENCES companies(id) ON DELETE SET NULL,
+  scope TEXT,
+  status TEXT DEFAULT 'new',
+  estimated_value NUMERIC,
+  realized_value NUMERIC,
+  fee_owed NUMERIC,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_referrals_advisor ON referrals(advisor_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_prospect ON referrals(prospect_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_direction ON referrals(direction);
+
+CREATE TABLE IF NOT EXISTS advisor_owner_links (
+  id TEXT PRIMARY KEY,
+  advisor_id TEXT NOT NULL REFERENCES advisors(id) ON DELETE CASCADE,
+  prospect_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  link_type TEXT DEFAULT 'suspected',
+  evidence TEXT,
+  confidence NUMERIC,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(advisor_id, prospect_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_advisor_owner_links_advisor ON advisor_owner_links(advisor_id);
+CREATE INDEX IF NOT EXISTS idx_advisor_owner_links_prospect ON advisor_owner_links(prospect_id);

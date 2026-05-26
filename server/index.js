@@ -91,6 +91,29 @@ const {
   addCampaignRecipients,
   removeCampaignRecipient,
   updateCampaignRecipient,
+  // Advisors
+  insertAdvisor,
+  updateAdvisorResearch,
+  getAdvisor,
+  listAdvisors,
+  updateAdvisorStage,
+  updateAdvisorRelationshipScore,
+  softDeleteAdvisor,
+  advisorsToResearch,
+  setAdvisorStatus,
+  advisorStats,
+  insertAdvisorCredential,
+  listAdvisorCredentials,
+  insertAdvisorContact,
+  listAdvisorContacts,
+  insertReferral,
+  listReferrals,
+  updateReferral,
+  getReferralGraph,
+  insertAdvisorOwnerLink,
+  listAdvisorOwnerLinks,
+  listOwnerAdvisorLinks,
+  getAdvisorQueue,
 } = require('./db');
 const { promoteToAdminIfFirstUser, requireUser, requireAdmin, isAdmin } = require('./auth');
 const { registerRoutes: registerTwilioRoutes, isMockMode: isTwilioMockMode } = require('./twilio');
@@ -2659,6 +2682,321 @@ app.get('/api/companies/warm', requireUser, async (req, res) => {
     "SELECT id, name, city, state, owner, score, tier, warm_until FROM companies WHERE warm_until > NOW() AND deleted_at IS NULL ORDER BY warm_until DESC"
   );
   res.json({ companies: rows });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ADVISOR NETWORK ROUTES
+// ═══════════════════════════════════════════════════════════════════════════
+
+const { runAdvisorResearch, runAdvisorIdentify } = require('./advisor-research');
+const { computeFitScore, computeRelationshipScore, computeAdvisorTier } = require('./advisor-scoring');
+
+// --- List advisors ---
+app.get('/api/advisors', async (req, res) => {
+  try {
+    const advisors = await listAdvisors({
+      type: req.query.type || undefined,
+      state: req.query.state || undefined,
+      minFitScore: req.query.minFitScore ? Number(req.query.minFitScore) : undefined,
+      maxFitScore: req.query.maxFitScore ? Number(req.query.maxFitScore) : undefined,
+      relationshipStage: req.query.relationshipStage || undefined,
+      search: req.query.search || undefined,
+      sort: req.query.sort || 'fit_score_desc',
+    });
+    res.json({ advisors });
+  } catch (err) {
+    console.error('[advisors] list error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Advisor stats ---
+app.get('/api/advisors/stats', async (req, res) => {
+  try {
+    const stats = await advisorStats();
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Advisor queue (daily follow-up) ---
+app.get('/api/advisors/queue', async (req, res) => {
+  try {
+    const queue = await getAdvisorQueue();
+    res.json({ advisors: queue });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Referral graph ---
+app.get('/api/referrals/graph', async (req, res) => {
+  try {
+    const graph = await getReferralGraph();
+    res.json({ referrals: graph });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Get single advisor ---
+app.get('/api/advisors/:id', async (req, res) => {
+  try {
+    const advisor = await getAdvisor(req.params.id);
+    if (!advisor) return res.status(404).json({ error: 'Not found' });
+    const credentials = await listAdvisorCredentials(req.params.id);
+    const contacts = await listAdvisorContacts(req.params.id);
+    const referrals = await listReferrals(req.params.id);
+    const ownerLinks = await listAdvisorOwnerLinks(req.params.id);
+    res.json({ advisor, credentials, contacts, referrals, ownerLinks });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Manually add an advisor ---
+app.post('/api/advisors', async (req, res) => {
+  try {
+    const { name, type, firm, title, city, state, email, phone, linkedin_url, website } = req.body;
+    if (!name || !type) return res.status(400).json({ error: 'name and type required' });
+    const id = await insertAdvisor({
+      type, name, firm, title, city, state, email, phone, linkedin_url, website,
+      status: 'pending',
+      relationship_stage: 'identified',
+    });
+    res.json({ ok: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Kick off identify + research job ---
+app.post('/api/advisors/research', async (req, res) => {
+  const { type, geo, filters } = req.body;
+  if (!type || !geo) return res.status(400).json({ error: 'type and geo required' });
+
+  res.json({ ok: true, message: 'Research job started' });
+
+  // Run async — identify candidates, then research each
+  (async () => {
+    try {
+      const { candidates } = await runAdvisorIdentify(type, geo, filters || {});
+      emit({ type: 'advisor_identify_done', advisorType: type, geo, count: candidates.length });
+
+      // Get pipeline geos for scoring
+      const geoRows = await execute('SELECT DISTINCT UPPER(state) AS st FROM companies WHERE deleted_at IS NULL AND state IS NOT NULL');
+      const pipelineGeos = geoRows.rows.map(r => r.st).filter(Boolean);
+
+      for (const cand of candidates) {
+        const advisorId = await insertAdvisor({
+          type,
+          name: cand.name,
+          firm: cand.firm || null,
+          title: cand.title || null,
+          city: cand.city || null,
+          state: cand.state || null,
+          linkedin_url: cand.linkedin_url || null,
+          website: cand.website || null,
+          status: 'pending',
+        });
+
+        try {
+          await setAdvisorStatus(advisorId, 'researching');
+          const { dossier } = await runAdvisorResearch(
+            { name: cand.name, firm: cand.firm, title: cand.title, city: cand.city, state: cand.state, linkedin_url: cand.linkedin_url, website: cand.website },
+            type, geo
+          );
+
+          const { fitScore, breakdown } = computeFitScore(dossier, type, pipelineGeos);
+
+          await updateAdvisorResearch(advisorId, {
+            dossier_json: dossier,
+            fit_score: fitScore,
+            fit_score_breakdown_json: breakdown,
+            status: 'done',
+            email: dossier.basics?.email || null,
+            phone: dossier.basics?.phone || null,
+            linkedin_url: dossier.basics?.linkedin || null,
+            website: dossier.basics?.website || null,
+            firm: dossier.basics?.firm || cand.firm || null,
+            title: dossier.basics?.title || cand.title || null,
+          });
+
+          // Store credentials
+          if (Array.isArray(dossier.credentials)) {
+            for (const c of dossier.credentials) {
+              await insertAdvisorCredential(advisorId, c.credential, c.earned_year || null);
+            }
+          }
+
+          emit({ type: 'advisor_done', id: advisorId, name: cand.name, fitScore, tier: computeAdvisorTier(fitScore) });
+        } catch (err) {
+          console.error(`[advisors] Research failed for ${cand.name}:`, err.message);
+          await setAdvisorStatus(advisorId, 'error');
+          emit({ type: 'advisor_error', id: advisorId, name: cand.name, error: err.message });
+        }
+      }
+
+      emit({ type: 'advisor_research_batch_done', advisorType: type, geo, total: candidates.length });
+    } catch (err) {
+      console.error('[advisors] Identify failed:', err.message);
+      emit({ type: 'advisor_identify_error', advisorType: type, geo, error: err.message });
+    }
+  })();
+});
+
+// --- Re-research a single advisor ---
+app.post('/api/advisors/:id/re-research', async (req, res) => {
+  try {
+    const advisor = await getAdvisor(req.params.id);
+    if (!advisor) return res.status(404).json({ error: 'Not found' });
+
+    res.json({ ok: true, message: 'Re-research started' });
+
+    (async () => {
+      try {
+        await setAdvisorStatus(advisor.id, 'researching');
+        const geoRows = await execute('SELECT DISTINCT UPPER(state) AS st FROM companies WHERE deleted_at IS NULL AND state IS NOT NULL');
+        const pipelineGeos = geoRows.rows.map(r => r.st).filter(Boolean);
+        const geo = advisor.state || '';
+
+        const { dossier } = await runAdvisorResearch(advisor, advisor.type, geo);
+        const { fitScore, breakdown } = computeFitScore(dossier, advisor.type, pipelineGeos);
+
+        await updateAdvisorResearch(advisor.id, {
+          dossier_json: dossier,
+          fit_score: fitScore,
+          fit_score_breakdown_json: breakdown,
+          status: 'done',
+          email: dossier.basics?.email || null,
+          phone: dossier.basics?.phone || null,
+          linkedin_url: dossier.basics?.linkedin || null,
+          website: dossier.basics?.website || null,
+          firm: dossier.basics?.firm || null,
+          title: dossier.basics?.title || null,
+        });
+
+        if (Array.isArray(dossier.credentials)) {
+          for (const c of dossier.credentials) {
+            await insertAdvisorCredential(advisor.id, c.credential, c.earned_year || null);
+          }
+        }
+
+        emit({ type: 'advisor_done', id: advisor.id, name: advisor.name, fitScore, tier: computeAdvisorTier(fitScore) });
+      } catch (err) {
+        console.error(`[advisors] Re-research failed for ${advisor.name}:`, err.message);
+        await setAdvisorStatus(advisor.id, 'error');
+      }
+    })();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Log a contact ---
+app.post('/api/advisors/:id/contacts', async (req, res) => {
+  try {
+    const advisor = await getAdvisor(req.params.id);
+    if (!advisor) return res.status(404).json({ error: 'Not found' });
+
+    const id = await insertAdvisorContact({
+      advisor_id: req.params.id,
+      contact_date: req.body.contact_date || new Date().toISOString(),
+      channel: req.body.channel || 'email',
+      direction: req.body.direction || 'outbound',
+      summary: req.body.summary,
+      next_action: req.body.next_action || null,
+      next_action_date: req.body.next_action_date || null,
+      user_id: req.currentUser?.id || null,
+    });
+    res.json({ ok: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Log a referral ---
+app.post('/api/advisors/:id/referrals', async (req, res) => {
+  try {
+    const id = await insertReferral({
+      advisor_id: req.params.id,
+      direction: req.body.direction,
+      prospect_id: req.body.prospect_id || null,
+      scope: req.body.scope || null,
+      status: req.body.status || 'new',
+      estimated_value: req.body.estimated_value || null,
+      notes: req.body.notes || null,
+    });
+    res.json({ ok: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Update referral ---
+app.put('/api/referrals/:id', async (req, res) => {
+  try {
+    await updateReferral(req.params.id, req.body);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Owner links ---
+app.get('/api/advisors/:id/owner-links', async (req, res) => {
+  try {
+    const links = await listAdvisorOwnerLinks(req.params.id);
+    res.json({ links });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/advisors/:id/owner-links', async (req, res) => {
+  try {
+    const id = await insertAdvisorOwnerLink({
+      advisor_id: req.params.id,
+      prospect_id: req.body.prospect_id,
+      link_type: req.body.link_type || 'suspected',
+      evidence: req.body.evidence || null,
+      confidence: req.body.confidence || null,
+    });
+    res.json({ ok: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Update advisor stage ---
+app.put('/api/advisors/:id/stage', async (req, res) => {
+  try {
+    await updateAdvisorStage(req.params.id, req.body.stage);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Delete advisor ---
+app.delete('/api/advisors/:id', async (req, res) => {
+  try {
+    await softDeleteAdvisor(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Advisors linked to a company ---
+app.get('/api/companies/:id/advisors', async (req, res) => {
+  try {
+    const links = await listOwnerAdvisorLinks(req.params.id);
+    res.json({ links });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ---------- Start ----------

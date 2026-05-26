@@ -121,6 +121,31 @@ When asked to discover NEW companies:
 - `server/debrief.js` — Debrief draft/submit helpers
 - `server/mock-transcripts.js` — 10 canned call transcripts for dev/testing
 - `server/auth.js` — Role enforcement + auto-promote first user to admin
+- `server/advisor-config.json` — Advisor scoring weights (tunable without code changes)
+- `server/advisor-prompts.js` — Per-type advisor research prompt templates
+- `server/advisor-research.js` — Advisor identify + dossier research engine
+- `server/advisor-scoring.js` — Advisor fit score + relationship score
+- `docs/advisor-network.md` — Advisor network feature documentation
+
+## Advisor Network
+
+A parallel referral-partner pipeline. See `docs/advisor-network.md` for full details.
+
+**Key files:**
+- `server/advisor-config.json` — Tunable scoring weights (fit score, hunger sub-weights, relationship decay)
+- `server/advisor-prompts.js` — Per-type prompt templates
+- `server/advisor-research.js` — Research engine (identify + dossier via Claude API)
+- `server/advisor-scoring.js` — Fit score + relationship score computation
+
+**API:** All routes under `/api/advisors`. Key endpoints:
+- `POST /api/advisors/research` — Identify + research batch (type + geo)
+- `GET /api/advisors` — List with filters
+- `GET /api/advisors/:id` — Full dossier + credentials + contacts + referrals + links
+- `GET /api/advisors/queue` — Daily follow-up queue
+
+**Advisor types:** cpa, ria, attorney, lender, coach, insurance, fractional_cfo
+
+**Scoring:** 6-category fit score (weights in advisor-config.json). Tier thresholds: strong-fit >= 7.5, moderate-fit >= 5.0.
 
 ## Phase 2 Telephony
 

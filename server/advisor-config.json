@@ -1,0 +1,98 @@
+{
+  "fitScoreWeights": {
+    "profile_fit": 0.25,
+    "hunger_signals": 0.20,
+    "client_overlap": 0.20,
+    "network_strength": 0.15,
+    "reachability": 0.10,
+    "geographic_relevance": 0.10
+  },
+
+  "hungerSubWeights": {
+    "newly_independent": 0.30,
+    "career_stage": 0.25,
+    "personal_book_incentive": 0.15,
+    "content_output": 0.15,
+    "recent_certifications": 0.10,
+    "growing_team": 0.05
+  },
+
+  "relationshipScoreWeights": {
+    "referral_activity": 0.50,
+    "engagement_recency": 0.25,
+    "response_rate": 0.15,
+    "connection_density_growth": 0.10
+  },
+
+  "relationshipDecay": {
+    "halfLifeDays": 45,
+    "minScore": 0
+  },
+
+  "tierThresholds": {
+    "strong_fit": 7.5,
+    "moderate_fit": 5.0
+  },
+
+  "relationshipStages": [
+    "identified",
+    "researched",
+    "queued",
+    "outreach_sent",
+    "first_response",
+    "intro_meeting_booked",
+    "intro_meeting_done",
+    "active_partner",
+    "dormant",
+    "declined"
+  ],
+
+  "advisorTypes": [
+    "cpa",
+    "ria",
+    "attorney",
+    "lender",
+    "coach",
+    "insurance",
+    "fractional_cfo"
+  ],
+
+  "perTypeFilters": {
+    "cpa": {
+      "requiredCredentials": [],
+      "preferredCredentials": ["CPA", "CEPA", "CExP", "CVA", "ABV", "CM&AA"],
+      "searchKeywords": ["business advisory", "exit planning", "succession", "closely-held"]
+    },
+    "ria": {
+      "requiredCredentials": [],
+      "preferredCredentials": ["CFP", "CFA", "CEPA", "ChFC"],
+      "maxAum": 500000000,
+      "searchKeywords": ["business owner", "exit planning", "liquidity event", "CEPA"]
+    },
+    "attorney": {
+      "requiredCredentials": ["JD"],
+      "preferredCredentials": ["LL.M."],
+      "searchKeywords": ["M&A", "succession", "business law", "estate planning", "buy-sell"]
+    },
+    "lender": {
+      "requiredCredentials": [],
+      "preferredCredentials": [],
+      "searchKeywords": ["SBA", "commercial lending", "acquisition financing", "small business"]
+    },
+    "coach": {
+      "requiredCredentials": [],
+      "preferredCredentials": ["EOS Implementer", "Vistage Chair", "Scaling Up"],
+      "searchKeywords": ["EOS", "Vistage", "peer group", "business coaching", "Nexstar"]
+    },
+    "insurance": {
+      "requiredCredentials": [],
+      "preferredCredentials": ["CLU", "ChFC", "AEP", "CPCU"],
+      "searchKeywords": ["commercial insurance", "buy-sell", "key-person", "trades", "contractor"]
+    },
+    "fractional_cfo": {
+      "requiredCredentials": [],
+      "preferredCredentials": ["CPA", "CMA", "MBA"],
+      "searchKeywords": ["fractional CFO", "outsourced CFO", "interim CFO", "business for sale"]
+    }
+  }
+}

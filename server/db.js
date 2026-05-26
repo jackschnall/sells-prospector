@@ -1154,6 +1154,314 @@ async function updateCampaignRecipient(id, data) {
   await execute(`UPDATE campaign_recipients SET ${fields.join(', ')} WHERE id = $${idx}`, params);
 }
 
+// ─── Advisors ───────────────────────────────────────────────────────────────
+
+async function insertAdvisor(data) {
+  const { nanoid } = require('nanoid');
+  const id = data.id || nanoid();
+  await execute(
+    `INSERT INTO advisors (
+       id, type, name, firm, title, city, state, email, phone,
+       linkedin_url, website, dossier_json, fit_score, fit_score_breakdown_json,
+       relationship_stage, status
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+     ON CONFLICT (id) DO NOTHING`,
+    [
+      id, data.type, data.name, data.firm || null, data.title || null,
+      data.city || null, data.state || null, data.email || null, data.phone || null,
+      data.linkedin_url || null, data.website || null,
+      data.dossier_json ? JSON.stringify(data.dossier_json) : null,
+      data.fit_score || null,
+      data.fit_score_breakdown_json ? JSON.stringify(data.fit_score_breakdown_json) : null,
+      data.relationship_stage || 'identified',
+      data.status || 'pending',
+    ]
+  );
+  return id;
+}
+
+async function updateAdvisorResearch(id, data) {
+  await execute(
+    `UPDATE advisors SET
+       dossier_json = $1,
+       fit_score = $2,
+       fit_score_breakdown_json = $3,
+       status = $4,
+       email = COALESCE($5, email),
+       phone = COALESCE($6, phone),
+       linkedin_url = COALESCE($7, linkedin_url),
+       website = COALESCE($8, website),
+       firm = COALESCE($9, firm),
+       title = COALESCE($10, title),
+       relationship_stage = CASE WHEN relationship_stage = 'identified' THEN 'researched' ELSE relationship_stage END,
+       last_researched_at = NOW(),
+       updated_at = NOW()
+     WHERE id = $11`,
+    [
+      data.dossier_json ? JSON.stringify(data.dossier_json) : null,
+      data.fit_score, data.fit_score_breakdown_json ? JSON.stringify(data.fit_score_breakdown_json) : null,
+      data.status || 'done',
+      data.email || null, data.phone || null, data.linkedin_url || null,
+      data.website || null, data.firm || null, data.title || null, id,
+    ]
+  );
+}
+
+async function getAdvisor(id) {
+  return queryOne('SELECT * FROM advisors WHERE id = $1 AND deleted_at IS NULL', [id]);
+}
+
+async function listAdvisors({ type, state: stateFilter, minFitScore, maxFitScore, relationshipStage, search, sort = 'fit_score_desc' } = {}) {
+  const where = ['deleted_at IS NULL'];
+  const params = [];
+  let idx = 1;
+
+  if (type) { where.push(`type = $${idx++}`); params.push(type); }
+  if (stateFilter) { where.push(`UPPER(state) = $${idx++}`); params.push(stateFilter.toUpperCase()); }
+  if (minFitScore != null) { where.push(`fit_score >= $${idx++}`); params.push(minFitScore); }
+  if (maxFitScore != null) { where.push(`fit_score <= $${idx++}`); params.push(maxFitScore); }
+  if (relationshipStage) { where.push(`relationship_stage = $${idx++}`); params.push(relationshipStage); }
+  if (search) {
+    where.push(`(LOWER(name) LIKE $${idx} OR LOWER(firm) LIKE $${idx} OR LOWER(city) LIKE $${idx})`);
+    params.push(`%${String(search).toLowerCase()}%`);
+    idx++;
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const orderMap = {
+    fit_score_desc: 'fit_score DESC NULLS LAST, name ASC',
+    fit_score_asc: 'fit_score ASC NULLS LAST, name ASC',
+    name_asc: 'name ASC',
+    relationship: `CASE relationship_stage
+      WHEN 'active_partner' THEN 1 WHEN 'intro_meeting_done' THEN 2
+      WHEN 'intro_meeting_booked' THEN 3 WHEN 'first_response' THEN 4
+      WHEN 'outreach_sent' THEN 5 WHEN 'queued' THEN 6
+      WHEN 'researched' THEN 7 WHEN 'identified' THEN 8
+      WHEN 'dormant' THEN 9 WHEN 'declined' THEN 10 ELSE 11 END, fit_score DESC`,
+    recent: 'updated_at DESC NULLS LAST',
+  };
+  const orderBy = orderMap[sort] || orderMap.fit_score_desc;
+
+  return query(`SELECT * FROM advisors ${whereSql} ORDER BY ${orderBy}`, params);
+}
+
+async function updateAdvisorStage(id, stage) {
+  await execute(
+    `UPDATE advisors SET relationship_stage = $1, updated_at = NOW() WHERE id = $2`,
+    [stage, id]
+  );
+}
+
+async function updateAdvisorRelationshipScore(id, score) {
+  await execute(
+    `UPDATE advisors SET relationship_score = $1, updated_at = NOW() WHERE id = $2`,
+    [score, id]
+  );
+}
+
+async function softDeleteAdvisor(id) {
+  await execute('UPDATE advisors SET deleted_at = NOW() WHERE id = $1', [id]);
+}
+
+async function advisorsToResearch() {
+  return query(
+    `SELECT * FROM advisors WHERE status IN ('pending', 'error') AND deleted_at IS NULL ORDER BY created_at ASC`
+  );
+}
+
+async function setAdvisorStatus(id, status) {
+  await execute('UPDATE advisors SET status = $1, updated_at = NOW() WHERE id = $2', [status, id]);
+}
+
+async function advisorStats() {
+  const row = await queryOne(`
+    SELECT
+      COUNT(*) AS total,
+      COUNT(*) FILTER (WHERE status = 'done') AS researched,
+      COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+      COUNT(*) FILTER (WHERE fit_score >= 7.5) AS strong_fit,
+      COUNT(*) FILTER (WHERE fit_score >= 5.0 AND fit_score < 7.5) AS moderate_fit,
+      COUNT(*) FILTER (WHERE fit_score < 5.0 AND fit_score IS NOT NULL) AS low_fit,
+      COUNT(*) FILTER (WHERE relationship_stage = 'active_partner') AS active_partners,
+      COUNT(*) FILTER (WHERE relationship_stage IN ('outreach_sent','first_response','intro_meeting_booked','intro_meeting_done')) AS in_outreach
+    FROM advisors WHERE deleted_at IS NULL
+  `);
+  const typeRows = await query(
+    `SELECT type, COUNT(*)::int AS cnt FROM advisors WHERE deleted_at IS NULL GROUP BY type ORDER BY cnt DESC`
+  );
+  const typeCounts = {};
+  for (const r of typeRows) typeCounts[r.type] = r.cnt;
+
+  return {
+    total: Number(row.total), researched: Number(row.researched), pending: Number(row.pending),
+    strongFit: Number(row.strong_fit), moderateFit: Number(row.moderate_fit), lowFit: Number(row.low_fit),
+    activePartners: Number(row.active_partners), inOutreach: Number(row.in_outreach),
+    typeCounts,
+  };
+}
+
+// ─── Advisor Credentials ────────────────────────────────────────────────────
+
+async function insertAdvisorCredential(advisorId, credential, earnedYear) {
+  const { nanoid } = require('nanoid');
+  await execute(
+    `INSERT INTO advisor_credentials (id, advisor_id, credential, earned_year) VALUES ($1,$2,$3,$4)`,
+    [nanoid(), advisorId, credential, earnedYear || null]
+  );
+}
+
+async function listAdvisorCredentials(advisorId) {
+  return query('SELECT * FROM advisor_credentials WHERE advisor_id = $1 ORDER BY earned_year DESC NULLS LAST', [advisorId]);
+}
+
+// ─── Advisor Contacts (interaction log) ─────────────────────────────────────
+
+async function insertAdvisorContact(data) {
+  const { nanoid } = require('nanoid');
+  const id = nanoid();
+  await execute(
+    `INSERT INTO advisor_contacts (id, advisor_id, contact_date, channel, direction, summary, next_action, next_action_date, user_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [id, data.advisor_id, data.contact_date || new Date().toISOString(),
+     data.channel || 'email', data.direction || 'outbound',
+     data.summary || null, data.next_action || null,
+     data.next_action_date || null, data.user_id || null]
+  );
+  await execute(
+    `UPDATE advisors SET last_contact_date = $1, last_contact_channel = $2, updated_at = NOW() WHERE id = $3`,
+    [data.contact_date || new Date().toISOString(), data.channel || 'email', data.advisor_id]
+  );
+  return id;
+}
+
+async function listAdvisorContacts(advisorId) {
+  return query(
+    `SELECT ac.*, u.name AS user_name FROM advisor_contacts ac
+     LEFT JOIN users u ON ac.user_id = u.id
+     WHERE ac.advisor_id = $1 ORDER BY ac.contact_date DESC`,
+    [advisorId]
+  );
+}
+
+// ─── Referrals ──────────────────────────────────────────────────────────────
+
+async function insertReferral(data) {
+  const { nanoid } = require('nanoid');
+  const id = nanoid();
+  await execute(
+    `INSERT INTO referrals (id, advisor_id, direction, prospect_id, scope, status, estimated_value, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [id, data.advisor_id, data.direction, data.prospect_id || null,
+     data.scope || null, data.status || 'new',
+     data.estimated_value || null, data.notes || null]
+  );
+  return id;
+}
+
+async function listReferrals(advisorId) {
+  return query(
+    `SELECT r.*, c.name AS prospect_name, c.city AS prospect_city, c.state AS prospect_state
+     FROM referrals r
+     LEFT JOIN companies c ON r.prospect_id = c.id
+     WHERE r.advisor_id = $1 ORDER BY r.created_at DESC`,
+    [advisorId]
+  );
+}
+
+async function updateReferral(id, data) {
+  const fields = [];
+  const params = [];
+  let idx = 1;
+  for (const key of ['status', 'estimated_value', 'realized_value', 'fee_owed', 'notes', 'scope']) {
+    if (data[key] !== undefined) {
+      fields.push(`${key} = $${idx++}`);
+      params.push(data[key]);
+    }
+  }
+  if (!fields.length) return;
+  fields.push('updated_at = NOW()');
+  params.push(id);
+  await execute(`UPDATE referrals SET ${fields.join(', ')} WHERE id = $${idx}`, params);
+}
+
+async function getReferralGraph() {
+  return query(
+    `SELECT r.*, a.name AS advisor_name, a.type AS advisor_type, a.firm AS advisor_firm,
+            c.name AS prospect_name, c.city AS prospect_city, c.state AS prospect_state
+     FROM referrals r
+     JOIN advisors a ON r.advisor_id = a.id
+     LEFT JOIN companies c ON r.prospect_id = c.id
+     WHERE a.deleted_at IS NULL
+     ORDER BY r.created_at DESC`
+  );
+}
+
+// ─── Advisor-Owner Links ────────────────────────────────────────────────────
+
+async function insertAdvisorOwnerLink(data) {
+  const { nanoid } = require('nanoid');
+  const id = nanoid();
+  await execute(
+    `INSERT INTO advisor_owner_links (id, advisor_id, prospect_id, link_type, evidence, confidence)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (advisor_id, prospect_id) DO UPDATE SET
+       link_type = EXCLUDED.link_type,
+       evidence = COALESCE(EXCLUDED.evidence, advisor_owner_links.evidence),
+       confidence = COALESCE(EXCLUDED.confidence, advisor_owner_links.confidence)`,
+    [id, data.advisor_id, data.prospect_id, data.link_type || 'suspected',
+     data.evidence || null, data.confidence || null]
+  );
+  return id;
+}
+
+async function listAdvisorOwnerLinks(advisorId) {
+  return query(
+    `SELECT aol.*, c.name AS prospect_name, c.city AS prospect_city, c.state AS prospect_state,
+            c.owner AS prospect_owner, c.score AS prospect_score, c.tier AS prospect_tier
+     FROM advisor_owner_links aol
+     JOIN companies c ON aol.prospect_id = c.id
+     WHERE aol.advisor_id = $1 AND c.deleted_at IS NULL
+     ORDER BY aol.confidence DESC NULLS LAST`,
+    [advisorId]
+  );
+}
+
+async function listOwnerAdvisorLinks(prospectId) {
+  return query(
+    `SELECT aol.*, a.name AS advisor_name, a.type AS advisor_type, a.firm AS advisor_firm,
+            a.fit_score, a.relationship_stage
+     FROM advisor_owner_links aol
+     JOIN advisors a ON aol.advisor_id = a.id
+     WHERE aol.prospect_id = $1 AND a.deleted_at IS NULL
+     ORDER BY a.fit_score DESC NULLS LAST`,
+    [prospectId]
+  );
+}
+
+// ─── Advisor Queue (daily follow-up) ────────────────────────────────────────
+
+async function getAdvisorQueue() {
+  return query(
+    `SELECT a.*, ac.next_action, ac.next_action_date
+     FROM advisors a
+     LEFT JOIN LATERAL (
+       SELECT next_action, next_action_date
+       FROM advisor_contacts
+       WHERE advisor_id = a.id AND next_action IS NOT NULL
+       ORDER BY created_at DESC LIMIT 1
+     ) ac ON TRUE
+     WHERE a.deleted_at IS NULL
+       AND a.relationship_stage NOT IN ('declined', 'dormant')
+       AND a.status = 'done'
+       AND (ac.next_action_date IS NULL OR ac.next_action_date <= NOW() + INTERVAL '1 day')
+     ORDER BY
+       CASE WHEN ac.next_action_date IS NOT NULL AND ac.next_action_date <= NOW() THEN 0 ELSE 1 END,
+       a.relationship_score DESC NULLS LAST,
+       a.fit_score DESC NULLS LAST
+     LIMIT 50`
+  );
+}
+
 // ─── Exports ─────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -1251,4 +1559,27 @@ module.exports = {
   addCampaignRecipients,
   removeCampaignRecipient,
   updateCampaignRecipient,
+  // Advisors
+  insertAdvisor,
+  updateAdvisorResearch,
+  getAdvisor,
+  listAdvisors,
+  updateAdvisorStage,
+  updateAdvisorRelationshipScore,
+  softDeleteAdvisor,
+  advisorsToResearch,
+  setAdvisorStatus,
+  advisorStats,
+  insertAdvisorCredential,
+  listAdvisorCredentials,
+  insertAdvisorContact,
+  listAdvisorContacts,
+  insertReferral,
+  listReferrals,
+  updateReferral,
+  getReferralGraph,
+  insertAdvisorOwnerLink,
+  listAdvisorOwnerLinks,
+  listOwnerAdvisorLinks,
+  getAdvisorQueue,
 };

@@ -78,6 +78,7 @@
           <button type="button" class="tab" data-tab="campaigns" role="tab" data-requires-user="1" hidden>Campaigns</button>
           <button type="button" class="tab" data-tab="reports" role="tab" data-requires-user="1" hidden>Buyside Reports</button>
           <button type="button" class="tab" data-tab="documents" role="tab" data-requires-user="1" hidden>Documents</button>
+          <button type="button" class="tab" data-tab="advisors" role="tab">Advisors</button>
           <button type="button" class="tab" data-tab="markets" role="tab">Markets</button>
           <button type="button" class="tab" data-tab="agent" role="tab">Agent</button>
           <button type="button" class="tab" data-tab="export" role="tab">Export</button>
@@ -1283,6 +1284,112 @@
             <h3 class="del-section-title">Contacts</h3>
             <div id="deleted-contacts-list" class="del-list">
               <div class="empty-msg">No deleted contacts.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADVISORS TAB -->
+        <div id="tab-advisors" class="tab-panel">
+          <div class="advisors-header">
+            <div class="advisors-title-row">
+              <div class="advisors-title">Advisor Network</div>
+              <div class="advisors-stats" id="advisor-stats-bar"></div>
+            </div>
+            <div class="advisors-controls">
+              <div class="advisors-filters">
+                <select id="advisor-type-filter" class="cf-input cf-input-sm">
+                  <option value="">All Types</option>
+                  <option value="cpa">CPA</option>
+                  <option value="ria">RIA / Wealth</option>
+                  <option value="attorney">Attorney</option>
+                  <option value="lender">Lender</option>
+                  <option value="coach">Coach</option>
+                  <option value="insurance">Insurance</option>
+                  <option value="fractional_cfo">Fractional CFO</option>
+                </select>
+                <select id="advisor-stage-filter" class="cf-input cf-input-sm">
+                  <option value="">All Stages</option>
+                  <option value="identified">Identified</option>
+                  <option value="researched">Researched</option>
+                  <option value="queued">Queued</option>
+                  <option value="outreach_sent">Outreach Sent</option>
+                  <option value="first_response">First Response</option>
+                  <option value="intro_meeting_booked">Meeting Booked</option>
+                  <option value="intro_meeting_done">Meeting Done</option>
+                  <option value="active_partner">Active Partner</option>
+                  <option value="dormant">Dormant</option>
+                  <option value="declined">Declined</option>
+                </select>
+                <input type="text" id="advisor-search" class="cf-input cf-input-sm" placeholder="Search advisors&hellip;" style="width:200px" />
+                <select id="advisor-view-mode" class="cf-input cf-input-sm">
+                  <option value="list">List View</option>
+                  <option value="pipeline">Pipeline View</option>
+                  <option value="queue">Daily Queue</option>
+                </select>
+              </div>
+              <button type="button" class="btn-primary btn-sm" id="btn-add-advisor-manual">+ Add Advisor</button>
+            </div>
+          </div>
+          <div id="advisor-list" class="advisor-list"></div>
+          <div id="advisor-pipeline" class="advisor-pipeline" hidden></div>
+          <div id="advisor-queue-view" class="advisor-queue-view" hidden></div>
+        </div>
+
+        <!-- ADVISOR DETAIL PANEL (slides in from right) -->
+        <div id="advisor-detail-panel" class="detail-panel" hidden>
+          <div class="detail-header">
+            <button type="button" class="detail-close" id="advisor-detail-close">&times;</button>
+            <div class="detail-header-content" id="advisor-detail-header"></div>
+          </div>
+          <div class="detail-body" id="advisor-detail-body"></div>
+        </div>
+
+        <!-- ADD ADVISOR MODAL (manual entry — research is done via Claude Code) -->
+        <div id="add-advisor-modal" class="debrief-modal" hidden>
+          <div class="debrief-card" style="max-width:520px">
+            <div class="debrief-header">
+              <div class="debrief-header-row">
+                <div>
+                  <div class="debrief-title">Add Advisor</div>
+                  <div class="debrief-sub">Manually add an advisor to the pipeline. Research is done via Claude Code.</div>
+                </div>
+                <button type="button" class="debrief-close" id="add-advisor-modal-close">&times;</button>
+              </div>
+            </div>
+            <div class="debrief-body">
+              <label class="camp-label">Name *</label>
+              <input type="text" id="add-adv-name" class="cf-input" placeholder="Full name" />
+              <label class="camp-label" style="margin-top:10px">Advisor Type *</label>
+              <select id="add-adv-type" class="cf-input">
+                <option value="cpa">CPA / Accountant</option>
+                <option value="ria">Wealth Manager / RIA</option>
+                <option value="attorney">Estate / M&amp;A Attorney</option>
+                <option value="lender">Community Bank Lender</option>
+                <option value="coach">Business Coach</option>
+                <option value="insurance">Insurance Broker</option>
+                <option value="fractional_cfo">Fractional CFO</option>
+              </select>
+              <label class="camp-label" style="margin-top:10px">Firm</label>
+              <input type="text" id="add-adv-firm" class="cf-input" placeholder="Firm name" />
+              <label class="camp-label" style="margin-top:10px">Title</label>
+              <input type="text" id="add-adv-title" class="cf-input" placeholder="e.g. Partner, Senior Manager" />
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <div style="flex:1">
+                  <label class="camp-label">City</label>
+                  <input type="text" id="add-adv-city" class="cf-input" placeholder="City" />
+                </div>
+                <div style="width:80px">
+                  <label class="camp-label">State</label>
+                  <input type="text" id="add-adv-state" class="cf-input" placeholder="TX" maxlength="2" />
+                </div>
+              </div>
+              <label class="camp-label" style="margin-top:10px">Email</label>
+              <input type="email" id="add-adv-email" class="cf-input" placeholder="Email" />
+              <label class="camp-label" style="margin-top:10px">LinkedIn URL</label>
+              <input type="url" id="add-adv-linkedin" class="cf-input" placeholder="https://linkedin.com/in/..." />
+              <div style="margin-top:16px;text-align:right">
+                <button type="button" class="btn-primary" id="btn-save-advisor">Add Advisor</button>
+              </div>
             </div>
           </div>
         </div>
