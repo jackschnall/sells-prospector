@@ -7038,7 +7038,7 @@ function renderAdvisorList() {
   const el = $('#advisor-list');
   if (!el) return;
   if (advisorState.advisors.length === 0) {
-    el.innerHTML = '<div class="empty-state">No advisors yet. Click "+ Identify Advisors" to find candidates.</div>';
+    el.innerHTML = '<div class="empty-state">No advisors yet. Click "+ Add Advisor" or run research from Claude Code.</div>';
     return;
   }
   el.innerHTML = `
@@ -7052,10 +7052,10 @@ function renderAdvisorList() {
       <tbody>
         ${advisorState.advisors.map(a => `
           <tr class="advisor-row" data-id="${a.id}">
-            <td class="advisor-name-cell">${esc(a.name)}</td>
+            <td class="advisor-name-cell">${escapeHtml(a.name)}</td>
             <td><span class="advisor-type-badge advisor-type-${a.type}">${ADVISOR_TYPE_LABELS[a.type] || a.type}</span></td>
-            <td>${esc(a.firm || '-')}</td>
-            <td>${esc([a.city, a.state].filter(Boolean).join(', ') || '-')}</td>
+            <td>${escapeHtml(a.firm || '-')}</td>
+            <td>${escapeHtml([a.city, a.state].filter(Boolean).join(', ') || '-')}</td>
             <td>${a.fit_score != null ? `<span class="tier-pill ${advisorTierClass(a.fit_score)}">${Number(a.fit_score).toFixed(1)}</span>` : '-'}</td>
             <td><span class="advisor-stage-pill" style="background:${ADVISOR_STAGE_COLORS[a.relationship_stage] || '#6b7280'}">${ADVISOR_STAGE_LABELS[a.relationship_stage] || a.relationship_stage}</span></td>
             <td>${a.last_contact_date ? new Date(a.last_contact_date).toLocaleDateString() : '-'}</td>
@@ -7090,8 +7090,8 @@ function renderAdvisorPipeline() {
         <div class="pipeline-cards">
           ${byStage[s].map(a => `
             <div class="pipeline-card advisor-pipeline-card" data-id="${a.id}">
-              <div class="pipeline-card-name">${esc(a.name)}</div>
-              <div class="pipeline-card-sub">${esc(a.firm || '')}</div>
+              <div class="pipeline-card-name">${escapeHtml(a.name)}</div>
+              <div class="pipeline-card-sub">${escapeHtml(a.firm || '')}</div>
               <div class="pipeline-card-meta">
                 <span class="advisor-type-badge advisor-type-${a.type}">${ADVISOR_TYPE_LABELS[a.type] || a.type}</span>
                 ${a.fit_score != null ? `<span class="tier-pill ${advisorTierClass(a.fit_score)}">${Number(a.fit_score).toFixed(1)}</span>` : ''}
@@ -7121,12 +7121,12 @@ async function loadAdvisorQueue() {
     el.innerHTML = advisors.map(a => `
       <div class="advisor-queue-card" data-id="${a.id}">
         <div class="advisor-queue-left">
-          <div class="advisor-queue-name">${esc(a.name)}</div>
+          <div class="advisor-queue-name">${escapeHtml(a.name)}</div>
           <div class="advisor-queue-meta">
             <span class="advisor-type-badge advisor-type-${a.type}">${ADVISOR_TYPE_LABELS[a.type] || a.type}</span>
-            ${esc(a.firm || '')} &mdash; ${esc([a.city, a.state].filter(Boolean).join(', '))}
+            ${escapeHtml(a.firm || '')} &mdash; ${escapeHtml([a.city, a.state].filter(Boolean).join(', '))}
           </div>
-          ${a.next_action ? `<div class="advisor-queue-action">Next: ${esc(a.next_action)}</div>` : ''}
+          ${a.next_action ? `<div class="advisor-queue-action">Next: ${escapeHtml(a.next_action)}</div>` : ''}
         </div>
         <div class="advisor-queue-right">
           ${a.fit_score != null ? `<span class="tier-pill ${advisorTierClass(a.fit_score)}">${Number(a.fit_score).toFixed(1)}</span>` : ''}
@@ -7162,13 +7162,13 @@ function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerL
 
   // Header
   $('#advisor-detail-header').innerHTML = `
-    <div class="advisor-detail-name">${esc(advisor.name)}</div>
+    <div class="advisor-detail-name">${escapeHtml(advisor.name)}</div>
     <div class="advisor-detail-sub">
       <span class="advisor-type-badge advisor-type-${advisor.type}">${ADVISOR_TYPE_LABELS[advisor.type] || advisor.type}</span>
-      ${advisor.firm ? `<span>${esc(advisor.firm)}</span>` : ''}
-      ${advisor.title ? `<span>&mdash; ${esc(advisor.title)}</span>` : ''}
+      ${advisor.firm ? `<span>${escapeHtml(advisor.firm)}</span>` : ''}
+      ${advisor.title ? `<span>&mdash; ${escapeHtml(advisor.title)}</span>` : ''}
     </div>
-    <div class="advisor-detail-loc">${esc([advisor.city, advisor.state].filter(Boolean).join(', '))}</div>
+    <div class="advisor-detail-loc">${escapeHtml([advisor.city, advisor.state].filter(Boolean).join(', '))}</div>
     <div class="advisor-detail-score-row">
       ${advisor.fit_score != null ? `<span class="tier-pill ${advisorTierClass(advisor.fit_score)}" style="font-size:14px">${advisorTierLabel(advisor.fit_score)} (${Number(advisor.fit_score).toFixed(1)})</span>` : ''}
       <span class="advisor-stage-pill" style="background:${ADVISOR_STAGE_COLORS[advisor.relationship_stage] || '#6b7280'};font-size:12px">${ADVISOR_STAGE_LABELS[advisor.relationship_stage] || advisor.relationship_stage}</span>
@@ -7195,10 +7195,10 @@ function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerL
   bodyHtml += `<div class="advisor-section">
     <div class="advisor-section-title">Contact Info</div>
     <div class="advisor-info-grid">
-      ${advisor.email ? `<div><strong>Email:</strong> <a href="mailto:${esc(advisor.email)}">${esc(advisor.email)}</a></div>` : ''}
-      ${advisor.phone ? `<div><strong>Phone:</strong> ${esc(advisor.phone)}</div>` : ''}
-      ${advisor.linkedin_url ? `<div><strong>LinkedIn:</strong> <a href="${esc(advisor.linkedin_url)}" target="_blank">Profile</a></div>` : ''}
-      ${advisor.website ? `<div><strong>Website:</strong> <a href="${esc(advisor.website)}" target="_blank">${esc(advisor.website)}</a></div>` : ''}
+      ${advisor.email ? `<div><strong>Email:</strong> <a href="mailto:${escapeHtml(advisor.email)}">${escapeHtml(advisor.email)}</a></div>` : ''}
+      ${advisor.phone ? `<div><strong>Phone:</strong> ${escapeHtml(advisor.phone)}</div>` : ''}
+      ${advisor.linkedin_url ? `<div><strong>LinkedIn:</strong> <a href="${escapeHtml(advisor.linkedin_url)}" target="_blank">Profile</a></div>` : ''}
+      ${advisor.website ? `<div><strong>Website:</strong> <a href="${escapeHtml(advisor.website)}" target="_blank">${escapeHtml(advisor.website)}</a></div>` : ''}
     </div>
   </div>`;
 
@@ -7224,11 +7224,11 @@ function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerL
     bodyHtml += `<div class="advisor-section">
       <div class="advisor-section-title">Outreach Angles</div>
       <div class="advisor-angles-list">${angles.map(a => {
-        if (typeof a === 'string') return `<div class="advisor-angle-item"><div class="advisor-angle-hook">${esc(a)}</div></div>`;
+        if (typeof a === 'string') return `<div class="advisor-angle-item"><div class="advisor-angle-hook">${escapeHtml(a)}</div></div>`;
         return `<div class="advisor-angle-item">
-          <div class="advisor-angle-hook">${esc(a.hook || '')}</div>
-          ${a.grounded_in_fact ? `<div class="advisor-angle-fact">Based on: ${esc(a.grounded_in_fact)}</div>` : ''}
-          ${a.suggested_channel ? `<div class="advisor-angle-channel">Via: ${esc(a.suggested_channel)}</div>` : ''}
+          <div class="advisor-angle-hook">${escapeHtml(a.hook || '')}</div>
+          ${a.grounded_in_fact ? `<div class="advisor-angle-fact">Based on: ${escapeHtml(a.grounded_in_fact)}</div>` : ''}
+          ${a.suggested_channel ? `<div class="advisor-angle-channel">Via: ${escapeHtml(a.suggested_channel)}</div>` : ''}
         </div>`;
       }).join('')}</div>
     </div>`;
@@ -7238,7 +7238,7 @@ function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerL
   if (credentials && credentials.length) {
     bodyHtml += `<div class="advisor-section">
       <div class="advisor-section-title">Credentials</div>
-      <div class="advisor-creds">${credentials.map(c => `<span class="advisor-cred">${esc(c.credential)}${c.earned_year ? ` (${c.earned_year})` : ''}</span>`).join(' ')}</div>
+      <div class="advisor-creds">${credentials.map(c => `<span class="advisor-cred">${escapeHtml(c.credential)}${c.earned_year ? ` (${c.earned_year})` : ''}</span>`).join(' ')}</div>
     </div>`;
   }
 
@@ -7249,9 +7249,9 @@ function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerL
       ${hs.newly_independent ? '<span class="signal-tag signal-hot">Newly Independent</span>' : ''}
       ${hs.growing_team ? '<span class="signal-tag signal-hot">Growing Team</span>' : ''}
       ${hs.content_output_frequency === 'high' ? '<span class="signal-tag signal-hot">High Content Output</span>' : ''}
-      ${hs.career_stage ? `<div class="signal-detail"><strong>Career Stage:</strong> ${esc(hs.career_stage)}</div>` : ''}
-      ${hs.personal_book_incentive ? `<div class="signal-detail"><strong>Book Incentive:</strong> ${esc(hs.personal_book_incentive)}</div>` : ''}
-      ${hs.growth_signals_summary ? `<div class="signal-detail">${esc(hs.growth_signals_summary)}</div>` : ''}
+      ${hs.career_stage ? `<div class="signal-detail"><strong>Career Stage:</strong> ${escapeHtml(hs.career_stage)}</div>` : ''}
+      ${hs.personal_book_incentive ? `<div class="signal-detail"><strong>Book Incentive:</strong> ${escapeHtml(hs.personal_book_incentive)}</div>` : ''}
+      ${hs.growth_signals_summary ? `<div class="signal-detail">${escapeHtml(hs.growth_signals_summary)}</div>` : ''}
     </div>
   </div>`;
 
@@ -7273,11 +7273,11 @@ function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerL
     bodyHtml += `<div class="advisor-section">
       <div class="advisor-section-title">Rapport Hooks</div>
       <div class="advisor-info-grid">
-        ${hooks.alma_mater ? `<div><strong>Alma Mater:</strong> ${esc(hooks.alma_mater)}</div>` : ''}
-        ${hooks.prior_employers?.length ? `<div><strong>Prior Employers:</strong> ${hooks.prior_employers.map(e => esc(e)).join(', ')}</div>` : ''}
-        ${hooks.hobbies_or_interests?.length ? `<div><strong>Interests:</strong> ${hooks.hobbies_or_interests.map(h => esc(h)).join(', ')}</div>` : ''}
-        ${lifeEvents ? `<div><strong>Recent:</strong> ${esc(lifeEvents)}</div>` : ''}
-        ${hooks.shared_connections_to_jack?.length ? `<div><strong>Shared Connections:</strong> ${hooks.shared_connections_to_jack.map(c => esc(c)).join(', ')}</div>` : ''}
+        ${hooks.alma_mater ? `<div><strong>Alma Mater:</strong> ${escapeHtml(hooks.alma_mater)}</div>` : ''}
+        ${hooks.prior_employers?.length ? `<div><strong>Prior Employers:</strong> ${hooks.prior_employers.map(e => escapeHtml(e)).join(', ')}</div>` : ''}
+        ${hooks.hobbies_or_interests?.length ? `<div><strong>Interests:</strong> ${hooks.hobbies_or_interests.map(h => escapeHtml(h)).join(', ')}</div>` : ''}
+        ${lifeEvents ? `<div><strong>Recent:</strong> ${escapeHtml(lifeEvents)}</div>` : ''}
+        ${hooks.shared_connections_to_jack?.length ? `<div><strong>Shared Connections:</strong> ${hooks.shared_connections_to_jack.map(c => escapeHtml(c)).join(', ')}</div>` : ''}
       </div>
     </div>`;
   }
@@ -7288,11 +7288,11 @@ function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerL
     bodyHtml += `<div class="advisor-section">
       <div class="advisor-section-title">Risk Flags</div>
       <div class="advisor-risks-list">${risks.map(r => {
-        if (typeof r === 'string') return `<div class="risk-item">${esc(r)}</div>`;
+        if (typeof r === 'string') return `<div class="risk-item">${escapeHtml(r)}</div>`;
         return `<div class="risk-item risk-${r.severity || 'low'}">
           <span class="risk-severity">${(r.severity || 'low').toUpperCase()}</span>
-          <span class="risk-flag">${esc(r.flag || '')}</span>
-          ${r.detail ? `<div class="risk-detail">${esc(r.detail)}</div>` : ''}
+          <span class="risk-flag">${escapeHtml(r.flag || '')}</span>
+          ${r.detail ? `<div class="risk-detail">${escapeHtml(r.detail)}</div>` : ''}
         </div>`;
       }).join('')}</div>
     </div>`;
@@ -7304,9 +7304,9 @@ function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerL
     <div id="advisor-contact-log">
       ${contacts && contacts.length ? contacts.map(c => `
         <div class="advisor-contact-entry">
-          <div class="advisor-contact-date">${new Date(c.contact_date).toLocaleDateString()} via ${esc(c.channel)} (${c.direction})</div>
-          <div>${esc(c.summary || '')}</div>
-          ${c.next_action ? `<div class="advisor-contact-next">Next: ${esc(c.next_action)}${c.next_action_date ? ` by ${new Date(c.next_action_date).toLocaleDateString()}` : ''}</div>` : ''}
+          <div class="advisor-contact-date">${new Date(c.contact_date).toLocaleDateString()} via ${escapeHtml(c.channel)} (${c.direction})</div>
+          <div>${escapeHtml(c.summary || '')}</div>
+          ${c.next_action ? `<div class="advisor-contact-next">Next: ${escapeHtml(c.next_action)}${c.next_action_date ? ` by ${new Date(c.next_action_date).toLocaleDateString()}` : ''}</div>` : ''}
         </div>
       `).join('') : '<div class="empty-sub">No contacts logged yet.</div>'}
     </div>
@@ -7319,9 +7319,9 @@ function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerL
       ${referrals && referrals.length ? referrals.map(r => `
         <div class="advisor-referral-entry">
           <span class="referral-direction ${r.direction}">${r.direction === 'inbound' ? 'From Advisor' : 'To Advisor'}</span>
-          ${r.prospect_name ? `<span>${esc(r.prospect_name)}</span>` : ''}
-          <span>${esc(r.scope || '')}</span>
-          <span class="referral-status">${esc(r.status)}</span>
+          ${r.prospect_name ? `<span>${escapeHtml(r.prospect_name)}</span>` : ''}
+          <span>${escapeHtml(r.scope || '')}</span>
+          <span class="referral-status">${escapeHtml(r.status)}</span>
           ${r.estimated_value ? `<span>$${Number(r.estimated_value).toLocaleString()}</span>` : ''}
         </div>
       `).join('') : '<div class="empty-sub">No referrals yet.</div>'}
@@ -7335,8 +7335,8 @@ function renderAdvisorDetail({ advisor, credentials, contacts, referrals, ownerL
       ${ownerLinks && ownerLinks.length ? ownerLinks.map(l => `
         <div class="advisor-owner-link">
           <span class="link-type-badge ${l.link_type}">${l.link_type}</span>
-          <span class="link-owner-name" data-id="${l.prospect_id}" style="cursor:pointer;text-decoration:underline">${esc(l.prospect_name || 'Unknown')}</span>
-          <span>${esc([l.prospect_city, l.prospect_state].filter(Boolean).join(', '))}</span>
+          <span class="link-owner-name" data-id="${l.prospect_id}" style="cursor:pointer;text-decoration:underline">${escapeHtml(l.prospect_name || 'Unknown')}</span>
+          <span>${escapeHtml([l.prospect_city, l.prospect_state].filter(Boolean).join(', '))}</span>
           ${l.confidence ? `<span>(${(l.confidence * 100).toFixed(0)}% confidence)</span>` : ''}
         </div>
       `).join('') : '<div class="empty-sub">No linked owners.</div>'}
