@@ -59,11 +59,14 @@ function scoreCareerStage(stage) {
   if (enumScores[stage] !== undefined) return enumScores[stage];
   // Fallback: fuzzy match for free-text career_stage values
   const s = stage.toLowerCase();
+  // Early-career bonus (graduated recently, new to industry)
+  if (s.includes('early-career') || s.includes('early career') || s.includes('recently graduated')) return 9;
   if (s.includes('solo') || s.includes('founder') || s.includes('launched') || s.includes('newly_independent')) return 9;
   if (s.includes('junior partner') || s.includes('just-made') || s.includes('new partner')) return 8;
   if (s.includes('senior manager') || s.includes('senior associate') || s.includes('partner track')) return 7;
   if (s.includes('producer')) return 7;
-  if (s.includes('associate') || s.includes('manager')) return 6;
+  if (s.includes('associate') || s.includes('analyst') || s.includes('junior')) return 8;
+  if (s.includes('manager')) return 6;
   if (s.includes('senior partner') || s.includes('managing partner') || s.includes('established')) return 3;
   return 5;
 }

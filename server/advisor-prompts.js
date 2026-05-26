@@ -186,6 +186,23 @@ function buildIdentifyUserPrompt(advisorType, geo, filters = {}) {
 
   return `Find ${typeLabel} in ${geo} who match our "young and hungry" advisor profile.
 
+IMPORTANT — AGE/CAREER-STAGE TARGETING:
+We specifically want a MIX of career stages, but at least 30-40% of candidates should be
+EARLY-CAREER advisors — people who graduated college roughly 2018-2026 (within the last ~8 years).
+These are associates, junior VPs, newly licensed advisors, or people who recently launched their
+own practice. They have the most to gain from a referral partnership and are the least likely to
+have established referral lanes locked in.
+
+To find early-career candidates, search LinkedIn with graduation year filters or look for:
+- "Associate" or "Analyst" or "Junior" in titles
+- "Class of 2018" / "Class of 2019" / "Class of 2020" etc. on LinkedIn
+- "40 under 40" or "rising stars" or "next gen" lists
+- Recently licensed (check state board for recent licensure dates)
+- Titles like "Associate Advisor", "Paraplanner promoted to Advisor", "Financial Planning Associate"
+
+Also include mid-career and senior candidates who show strong hunger signals (breakaways,
+new firms, recent CEPA certs), but make sure the batch isn't ALL 20+ year veterans.
+
 Suggested search queries to start with:
 ${suggestedQueries.map(q => `- ${q}`).join('\n')}
 
@@ -193,8 +210,9 @@ ${filters.requiredCredentials?.length ? `Required credentials: ${filters.require
 ${filters.preferredCredentials?.length ? `Preferred credentials: ${filters.preferredCredentials.join(', ')}` : ''}
 
 Find 8-15 candidates. For each, gather their name, firm, title, city, state, and a brief
-note on why they fit. Only include people you actually found in search results — do NOT
-fabricate names. Return the JSON object only.`;
+note on why they fit — ESPECIALLY note if they are early-career (graduated recently, newly
+licensed, etc.). Only include people you actually found in search results — do NOT fabricate
+names. Return the JSON object only.`;
 }
 
 

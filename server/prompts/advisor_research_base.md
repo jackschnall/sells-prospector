@@ -42,6 +42,17 @@ HUNGER SIGNALS (apply across all types — "young and hungry" is a profile, NOT 
 - Growth signals: new hires under them, recent promotion, new office, internal "rising star"
   recognition.
 
+CRITICAL — GRADUATION YEAR & CAREER TENURE:
+- ALWAYS look up and report the advisor's college graduation year (from LinkedIn, firm bio, 
+  or state licensing records). This is a KEY signal for identifying "young and hungry" advisors.
+- If they graduated within the last ~8 years (roughly 2018 or later), they are EARLY-CAREER
+  and should be flagged prominently. Early-career advisors are high-priority targets because
+  they have the most to gain from referral partnerships and haven't locked in referral lanes yet.
+- Report graduation year in the personal_rapport_hooks.alma_mater field AND in the
+  hunger_signals.career_stage field (e.g. "early-career — graduated 2020, 6 years in industry").
+- If you cannot find a graduation year, estimate based on bar admission date, first FINRA
+  registration, or first job date.
+
 A senior manager at a Big 4 firm working toward partner is just as valid a target as a solo
 practitioner who launched last year — both have the same incentive to take a meeting with us.
 
