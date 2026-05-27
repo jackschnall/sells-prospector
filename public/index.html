@@ -1524,11 +1524,30 @@
           <!-- SUBTAB: Referral Graph -->
           <div id="advisor-sub-referral-graph" class="advisor-subpanel" hidden>
             <div class="advisors-header" style="padding-bottom:8px">
-              <div class="advisors-title">Referral Graph</div>
-              <div class="queue-sub">Visual network of advisor-owner connections. Nodes = advisors (diamonds) and companies (circles). Edges = suspected/confirmed links and referrals.</div>
+              <div class="advisors-title-row">
+                <div class="advisors-title">Referral Graph</div>
+                <div class="advisors-filters" style="gap:10px">
+                  <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="graph-show-suspected" checked /> Suspected</label>
+                  <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="graph-show-confirmed" checked /> Confirmed</label>
+                  <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="graph-show-referrals" checked /> Referrals</label>
+                  <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="graph-show-unlinked" /> Show unlinked advisors</label>
+                  <select id="graph-type-filter" class="cf-input cf-input-sm" style="width:130px">
+                    <option value="">All Types</option>
+                    <option value="cpa">CPA</option>
+                    <option value="ria">RIA</option>
+                    <option value="attorney">Attorney</option>
+                    <option value="lender">Lender</option>
+                    <option value="coach">Coach</option>
+                    <option value="insurance">Insurance</option>
+                    <option value="fractional_cfo">Fractional CFO</option>
+                  </select>
+                </div>
+              </div>
+              <div class="queue-sub">Click a node to open its detail. Scroll to zoom. Drag to pan. Diamonds = advisors, circles = companies.</div>
             </div>
-            <div id="referral-graph-container" style="width:100%;height:600px;border:1px solid var(--card-border);border-radius:8px;overflow:hidden;position:relative;background:var(--bg, #f9f6f0)">
-              <canvas id="referral-graph-canvas" style="width:100%;height:100%"></canvas>
+            <div id="referral-graph-container" style="width:100%;height:600px;border:1px solid var(--card-border);border-radius:8px;overflow:hidden;position:relative;background:var(--bg, #f9f6f0);cursor:grab">
+              <canvas id="referral-graph-canvas"></canvas>
+              <div id="graph-tooltip" style="display:none;position:absolute;background:rgba(30,30,30,0.92);color:#fff;padding:8px 12px;border-radius:6px;font-size:0.8rem;pointer-events:none;z-index:10;max-width:250px"></div>
             </div>
           </div>
 

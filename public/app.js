@@ -7588,20 +7588,22 @@ async function loadAdvisorQueueCallHistory(advisorId) {
   } catch { section.hidden = true; }
 }
 
-// ─── Referral Graph Visualization ────────────────────────────────────────
+// ─── Referral Graph Visualization (zoom/pan/click/filter) ───────────────
+
+const graphState = { nodes: [], edges: [], nodeMap: {}, zoom: 1, panX: 0, panY: 0, dragging: false, dragStartX: 0, dragStartY: 0, hoveredNode: null, allEdges: [], allNodes: [] };
 
 async function loadReferralGraph() {
   const canvas = $('#referral-graph-canvas');
   if (!canvas) return;
   const container = $('#referral-graph-container');
-  canvas.width = container.clientWidth * 2;
-  canvas.height = container.clientHeight * 2;
-  canvas.style.width = container.clientWidth + 'px';
-  canvas.style.height = container.clientHeight + 'px';
-  const ctx = canvas.getContext('2d');
-  ctx.scale(2, 2);
+  const dpr = window.devicePixelRatio || 2;
   const W = container.clientWidth;
   const H = container.clientHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+
+  // Reset view
+  graphState.zoom = 1; graphState.panX = 0; graphState.panY = 0;
 
   // Fetch data
   let advisors = [], links = [], referrals = [];
@@ -7614,162 +7616,309 @@ async function loadReferralGraph() {
     const gData = await gRes.json();
     advisors = (aData.advisors || []).filter(a => a.status === 'done');
     referrals = gData.referrals || [];
-
-    // Also fetch advisor-owner links
-    const linkPromises = advisors.slice(0, 30).map(a => fetch(`/api/advisors/${a.id}/owner-links`).then(r => r.json()));
+    const linkPromises = advisors.slice(0, 50).map(a => fetch(`/api/advisors/${a.id}/owner-links`).then(r => r.json()));
     const linkResults = await Promise.all(linkPromises);
     linkResults.forEach(r => { if (r.links) links.push(...r.links); });
   } catch { return; }
 
-  if (advisors.length === 0) {
-    ctx.fillStyle = '#999'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('No advisors with completed research yet.', W / 2, H / 2);
-    return;
-  }
-
-  // Build nodes: advisors + linked companies
-  const nodes = [];
-  const nodeMap = {};
-
-  advisors.forEach((a, i) => {
-    const node = { id: a.id, label: a.name, type: 'advisor', advisorType: a.type, score: a.fit_score, x: 0, y: 0, vx: 0, vy: 0 };
-    nodes.push(node);
-    nodeMap[a.id] = node;
+  // Build nodes + edges
+  const nodes = []; const nodeMap = {};
+  advisors.forEach(a => {
+    const n = { id: a.id, label: a.name, type: 'advisor', advisorType: a.type, score: a.fit_score, firm: a.firm, city: a.city, state: a.state, stage: a.relationship_stage, x: 0, y: 0, vx: 0, vy: 0, linkCount: 0 };
+    nodes.push(n); nodeMap[a.id] = n;
   });
-
-  // Add company nodes from links
   const companyIds = new Set();
   links.forEach(l => {
     if (!companyIds.has(l.prospect_id)) {
       companyIds.add(l.prospect_id);
-      const node = { id: l.prospect_id, label: l.prospect_name || 'Company', type: 'company', city: l.prospect_city, state: l.prospect_state, x: 0, y: 0, vx: 0, vy: 0 };
-      nodes.push(node);
-      nodeMap[l.prospect_id] = node;
+      const n = { id: l.prospect_id, label: l.prospect_name || 'Company', type: 'company', city: l.prospect_city, state: l.prospect_state, score: l.prospect_score, tier: l.prospect_tier, x: 0, y: 0, vx: 0, vy: 0, linkCount: 0 };
+      nodes.push(n); nodeMap[l.prospect_id] = n;
     }
   });
-
-  // Build edges
   const edges = [];
   links.forEach(l => {
     if (nodeMap[l.advisor_id] && nodeMap[l.prospect_id]) {
       edges.push({ from: l.advisor_id, to: l.prospect_id, type: l.link_type, confidence: l.confidence });
+      nodeMap[l.advisor_id].linkCount++;
+      nodeMap[l.prospect_id].linkCount++;
     }
   });
   referrals.forEach(r => {
     if (nodeMap[r.advisor_id] && nodeMap[r.prospect_id]) {
       edges.push({ from: r.advisor_id, to: r.prospect_id, type: 'referral', direction: r.direction });
+      nodeMap[r.advisor_id].linkCount++;
+      if (nodeMap[r.prospect_id]) nodeMap[r.prospect_id].linkCount++;
     }
   });
 
-  // Initial positions — circle layout
+  graphState.allNodes = nodes; graphState.allEdges = edges; graphState.nodeMap = nodeMap;
+
+  // Layout — more spacing
+  const CX = W / 2, CY = H / 2;
   nodes.forEach((n, i) => {
     const angle = (i / nodes.length) * Math.PI * 2;
-    const radius = Math.min(W, H) * 0.35;
-    n.x = W / 2 + Math.cos(angle) * radius * (0.7 + Math.random() * 0.3);
-    n.y = H / 2 + Math.sin(angle) * radius * (0.7 + Math.random() * 0.3);
+    const r = Math.min(W, H) * 0.4;
+    n.x = CX + Math.cos(angle) * r * (0.6 + Math.random() * 0.4);
+    n.y = CY + Math.sin(angle) * r * (0.6 + Math.random() * 0.4);
   });
-
-  // Simple force simulation (60 iterations)
-  for (let iter = 0; iter < 60; iter++) {
-    // Repulsion between all nodes
+  // Force sim — more iterations, stronger repulsion
+  for (let iter = 0; iter < 100; iter++) {
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
-        let dx = nodes[j].x - nodes[i].x;
-        let dy = nodes[j].y - nodes[i].y;
+        let dx = nodes[j].x - nodes[i].x, dy = nodes[j].y - nodes[i].y;
         let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        let force = 800 / (dist * dist);
-        nodes[i].vx -= (dx / dist) * force;
-        nodes[i].vy -= (dy / dist) * force;
-        nodes[j].vx += (dx / dist) * force;
-        nodes[j].vy += (dy / dist) * force;
+        let force = 2000 / (dist * dist);
+        nodes[i].vx -= (dx / dist) * force; nodes[i].vy -= (dy / dist) * force;
+        nodes[j].vx += (dx / dist) * force; nodes[j].vy += (dy / dist) * force;
       }
     }
-    // Attraction along edges
     edges.forEach(e => {
       const a = nodeMap[e.from], b = nodeMap[e.to];
       if (!a || !b) return;
-      let dx = b.x - a.x, dy = b.y - a.y;
-      let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      let force = (dist - 120) * 0.01;
-      a.vx += (dx / dist) * force;
-      a.vy += (dy / dist) * force;
-      b.vx -= (dx / dist) * force;
-      b.vy -= (dy / dist) * force;
+      let dx = b.x - a.x, dy = b.y - a.y, dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      let force = (dist - 180) * 0.008;
+      a.vx += (dx / dist) * force; a.vy += (dy / dist) * force;
+      b.vx -= (dx / dist) * force; b.vy -= (dy / dist) * force;
     });
-    // Center gravity
     nodes.forEach(n => {
-      n.vx += (W / 2 - n.x) * 0.005;
-      n.vy += (H / 2 - n.y) * 0.005;
-      n.vx *= 0.8; n.vy *= 0.8;
+      n.vx += (CX - n.x) * 0.003; n.vy += (CY - n.y) * 0.003;
+      n.vx *= 0.75; n.vy *= 0.75;
       n.x += n.vx; n.y += n.vy;
-      n.x = Math.max(30, Math.min(W - 30, n.x));
-      n.y = Math.max(30, Math.min(H - 30, n.y));
     });
   }
 
-  // Draw
+  drawGraph();
+  bindGraphEvents();
+}
+
+function getVisibleGraph() {
+  const showSuspected = $('#graph-show-suspected')?.checked ?? true;
+  const showConfirmed = $('#graph-show-confirmed')?.checked ?? true;
+  const showReferrals = $('#graph-show-referrals')?.checked ?? true;
+  const showUnlinked = $('#graph-show-unlinked')?.checked ?? false;
+  const typeFilter = $('#graph-type-filter')?.value || '';
+
+  let edges = graphState.allEdges.filter(e => {
+    if (e.type === 'suspected' && !showSuspected) return false;
+    if ((e.type === 'confirmed_serves' || e.type === 'jointly_engaged') && !showConfirmed) return false;
+    if (e.type === 'referral' && !showReferrals) return false;
+    return true;
+  });
+
+  // Filter by advisor type
+  if (typeFilter) {
+    const advisorIds = new Set(graphState.allNodes.filter(n => n.type === 'advisor' && n.advisorType === typeFilter).map(n => n.id));
+    edges = edges.filter(e => advisorIds.has(e.from) || advisorIds.has(e.to));
+  }
+
+  const connectedIds = new Set();
+  edges.forEach(e => { connectedIds.add(e.from); connectedIds.add(e.to); });
+
+  let nodes = graphState.allNodes.filter(n => {
+    if (typeFilter && n.type === 'advisor' && n.advisorType !== typeFilter) return false;
+    if (!showUnlinked && !connectedIds.has(n.id)) return false;
+    return true;
+  });
+
+  return { nodes, edges };
+}
+
+function drawGraph() {
+  const canvas = $('#referral-graph-canvas');
+  if (!canvas) return;
+  const container = $('#referral-graph-container');
+  const dpr = window.devicePixelRatio || 2;
+  const W = container.clientWidth, H = container.clientHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
 
-  // Edges
+  const { zoom, panX, panY } = graphState;
+  ctx.save();
+  ctx.translate(panX, panY);
+  ctx.scale(zoom, zoom);
+
+  const { nodes, edges } = getVisibleGraph();
+  const nodeMap = graphState.nodeMap;
+  const TYPE_COLORS = { cpa: '#2563eb', ria: '#7c3aed', attorney: '#0891b2', lender: '#059669', coach: '#d97706', insurance: '#dc2626', fractional_cfo: '#4f46e5' };
+  const hovered = graphState.hoveredNode;
+
+  // Draw edges
   edges.forEach(e => {
     const a = nodeMap[e.from], b = nodeMap[e.to];
     if (!a || !b) return;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
     if (e.type === 'referral') {
-      ctx.strokeStyle = e.direction === 'inbound' ? '#22c55e' : '#3b82f6';
-      ctx.lineWidth = 2;
-    } else if (e.type === 'confirmed_serves') {
-      ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = e.direction === 'inbound' ? '#22c55e' : '#3b82f6'; ctx.lineWidth = 2.5 / zoom;
+    } else if (e.type === 'confirmed_serves' || e.type === 'jointly_engaged') {
+      ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 2 / zoom;
     } else {
-      ctx.strokeStyle = 'rgba(200,180,130,0.3)'; ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(180,160,120,0.25)'; ctx.lineWidth = 1 / zoom;
+    }
+    // Highlight edges connected to hovered node
+    if (hovered && (e.from === hovered.id || e.to === hovered.id)) {
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3 / zoom;
     }
     ctx.stroke();
   });
 
-  // Nodes
-  const TYPE_COLORS = { cpa: '#2563eb', ria: '#7c3aed', attorney: '#0891b2', lender: '#059669', coach: '#d97706', insurance: '#dc2626', fractional_cfo: '#4f46e5' };
-
+  // Draw nodes
   nodes.forEach(n => {
+    const isHovered = hovered && hovered.id === n.id;
+    const size = n.type === 'advisor' ? (10 + Math.min(n.linkCount * 2, 10)) : (6 + Math.min(n.linkCount, 6));
+    const s = (isHovered ? size * 1.4 : size) / zoom;
+
     ctx.beginPath();
     if (n.type === 'advisor') {
-      // Diamond shape for advisors
-      const s = 8;
-      ctx.moveTo(n.x, n.y - s); ctx.lineTo(n.x + s, n.y); ctx.lineTo(n.x, n.y + s); ctx.lineTo(n.x - s, n.y);
-      ctx.closePath();
+      ctx.moveTo(n.x, n.y - s); ctx.lineTo(n.x + s, n.y); ctx.lineTo(n.x, n.y + s); ctx.lineTo(n.x - s, n.y); ctx.closePath();
       ctx.fillStyle = TYPE_COLORS[n.advisorType] || '#6b7280';
     } else {
-      // Circle for companies
-      ctx.arc(n.x, n.y, 6, 0, Math.PI * 2);
+      ctx.arc(n.x, n.y, s * 0.7, 0, Math.PI * 2);
       ctx.fillStyle = '#c9a227';
     }
     ctx.fill();
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = isHovered ? '#f59e0b' : '#fff';
+    ctx.lineWidth = (isHovered ? 3 : 1.5) / zoom;
+    ctx.stroke();
 
-    // Label
-    ctx.fillStyle = '#333'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(n.label.length > 18 ? n.label.slice(0, 16) + '...' : n.label, n.x, n.y + 16);
+    // Label — only show at sufficient zoom or on hover
+    if (zoom >= 0.6 || isHovered) {
+      const fontSize = Math.max(9, 11 / zoom);
+      ctx.fillStyle = '#333'; ctx.font = `${fontSize}px sans-serif`; ctx.textAlign = 'center';
+      const lbl = n.label.length > 20 ? n.label.slice(0, 18) + '...' : n.label;
+      ctx.fillText(lbl, n.x, n.y + s + fontSize + 2);
+    }
   });
 
-  // Legend
+  ctx.restore();
+
+  // Legend (fixed position, not affected by zoom/pan)
+  const lx = 14; let ly = 20;
   ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
-  let ly = 20;
-  ctx.fillStyle = '#666'; ctx.fillText('Legend:', 12, ly); ly += 16;
-  // Diamond
-  ctx.fillStyle = '#7c3aed'; ctx.beginPath();
-  ctx.moveTo(12, ly - 4); ctx.lineTo(16, ly); ctx.lineTo(12, ly + 4); ctx.lineTo(8, ly); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#333'; ctx.fillText('Advisor', 22, ly + 3); ly += 16;
-  // Circle
-  ctx.fillStyle = '#c9a227'; ctx.beginPath(); ctx.arc(12, ly, 5, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#333'; ctx.fillText('Company', 22, ly + 3); ly += 16;
-  // Lines
-  ctx.strokeStyle = 'rgba(200,180,130,0.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(6, ly); ctx.lineTo(18, ly); ctx.stroke();
-  ctx.fillStyle = '#333'; ctx.fillText('Suspected link', 22, ly + 3); ly += 16;
-  ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(6, ly); ctx.lineTo(18, ly); ctx.stroke();
-  ctx.fillStyle = '#333'; ctx.fillText('Confirmed / Inbound referral', 22, ly + 3); ly += 16;
-  ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(6, ly); ctx.lineTo(18, ly); ctx.stroke();
-  ctx.fillStyle = '#333'; ctx.fillText('Outbound referral', 22, ly + 3);
+  ctx.fillStyle = 'rgba(249,246,240,0.9)'; ctx.fillRect(4, 4, 200, 110); // bg
+  ctx.fillStyle = '#666'; ctx.fillText('Legend:', lx, ly); ly += 16;
+  ctx.fillStyle = '#7c3aed'; ctx.beginPath(); ctx.moveTo(lx, ly - 4); ctx.lineTo(lx + 4, ly); ctx.lineTo(lx, ly + 4); ctx.lineTo(lx - 4, ly); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#333'; ctx.fillText('Advisor (size = # links)', lx + 10, ly + 3); ly += 16;
+  ctx.fillStyle = '#c9a227'; ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#333'; ctx.fillText('Company', lx + 10, ly + 3); ly += 16;
+  ctx.strokeStyle = 'rgba(180,160,120,0.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(lx - 6, ly); ctx.lineTo(lx + 6, ly); ctx.stroke();
+  ctx.fillStyle = '#333'; ctx.fillText('Suspected', lx + 10, ly + 3); ly += 16;
+  ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(lx - 6, ly); ctx.lineTo(lx + 6, ly); ctx.stroke();
+  ctx.fillStyle = '#333'; ctx.fillText('Confirmed / Inbound', lx + 10, ly + 3); ly += 16;
+  ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(lx - 6, ly); ctx.lineTo(lx + 6, ly); ctx.stroke();
+  ctx.fillStyle = '#333'; ctx.fillText('Outbound referral', lx + 10, ly + 3);
+}
+
+function graphScreenToWorld(sx, sy) {
+  return { x: (sx - graphState.panX) / graphState.zoom, y: (sy - graphState.panY) / graphState.zoom };
+}
+
+function findNodeAt(wx, wy) {
+  const { nodes } = getVisibleGraph();
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    const r = n.type === 'advisor' ? 14 : 10;
+    if (Math.abs(n.x - wx) < r && Math.abs(n.y - wy) < r) return n;
+  }
+  return null;
+}
+
+function bindGraphEvents() {
+  const canvas = $('#referral-graph-canvas');
+  const container = $('#referral-graph-container');
+  const tooltip = $('#graph-tooltip');
+  if (!canvas || canvas._graphBound) return;
+  canvas._graphBound = true;
+
+  // Zoom
+  container.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = container.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const oldZoom = graphState.zoom;
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    graphState.zoom = Math.max(0.2, Math.min(5, graphState.zoom * delta));
+    // Zoom toward mouse
+    graphState.panX = mx - (mx - graphState.panX) * (graphState.zoom / oldZoom);
+    graphState.panY = my - (my - graphState.panY) * (graphState.zoom / oldZoom);
+    drawGraph();
+  }, { passive: false });
+
+  // Pan
+  container.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    graphState.dragging = true;
+    graphState.dragStartX = e.clientX - graphState.panX;
+    graphState.dragStartY = e.clientY - graphState.panY;
+    container.style.cursor = 'grabbing';
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (graphState.dragging) {
+      graphState.panX = e.clientX - graphState.dragStartX;
+      graphState.panY = e.clientY - graphState.dragStartY;
+      drawGraph();
+    }
+  });
+  window.addEventListener('mouseup', () => {
+    if (graphState.dragging) { graphState.dragging = false; container.style.cursor = 'grab'; }
+  });
+
+  // Hover + tooltip
+  canvas.addEventListener('mousemove', (e) => {
+    if (graphState.dragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    const { x, y } = graphScreenToWorld(sx, sy);
+    const node = findNodeAt(x, y);
+    if (node !== graphState.hoveredNode) {
+      graphState.hoveredNode = node;
+      drawGraph();
+      if (node && tooltip) {
+        let html = `<strong>${escapeHtml(node.label)}</strong>`;
+        if (node.type === 'advisor') {
+          html += `<br>${(ADVISOR_TYPE_LABELS[node.advisorType] || node.advisorType).toUpperCase()}`;
+          if (node.firm) html += `<br>${escapeHtml(node.firm)}`;
+          if (node.city || node.state) html += `<br>${escapeHtml([node.city, node.state].filter(Boolean).join(', '))}`;
+          if (node.score != null) html += `<br>Fit: ${Number(node.score).toFixed(1)}`;
+          html += `<br>${node.linkCount} connection${node.linkCount !== 1 ? 's' : ''}`;
+        } else {
+          if (node.city || node.state) html += `<br>${escapeHtml([node.city, node.state].filter(Boolean).join(', '))}`;
+          if (node.tier) html += `<br>Tier: ${node.tier}`;
+          html += `<br>${node.linkCount} advisor${node.linkCount !== 1 ? 's' : ''} linked`;
+        }
+        tooltip.innerHTML = html;
+        tooltip.style.display = 'block';
+        tooltip.style.left = (sx + 12) + 'px';
+        tooltip.style.top = (sy - 10) + 'px';
+      } else if (tooltip) {
+        tooltip.style.display = 'none';
+      }
+    }
+    canvas.style.cursor = node ? 'pointer' : 'grab';
+  });
+
+  // Click — open detail
+  canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    const { x, y } = graphScreenToWorld(sx, sy);
+    const node = findNodeAt(x, y);
+    if (!node) return;
+    if (node.type === 'advisor') {
+      openAdvisorDetail(node.id);
+    } else {
+      // Switch to Companies tab and open detail
+      const companiesTab = document.querySelector('.tab[data-tab="companies"]');
+      if (companiesTab) companiesTab.click();
+      setTimeout(() => openDetail(node.id), 50);
+    }
+  });
+
+  // Filter change handlers
+  ['graph-show-suspected', 'graph-show-confirmed', 'graph-show-referrals', 'graph-show-unlinked'].forEach(id => {
+    $(`#${id}`)?.addEventListener('change', drawGraph);
+  });
+  $('#graph-type-filter')?.addEventListener('change', drawGraph);
 }
 
 async function openAdvisorDetail(id) {
