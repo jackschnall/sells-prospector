@@ -2726,21 +2726,42 @@ app.get('/api/admin/team-stats', requireUser, async (req, res) => {
 app.get('/api/map/accounts', async (req, res) => {
   try {
     const rows = await query(
-      `SELECT id, name, city, state, address, lat, lng, score, tier,
-              pipeline_stage, industry, owner, updated_at, county_fips, county_name
-       FROM companies
-       WHERE deleted_at IS NULL AND lat IS NOT NULL AND lng IS NOT NULL`
+      `SELECT c.id, c.name, c.city, c.state, c.address, c.lat, c.lng, c.score, c.tier,
+              c.pipeline_stage, c.industry, c.owner, c.county_fips, c.county_name,
+              c.phone, c.email,
+              -- Real last activity: most recent call or activity, NOT updated_at
+              GREATEST(
+                (SELECT MAX(cl.called_at) FROM call_logs cl WHERE cl.company_id = c.id),
+                (SELECT MAX(a.created_at) FROM activities a WHERE a.company_id = c.id)
+              ) AS last_real_activity,
+              -- Last contacted by
+              (SELECT u.name FROM call_logs cl2
+               JOIN users u ON u.id = cl2.user_id
+               WHERE cl2.company_id = c.id
+               ORDER BY cl2.called_at DESC LIMIT 1) AS last_contacted_by
+       FROM companies c
+       WHERE c.deleted_at IS NULL AND c.lat IS NOT NULL AND c.lng IS NOT NULL`
     );
     const accounts = rows.map(r => ({
+      id: r.id,
       name: r.name,
       city: r.city || '',
       state: r.state || '',
       street: r.address || '',
       lat: Number(r.lat),
       lng: Number(r.lng),
-      lastActivity: r.updated_at ? r.updated_at.toISOString().slice(0, 10) : null,
+      lastActivity: r.last_real_activity ? r.last_real_activity.toISOString().slice(0, 10) : null,
       countyFips: r.county_fips || null,
       county: r.county_name || null,
+      // Extra fields for detail panel
+      score: r.score ? Number(r.score) : null,
+      tier: r.tier || null,
+      pipeline_stage: r.pipeline_stage || 'no_contact',
+      industry: r.industry || null,
+      owner: r.owner || null,
+      phone: r.phone || null,
+      email: r.email || null,
+      last_contacted_by: r.last_contacted_by || null,
     }));
     res.json(accounts);
   } catch (err) {

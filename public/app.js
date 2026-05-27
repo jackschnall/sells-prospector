@@ -8528,10 +8528,57 @@ function formatTalkTime(sec) {
   return `${m}m`;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MAP IFRAME MESSAGE HANDLER
+// ═══════════════════════════════════════════════════════════════════════════
+
+function initMapMessages() {
+  window.addEventListener('message', async (e) => {
+    if (!e.data || !e.data.type) return;
+
+    if (e.data.type === 'map-open-company') {
+      // Switch to Companies tab and open detail
+      const companiesTab = document.querySelector('.tab[data-tab="companies"]');
+      if (companiesTab) companiesTab.click();
+      setTimeout(() => openDetail(e.data.companyId), 100);
+    }
+
+    if (e.data.type === 'map-create-campaign') {
+      const ids = e.data.companyIds || [];
+      if (ids.length === 0) return;
+      try {
+        // Create a new campaign
+        const res = await fetch('/api/campaigns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: `Map Campaign — ${ids.length} accounts (${new Date().toLocaleDateString()})` }),
+        });
+        const data = await res.json();
+        if (!data.id) { toast('Failed to create campaign', 'error'); return; }
+
+        // Add all companies as recipients
+        await fetch(`/api/campaigns/${data.id}/recipients`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: ids }),
+        });
+
+        toast(`Campaign created with ${ids.length} accounts`);
+
+        // Switch to Campaigns tab
+        const campTab = document.querySelector('.tab[data-tab="campaigns"]');
+        if (campTab) campTab.click();
+      } catch (err) {
+        toast('Failed to create campaign: ' + err.message, 'error');
+      }
+    }
+  });
+}
+
 function initTeamStats() {
   $('#team-stats-range')?.addEventListener('change', loadTeamStats);
   // Load on dashboard if admin
   setTimeout(loadTeamStats, 500);
 }
 
-document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); initMandateBindings(); initNewFeatures(); initDealPopupBindings(); initAdvisorBindings(); initTeamStats(); });
+document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); initMandateBindings(); initNewFeatures(); initDealPopupBindings(); initAdvisorBindings(); initTeamStats(); initMapMessages(); });
