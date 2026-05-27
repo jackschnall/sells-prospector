@@ -8543,6 +8543,19 @@ function initMapMessages() {
       setTimeout(() => openDetail(e.data.companyId), 100);
     }
 
+    if (e.data.type === 'map-add-to-queue') {
+      const id = e.data.companyId;
+      const name = e.data.companyName || 'Company';
+      if (!id) return;
+      // Pin to queue so it appears at the top on next load
+      if (!state.queuePins.includes(id)) {
+        state.queuePins.push(id);
+      }
+      toast(`${name} added to call queue`);
+      // If queue tab is active, reload it
+      if ($('#tab-queue')?.classList.contains('active')) loadQueue();
+    }
+
     if (e.data.type === 'map-create-campaign') {
       const ids = e.data.companyIds || [];
       if (ids.length === 0) return;

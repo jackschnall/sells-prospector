@@ -3147,20 +3147,33 @@ function CrmDetailPanel({ account, onClose }) {
         )}
       </div>
 
-      {/* Open in CRM button */}
-      <button
-        onClick={() => {
-          // Message parent CRM to open this company
-          if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ type: 'map-open-company', companyId: account.id }, '*');
-          }
-        }}
-        style={{
-          marginTop: 20, width: '100%', padding: '10px 0', background: 'var(--sells-blue, #102772)',
-          color: '#fff', border: 'none', borderRadius: 6, fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
-        }}>
-        Open in CRM
-      </button>
+      {/* Action buttons */}
+      <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <button
+          onClick={() => {
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: 'map-add-to-queue', companyId: account.id, companyName: account.name }, '*');
+            }
+          }}
+          style={{
+            width: '100%', padding: '10px 0', background: 'var(--sells-gold, #EFB64E)',
+            color: 'var(--sells-blue, #102772)', border: 'none', borderRadius: 6, fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
+          }}>
+          + Add to Call Queue
+        </button>
+        <button
+          onClick={() => {
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: 'map-open-company', companyId: account.id }, '*');
+            }
+          }}
+          style={{
+            width: '100%', padding: '10px 0', background: 'var(--sells-blue, #102772)',
+            color: '#fff', border: 'none', borderRadius: 6, fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
+          }}>
+          Open in CRM
+        </button>
+      </div>
     </div>
   );
 }
