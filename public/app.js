@@ -4461,7 +4461,7 @@ function renderInbox() {
       ? `<div class="inbox-transcript">${escapeHtml(c.transcript)}</div>`
       : hasVm ? `<div class="inbox-transcript dim">Transcribing...</div>` : '';
     const vmPlayer = hasVm
-      ? `<audio controls preload="none" class="inbox-audio" src="${escapeHtml(c.voicemail_url)}.mp3"></audio>`
+      ? `<audio controls preload="none" class="inbox-audio" src="/api/recordings/${escapeHtml(c.id)}.mp3"></audio>`
       : '';
     const callbackBtn = c.from_number
       ? `<button type="button" class="btn-ghost btn-xs inbox-callback" data-number="${escapeHtml(c.from_number)}" data-company="${escapeHtml(c.company_id || '')}">Call back</button>`

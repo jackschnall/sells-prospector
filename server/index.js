@@ -2692,6 +2692,41 @@ app.get('/api/companies/warm', requireUser, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// TWILIO RECORDING PROXY — serves recordings without exposing credentials
+// ═══════════════════════════════════════════════════════════════════════════
+
+app.get('/api/recordings/:callLogId.mp3', async (req, res) => {
+  try {
+    const call = await getCallLog(req.params.callLogId);
+    if (!call) return res.status(404).send('Not found');
+    const url = call.voicemail_url || call.recording_url;
+    if (!url) return res.status(404).send('No recording');
+
+    const recordingUrl = url.endsWith('.mp3') ? url : url + '.mp3';
+    const sid = process.env.TWILIO_ACCOUNT_SID;
+    const token = process.env.TWILIO_AUTH_TOKEN;
+
+    if (!sid || !token) return res.status(503).send('Twilio not configured');
+
+    const auth = Buffer.from(`${sid}:${token}`).toString('base64');
+    const upstream = await fetch(recordingUrl, {
+      headers: { Authorization: `Basic ${auth}` },
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!upstream.ok) return res.status(upstream.status).send('Recording fetch failed');
+
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Cache-Control', 'private, max-age=3600');
+    const buffer = await upstream.arrayBuffer();
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    console.error('[recordings] proxy error:', err.message);
+    res.status(500).send('Error fetching recording');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ADVISOR NETWORK ROUTES
 // ═══════════════════════════════════════════════════════════════════════════
 
