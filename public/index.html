@@ -79,6 +79,7 @@
           <button type="button" class="tab" data-tab="campaigns" role="tab" data-requires-user="1" hidden>Campaigns</button>
           <button type="button" class="tab" data-tab="reports" role="tab" data-requires-user="1" hidden>Buyside Reports</button>
           <button type="button" class="tab" data-tab="documents" role="tab" data-requires-user="1" hidden>Documents</button>
+          <button type="button" class="tab" data-tab="map" role="tab">Map</button>
           <button type="button" class="tab" data-tab="markets" role="tab">Markets</button>
           <button type="button" class="tab" data-tab="agent" role="tab">Agent</button>
           <button type="button" class="tab" data-tab="export" role="tab">Export</button>
@@ -319,6 +320,11 @@
               <div class="empty-sub">Add advisors from the Advisors tab or run research via Claude Code.</div>
             </div>
           </div>
+        </div>
+
+        <!-- MAP TAB -->
+        <div id="tab-map" class="tab-panel">
+          <iframe id="map-iframe" src="/map.html" style="width:100%;height:calc(100vh - 80px);border:none;border-radius:8px"></iframe>
         </div>
 
         <!-- MARKETS TAB -->
