@@ -833,6 +833,13 @@ function renderDetail(data) {
     dNameEl.appendChild(wb);
   }
   $('#d-sub').textContent = loc || '—';
+  const addrEl = $('#d-address');
+  if (addrEl) {
+    // Show full address if it has a street number, otherwise hide
+    const addr = c.address || '';
+    addrEl.textContent = (addr && /\d/.test(addr) && addr.length > 10) ? addr : '';
+    addrEl.hidden = !addrEl.textContent;
+  }
   $('#d-tier').textContent = tierLabel(c.tier);
   $('#d-tier').className = `detail-tier ${tierClass(c.tier)}`;
   $('#d-summary').textContent = c.summary || 'No research summary yet.';
