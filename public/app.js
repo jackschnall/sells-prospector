@@ -8435,4 +8435,103 @@ function initAdvisorBindings() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); initMandateBindings(); initNewFeatures(); initDealPopupBindings(); initAdvisorBindings(); });
+// ═══════════════════════════════════════════════════════════════════════════
+// TEAM ACTIVITY STATS (admin only)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadTeamStats() {
+  const section = $('#team-stats-section');
+  if (!section) return;
+  // Only show for admin
+  if (!state.user || state.user.role !== 'admin') { section.hidden = true; return; }
+  section.hidden = false;
+
+  const range = $('#team-stats-range')?.value || 'today';
+  const host = $('#team-stats-table');
+  if (!host) return;
+
+  try {
+    const res = await fetch(`/api/admin/team-stats?range=${range}`);
+    if (!res.ok) { host.innerHTML = '<div class="dash-empty">Failed to load stats.</div>'; return; }
+    const data = await res.json();
+    const stats = data.stats || [];
+
+    if (stats.length === 0) {
+      host.innerHTML = '<div class="dash-empty">No team members found.</div>';
+      return;
+    }
+
+    // Compute totals
+    const totals = { outbound_calls: 0, inbound_calls: 0, total_talk_min: 0, sms_sent: 0, emails_sent: 0, receptive_count: 0, meetings_booked: 0 };
+    stats.forEach(s => {
+      totals.outbound_calls += s.outbound_calls;
+      totals.inbound_calls += s.inbound_calls;
+      totals.total_talk_min += s.total_talk_min;
+      totals.sms_sent += s.sms_sent;
+      totals.emails_sent += s.emails_sent;
+      totals.receptive_count += s.receptive_count;
+      totals.meetings_booked += s.meetings_booked;
+    });
+
+    host.innerHTML = `
+      <table class="team-stats-tbl">
+        <thead>
+          <tr>
+            <th>Rep</th>
+            <th>Outbound Calls</th>
+            <th>Inbound Calls</th>
+            <th>Talk Time</th>
+            <th>SMS Sent</th>
+            <th>Emails Sent</th>
+            <th>Receptive</th>
+            <th>Meetings</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${stats.map(s => `
+            <tr>
+              <td class="team-stats-name">${escapeHtml(s.user_name)}</td>
+              <td>${s.outbound_calls}</td>
+              <td>${s.inbound_calls}</td>
+              <td>${formatTalkTime(s.total_talk_sec)}</td>
+              <td>${s.sms_sent}</td>
+              <td>${s.emails_sent}</td>
+              <td>${s.receptive_count}</td>
+              <td>${s.meetings_booked}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+        <tfoot>
+          <tr class="team-stats-total">
+            <td>Total</td>
+            <td>${totals.outbound_calls}</td>
+            <td>${totals.inbound_calls}</td>
+            <td>${totals.total_talk_min}m</td>
+            <td>${totals.sms_sent}</td>
+            <td>${totals.emails_sent}</td>
+            <td>${totals.receptive_count}</td>
+            <td>${totals.meetings_booked}</td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
+  } catch {
+    host.innerHTML = '<div class="dash-empty">Error loading team stats.</div>';
+  }
+}
+
+function formatTalkTime(sec) {
+  if (!sec) return '0m';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function initTeamStats() {
+  $('#team-stats-range')?.addEventListener('change', loadTeamStats);
+  // Load on dashboard if admin
+  setTimeout(loadTeamStats, 500);
+}
+
+document.addEventListener('DOMContentLoaded', () => { init(); initGlobalSearch(); initMandateBindings(); initNewFeatures(); initDealPopupBindings(); initAdvisorBindings(); initTeamStats(); });

@@ -117,6 +117,7 @@ const {
   listOwnerAdvisorLinks,
   getAdvisorQueue,
   geocodeCompany,
+  getTeamStats,
   recomputeAllRelationshipScores,
   listCallLogsByAdvisor,
   listAdvisorMessages,
@@ -2701,6 +2702,21 @@ app.get('/api/companies/warm', requireUser, async (req, res) => {
     "SELECT id, name, city, state, owner, score, tier, warm_until FROM companies WHERE warm_until > NOW() AND deleted_at IS NULL ORDER BY warm_until DESC"
   );
   res.json({ companies: rows });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ADMIN — team activity stats
+// ═══════════════════════════════════════════════════════════════════════════
+
+app.get('/api/admin/team-stats', requireUser, async (req, res) => {
+  if (req.currentUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const range = req.query.range || 'today';
+  try {
+    const stats = await getTeamStats(range);
+    res.json({ stats, range });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

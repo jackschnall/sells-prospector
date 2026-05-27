@@ -5674,6 +5674,19 @@ body.detail-fullscreen { overflow: hidden; }
 
 .advisor-subpanel { padding-top: 4px; }
 .contacts-subpanel { padding-top: 4px; }
+
+/* Team Activity Stats table */
+.team-stats-tbl { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.team-stats-tbl th {
+  text-align: left; padding: 8px 12px; font-size: 0.7rem;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted, #7a7a72); border-bottom: 2px solid var(--card-border, #ddd);
+}
+.team-stats-tbl td { padding: 10px 12px; border-bottom: 1px solid var(--card-border, #eee); }
+.team-stats-tbl td:not(:first-child), .team-stats-tbl th:not(:first-child) { text-align: center; }
+.team-stats-name { font-weight: 600; color: var(--fg-1, #102772); }
+.team-stats-total { font-weight: 700; background: var(--sells-gray-050, #f7f6f0); }
+.team-stats-total td { border-top: 2px solid var(--card-border, #ddd); }
 .queue-row-lastby { font-size: 0.7rem; color: var(--gold-dark, #997a1e); margin-top: 2px; }
 
 .advisors-header { padding: 16px 0; }

@@ -1583,6 +1583,85 @@ async function recomputeAllRelationshipScores() {
   return updated;
 }
 
+// ─── Admin Team Stats ────────────────────────────────────────────────────────
+
+async function getTeamStats(range = 'today') {
+  let callRange = '', actRange = '', msgRange = '';
+  if (range === 'today') {
+    callRange = `AND cl.called_at >= date_trunc('day', NOW())`;
+    actRange = `AND a.created_at >= date_trunc('day', NOW())`;
+    msgRange = `AND m.created_at >= date_trunc('day', NOW())`;
+  } else if (range === 'week') {
+    callRange = `AND cl.called_at >= date_trunc('week', NOW())`;
+    actRange = `AND a.created_at >= date_trunc('week', NOW())`;
+    msgRange = `AND m.created_at >= date_trunc('week', NOW())`;
+  } else if (range === 'month') {
+    callRange = `AND cl.called_at >= date_trunc('month', NOW())`;
+    actRange = `AND a.created_at >= date_trunc('month', NOW())`;
+    msgRange = `AND m.created_at >= date_trunc('month', NOW())`;
+  }
+
+  // Call stats per user
+  const callStats = await query(`
+    SELECT u.id AS user_id, u.name AS user_name,
+      COUNT(cl.id)::int AS total_calls,
+      COUNT(cl.id) FILTER (WHERE cl.direction = 'outbound')::int AS outbound_calls,
+      COUNT(cl.id) FILTER (WHERE cl.direction = 'inbound')::int AS inbound_calls,
+      COALESCE(SUM(COALESCE(cl.duration_sec, 0)), 0)::int AS total_talk_sec,
+      COUNT(cl.id) FILTER (WHERE cl.sentiment = 'Receptive')::int AS receptive_count,
+      COUNT(cl.id) FILTER (WHERE cl.sentiment = 'Callback Requested')::int AS callback_count,
+      COUNT(cl.id) FILTER (WHERE cl.sentiment = 'Not Interested')::int AS not_interested_count,
+      COUNT(cl.id) FILTER (WHERE cl.scheduling_detected = TRUE)::int AS meetings_booked
+    FROM users u
+    LEFT JOIN call_logs cl ON cl.user_id = u.id ${callRange}
+    WHERE u.disabled = FALSE
+    GROUP BY u.id, u.name
+    ORDER BY u.name
+  `);
+
+  // SMS stats per user
+  const smsStats = await query(`
+    SELECT u.id AS user_id,
+      COUNT(m.id) FILTER (WHERE m.direction = 'outbound')::int AS sms_sent,
+      COUNT(m.id) FILTER (WHERE m.direction = 'inbound')::int AS sms_received
+    FROM users u
+    LEFT JOIN messages m ON m.user_id = u.id ${msgRange}
+    WHERE u.disabled = FALSE
+    GROUP BY u.id
+  `);
+
+  // Email stats per user (from activities table)
+  const emailStats = await query(`
+    SELECT u.id AS user_id,
+      COUNT(a.id) FILTER (WHERE a.type = 'email')::int AS emails_sent
+    FROM users u
+    LEFT JOIN activities a ON a.user_id = u.id ${actRange}
+    WHERE u.disabled = FALSE
+    GROUP BY u.id
+  `);
+
+  // Merge all stats per user
+  const smsMap = {}; for (const r of smsStats) smsMap[r.user_id] = r;
+  const emailMap = {}; for (const r of emailStats) emailMap[r.user_id] = r;
+
+  return callStats.map(c => ({
+    user_id: c.user_id,
+    user_name: c.user_name,
+    outbound_calls: c.outbound_calls,
+    inbound_calls: c.inbound_calls,
+    total_calls: c.total_calls,
+    total_talk_sec: c.total_talk_sec,
+    total_talk_min: Math.round(c.total_talk_sec / 60),
+    receptive_count: c.receptive_count,
+    callback_count: c.callback_count,
+    not_interested_count: c.not_interested_count,
+    meetings_booked: c.meetings_booked,
+    sms_sent: smsMap[c.user_id]?.sms_sent || 0,
+    sms_received: smsMap[c.user_id]?.sms_received || 0,
+    emails_sent: emailMap[c.user_id]?.emails_sent || 0,
+  }));
+}
+
 // ─── Advisor Call Logs, Messages, Notes ──────────────────────────────────────
 
 async function listCallLogsByAdvisor(advisorId, { limit = 100 } = {}) {
@@ -1748,6 +1827,7 @@ module.exports = {
   getAdvisorQueue,
   recomputeAllRelationshipScores,
   geocodeCompany,
+  getTeamStats,
   listCallLogsByAdvisor,
   listAdvisorMessages,
   addAdvisorNote,
