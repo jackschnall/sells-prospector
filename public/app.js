@@ -835,10 +835,24 @@ function renderDetail(data) {
   $('#d-sub').textContent = loc || '—';
   const addrEl = $('#d-address');
   if (addrEl) {
-    // Show full address if it has a street number, otherwise hide
     const addr = c.address || '';
     addrEl.textContent = (addr && /\d/.test(addr) && addr.length > 10) ? addr : '';
     addrEl.hidden = !addrEl.textContent;
+  }
+  // Last contacted by — fetch from most recent call log
+  const lastByEl = $('#d-last-contacted-by');
+  if (lastByEl) {
+    lastByEl.textContent = '';
+    lastByEl.hidden = true;
+    fetch(`/api/companies/${c.id}/calls`).then(r => r.json()).then(data => {
+      const calls = data.calls || [];
+      if (calls.length > 0) {
+        const last = calls[0];
+        const who = last.user_name || 'Unknown';
+        lastByEl.textContent = `Last contacted by ${who} ${timeAgo(last.called_at)}`;
+        lastByEl.hidden = false;
+      }
+    }).catch(() => {});
   }
   $('#d-tier').textContent = tierLabel(c.tier);
   $('#d-tier').className = `detail-tier ${tierClass(c.tier)}`;
@@ -2191,10 +2205,25 @@ async function dismissOldestDebrief() {
 }
 
 // ---------- Call Queue ----------
+// Auto-refresh company queue every 60s when the tab is active
+let _queueAutoRefresh = null;
+function startQueueAutoRefresh() {
+  stopQueueAutoRefresh();
+  _queueAutoRefresh = setInterval(() => {
+    if ($('#tab-queue')?.classList.contains('active') && !state.twilioActiveCall) {
+      loadQueue();
+    }
+  }, 60000);
+}
+function stopQueueAutoRefresh() {
+  if (_queueAutoRefresh) { clearInterval(_queueAutoRefresh); _queueAutoRefresh = null; }
+}
+
 async function loadQueue() {
   const list = $('#queue-list');
   if (!list) return;
   list.innerHTML = '<div class="queue-empty">Loading queue…</div>';
+  startQueueAutoRefresh();
   try {
     const pins = state.queuePins.join(',');
     const qs = pins ? `?pins=${encodeURIComponent(pins)}` : '';
@@ -2247,6 +2276,7 @@ function renderQueue(data) {
             <div class="queue-row-name">${escapeHtml(r.name)}${r.warm_until && new Date(r.warm_until) > new Date() ? '<span class="warm-badge" title="Engaged — opened email or had positive call">🔥</span>' : ''}</div>
             <div class="queue-row-meta">${escapeHtml(meta)}</div>
             <div class="queue-row-reason">${escapeHtml(r.reason || '')}</div>
+            ${r.last_call?.user_name ? `<div class="queue-row-lastby">Last: ${escapeHtml(r.last_call.user_name)} ${r.last_call.called_at ? timeAgo(r.last_call.called_at) : ''}</div>` : ''}
           </div>
           <div class="queue-row-actions">
             <button type="button" class="queue-skip-btn" data-skip="${escapeHtml(r.id)}">Skip</button>
@@ -7241,10 +7271,22 @@ function renderAdvisorPipeline() {
 
 // ─── Advisor Call Queue (subtab) ─────────────────────────────────────────
 
+// Auto-refresh advisor queue every 60s when the subtab is active
+let _advQueueAutoRefresh = null;
+function startAdvQueueAutoRefresh() {
+  if (_advQueueAutoRefresh) clearInterval(_advQueueAutoRefresh);
+  _advQueueAutoRefresh = setInterval(() => {
+    if (!$('#advisor-sub-advisor-call-queue')?.hidden && !advisorState.twilioActiveCall) {
+      loadAdvisorCallQueue();
+    }
+  }, 60000);
+}
+
 async function loadAdvisorCallQueue() {
   const list = $('#adv-queue-list');
   if (!list) return;
   list.innerHTML = '<div class="queue-empty">Loading queue&hellip;</div>';
+  startAdvQueueAutoRefresh();
   try {
     const res = await fetch('/api/advisors/queue');
     const data = await res.json();
@@ -7282,6 +7324,7 @@ function renderAdvisorCallQueue() {
           </div>
           <div class="queue-row-meta">${escapeHtml(meta)}</div>
           ${a.next_action ? `<div class="queue-row-reason">Next: ${escapeHtml(a.next_action)}</div>` : ''}
+          ${a.last_contact_date ? `<div class="queue-row-lastby">Last contact: ${timeAgo(a.last_contact_date)}${a.last_contact_channel ? ' via ' + escapeHtml(a.last_contact_channel) : ''}</div>` : ''}
         </div>
         <div class="queue-row-actions">
           <button type="button" class="queue-skip-btn" data-skip="${a.id}">Skip</button>

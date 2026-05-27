@@ -1442,6 +1442,7 @@ async function listOwnerAdvisorLinks(prospectId) {
 
 async function getAdvisorQueue(cooldownDays = 3) {
   // Configurable cooldown: skip advisors contacted within last N days
+  // Checks BOTH advisor_contacts AND call_logs (cross-user) for cooldown
   // Priority: overdue actions first, then weighted score (relationship_score * 0.4 + fit_score * 0.6)
   // Excludes: declined, dormant, identified (not yet researched), recently contacted
   return query(
@@ -1449,11 +1450,13 @@ async function getAdvisorQueue(cooldownDays = 3) {
        ac.next_action,
        ac.next_action_date,
        ac.last_contact_at,
+       lc.last_called_at,
+       lc.last_call_user_name,
        COALESCE(a.relationship_score, 0) * 0.4 + COALESCE(a.fit_score, 0) * 0.6 AS priority_score,
        CASE
          WHEN ac.next_action_date IS NOT NULL AND ac.next_action_date <= NOW() THEN 0
          WHEN ac.next_action_date IS NOT NULL AND ac.next_action_date <= NOW() + INTERVAL '1 day' THEN 1
-         WHEN a.last_contact_date IS NULL THEN 2
+         WHEN a.last_contact_date IS NULL AND lc.last_called_at IS NULL THEN 2
          ELSE 3
        END AS urgency_bucket
      FROM advisors a
@@ -1463,10 +1466,25 @@ async function getAdvisorQueue(cooldownDays = 3) {
        WHERE advisor_id = a.id
        ORDER BY created_at DESC LIMIT 1
      ) ac ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT cl.called_at AS last_called_at, u.name AS last_call_user_name
+       FROM call_logs cl
+       LEFT JOIN users u ON u.id = cl.user_id
+       WHERE cl.advisor_id = a.id
+       ORDER BY cl.called_at DESC LIMIT 1
+     ) lc ON TRUE
      WHERE a.deleted_at IS NULL
        AND a.relationship_stage NOT IN ('declined', 'dormant', 'identified')
        AND a.status = 'done'
-       AND (a.last_contact_date IS NULL OR a.last_contact_date < NOW() - INTERVAL '1 day' * $1)
+       -- Cross-user cooldown: check both advisor_contacts AND call_logs
+       AND (
+         (a.last_contact_date IS NULL AND lc.last_called_at IS NULL)
+         OR (
+           (a.last_contact_date IS NULL OR a.last_contact_date < NOW() - INTERVAL '1 day' * $1)
+           AND (lc.last_called_at IS NULL OR lc.last_called_at < NOW() - INTERVAL '1 day' * $1)
+         )
+         OR ac.next_action_date IS NOT NULL
+       )
      ORDER BY
        urgency_bucket ASC,
        priority_score DESC NULLS LAST,

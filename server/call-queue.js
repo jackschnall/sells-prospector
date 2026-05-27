@@ -80,15 +80,18 @@ async function buildQueue(user, opts = {}) {
   // We also left-join the SOONEST upcoming manual calendar event (today or overdue).
   const sql = `
     WITH last_call AS (
-      SELECT DISTINCT ON (company_id)
-        company_id,
-        id            AS last_call_id,
-        called_at     AS last_called_at,
-        sentiment     AS last_sentiment,
-        status        AS last_status,
-        debrief_status AS last_debrief_status
-      FROM call_logs
-      ORDER BY company_id, called_at DESC NULLS LAST
+      SELECT DISTINCT ON (cl2.company_id)
+        cl2.company_id,
+        cl2.id            AS last_call_id,
+        cl2.called_at     AS last_called_at,
+        cl2.sentiment     AS last_sentiment,
+        cl2.status        AS last_status,
+        cl2.debrief_status AS last_debrief_status,
+        cl2.user_id       AS last_call_user_id,
+        u2.name           AS last_call_user_name
+      FROM call_logs cl2
+      LEFT JOIN users u2 ON u2.id = cl2.user_id
+      ORDER BY cl2.company_id, cl2.called_at DESC NULLS LAST
     ),
     pending_callback AS (
       SELECT DISTINCT ON (cl.company_id)
@@ -121,6 +124,7 @@ async function buildQueue(user, opts = {}) {
       c.score, c.tier, c.outreach_angle, c.pipeline_stage, c.warm_until, COALESCE(c.industry, 'Plumbing') AS industry,
       lc.last_call_id, lc.last_called_at, lc.last_sentiment,
       lc.last_status, lc.last_debrief_status,
+      lc.last_call_user_id, lc.last_call_user_name,
       pc.scheduled_callback_date, pc.call_log_id AS callback_call_log_id,
       pe.event_id, pe.event_starts_at, pe.event_title, pe.event_description, pe.event_source
     FROM companies c
@@ -177,6 +181,7 @@ async function buildQueue(user, opts = {}) {
             sentiment: row.last_sentiment,
             status: row.last_status,
             debrief_status: row.last_debrief_status,
+            user_name: row.last_call_user_name || null,
           }
         : null,
       callback: row.scheduled_callback_date

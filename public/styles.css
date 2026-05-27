@@ -5674,6 +5674,7 @@ body.detail-fullscreen { overflow: hidden; }
 
 .advisor-subpanel { padding-top: 4px; }
 .contacts-subpanel { padding-top: 4px; }
+.queue-row-lastby { font-size: 0.7rem; color: var(--gold-dark, #997a1e); margin-top: 2px; }
 
 .advisors-header { padding: 16px 0; }
 .advisors-title-row { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
