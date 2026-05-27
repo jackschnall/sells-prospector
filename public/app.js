@@ -748,6 +748,18 @@ function bindTabs() {
       if (target === 'actlog') loadActivityLog();
       if (target === 'inbox') loadInbox();
       if (target === 'advisors') loadAdvisors();
+      // Clean up advisor state when leaving advisors tab
+      if (target !== 'advisors') {
+        graphState.dragging = false;
+        const tooltip = $('#graph-tooltip');
+        if (tooltip) tooltip.style.display = 'none';
+        // Close advisor detail panel if open
+        const advPanel = $('#advisor-detail-panel');
+        if (advPanel && !advPanel.hidden) {
+          advPanel.hidden = true;
+          document.body.classList.remove('detail-open');
+        }
+      }
       // Disable tier filter sidebar on tabs where it doesn't apply
       const tierApplies = ['companies', 'dashboard', 'pipeline'].includes(target);
       const sidebar = $('#tier-filters');
@@ -7902,16 +7914,20 @@ function bindGraphEvents() {
     graphState.dragStartY = e.clientY - graphState.panY;
     container.style.cursor = 'grabbing';
   });
-  window.addEventListener('mousemove', (e) => {
-    if (graphState.dragging) {
-      graphState.panX = e.clientX - graphState.dragStartX;
-      graphState.panY = e.clientY - graphState.dragStartY;
-      drawGraph();
-    }
-  });
-  window.addEventListener('mouseup', () => {
-    if (graphState.dragging) { graphState.dragging = false; container.style.cursor = 'grab'; }
-  });
+  if (!window._graphMoveHandler) {
+    window._graphMoveHandler = (e) => {
+      if (graphState.dragging) {
+        graphState.panX = e.clientX - graphState.dragStartX;
+        graphState.panY = e.clientY - graphState.dragStartY;
+        drawGraph();
+      }
+    };
+    window._graphUpHandler = () => {
+      if (graphState.dragging) { graphState.dragging = false; container.style.cursor = 'grab'; }
+    };
+    window.addEventListener('mousemove', window._graphMoveHandler);
+    window.addEventListener('mouseup', window._graphUpHandler);
+  }
 
   // Hover + tooltip
   canvas.addEventListener('mousemove', (e) => {
