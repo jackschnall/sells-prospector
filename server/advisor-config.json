@@ -52,7 +52,6 @@
     "ria",
     "attorney",
     "lender",
-    "coach",
     "insurance",
     "fractional_cfo"
   ],
@@ -78,11 +77,6 @@
       "requiredCredentials": [],
       "preferredCredentials": [],
       "searchKeywords": ["SBA", "commercial lending", "acquisition financing", "small business"]
-    },
-    "coach": {
-      "requiredCredentials": [],
-      "preferredCredentials": ["EOS Implementer", "Vistage Chair", "Scaling Up"],
-      "searchKeywords": ["EOS", "Vistage", "peer group", "business coaching", "Nexstar"]
     },
     "insurance": {
       "requiredCredentials": [],

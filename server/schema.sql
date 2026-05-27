@@ -493,7 +493,7 @@ CREATE TABLE IF NOT EXISTS call_targets (
 -- ────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS advisors (
   id TEXT PRIMARY KEY,
-  type TEXT CHECK(type IN ('cpa','ria','attorney','lender','coach','insurance','fractional_cfo')),
+  type TEXT CHECK(type IN ('cpa','ria','attorney','lender','insurance','fractional_cfo')),
   name TEXT NOT NULL,
   firm TEXT,
   title TEXT,
@@ -517,6 +517,13 @@ CREATE TABLE IF NOT EXISTS advisors (
   last_researched_at TIMESTAMPTZ,
   deleted_at TIMESTAMPTZ
 );
+
+-- Drop and recreate type constraint (removed 'coach')
+DO $$ BEGIN
+  ALTER TABLE advisors DROP CONSTRAINT IF EXISTS advisors_type_check;
+  ALTER TABLE advisors ADD CONSTRAINT advisors_type_check CHECK(type IN ('cpa','ria','attorney','lender','insurance','fractional_cfo'));
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_advisors_type ON advisors(type);
 CREATE INDEX IF NOT EXISTS idx_advisors_state ON advisors(state);

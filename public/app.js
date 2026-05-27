@@ -7036,7 +7036,7 @@ const advisorState = {
 
 const ADVISOR_TYPE_LABELS = {
   cpa: 'CPA', ria: 'RIA / Wealth', attorney: 'Attorney', lender: 'Lender',
-  coach: 'Coach', insurance: 'Insurance', fractional_cfo: 'Fractional CFO',
+  insurance: 'Insurance', fractional_cfo: 'Fractional CFO',
 };
 
 const ADVISOR_STAGE_LABELS = {
@@ -7740,7 +7740,7 @@ function drawGraph() {
 
   const { nodes, edges } = getVisibleGraph();
   const nodeMap = graphState.nodeMap;
-  const TYPE_COLORS = { cpa: '#2563eb', ria: '#7c3aed', attorney: '#0891b2', lender: '#059669', coach: '#d97706', insurance: '#dc2626', fractional_cfo: '#4f46e5' };
+  const TYPE_COLORS = { cpa: '#2563eb', ria: '#7c3aed', attorney: '#0891b2', lender: '#059669', insurance: '#dc2626', fractional_cfo: '#4f46e5' };
   const hovered = graphState.hoveredNode;
 
   // Draw edges
