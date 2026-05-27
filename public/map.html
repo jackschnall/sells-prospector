@@ -3148,32 +3148,91 @@ function CrmDetailPanel({ account, onClose }) {
       </div>
 
       {/* Action buttons */}
-      <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button
-          onClick={() => {
-            if (window.parent && window.parent !== window) {
-              window.parent.postMessage({ type: 'map-add-to-queue', companyId: account.id, companyName: account.name }, '*');
-            }
-          }}
-          style={{
-            width: '100%', padding: '10px 0', background: 'var(--sells-gold, #EFB64E)',
-            color: 'var(--sells-blue, #102772)', border: 'none', borderRadius: 6, fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
-          }}>
-          + Add to Call Queue
-        </button>
-        <button
-          onClick={() => {
-            if (window.parent && window.parent !== window) {
-              window.parent.postMessage({ type: 'map-open-company', companyId: account.id }, '*');
-            }
-          }}
-          style={{
-            width: '100%', padding: '10px 0', background: 'var(--sells-blue, #102772)',
-            color: '#fff', border: 'none', borderRadius: 6, fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
-          }}>
-          Open in CRM
-        </button>
-      </div>
+      <MapActionButtons account={account} />
+    </div>
+  );
+}
+
+function MapActionButtons({ account }) {
+  const [showMandates, setShowMandates] = React.useState(false);
+  const [mandates, setMandates] = React.useState([]);
+  const [addedToQueue, setAddedToQueue] = React.useState(false);
+  const [addedToMandate, setAddedToMandate] = React.useState(null);
+
+  const loadMandates = React.useCallback(async () => {
+    if (mandates.length > 0) { setShowMandates(!showMandates); return; }
+    try {
+      const res = await fetch('/api/mandates');
+      const data = await res.json();
+      setMandates(data.mandates || []);
+      setShowMandates(true);
+    } catch { setMandates([]); setShowMandates(true); }
+  }, [mandates, showMandates]);
+
+  const addToQueue = () => {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'map-add-to-queue', companyId: account.id, companyName: account.name }, '*');
+    }
+    setAddedToQueue(true);
+    setTimeout(() => setAddedToQueue(false), 2000);
+  };
+
+  const addToMandate = async (mandateId, mandateName) => {
+    try {
+      await fetch(`/api/mandates/${mandateId}/companies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_ids: [account.id] }),
+      });
+      setAddedToMandate(mandateName);
+      setTimeout(() => setAddedToMandate(null), 2000);
+    } catch {}
+  };
+
+  return (
+    <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <button onClick={() => { addToQueue(); loadMandates(); }}
+        style={{
+          width: '100%', padding: '10px 0', background: addedToQueue ? '#22c55e' : 'var(--sells-gold, #EFB64E)',
+          color: addedToQueue ? '#fff' : 'var(--sells-blue, #102772)', border: 'none', borderRadius: 6,
+          fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s',
+        }}>
+        {addedToQueue ? '✓ Added to Queue' : '+ Add to Call Queue'}
+      </button>
+
+      {showMandates && (
+        <div style={{ background: '#f8f7f2', borderRadius: 6, padding: 10, border: '1px solid #e5e2d8' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+            Also add to a mandate:
+          </div>
+          {mandates.length === 0 ? (
+            <div style={{ fontSize: '0.8rem', color: '#aaa', fontStyle: 'italic' }}>No mandates found</div>
+          ) : mandates.map(m => (
+            <button key={m.id} onClick={() => addToMandate(m.id, m.buyer_name)}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', marginBottom: 4,
+                background: addedToMandate === m.buyer_name ? '#22c55e' : '#fff', color: addedToMandate === m.buyer_name ? '#fff' : '#333',
+                border: '1px solid #ddd', borderRadius: 4, fontSize: '0.82rem', cursor: 'pointer', transition: 'background 0.2s',
+              }}>
+              {addedToMandate === m.buyer_name ? '✓ Added' : m.buyer_name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <button
+        onClick={() => {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'map-open-company', companyId: account.id }, '*');
+          }
+        }}
+        style={{
+          width: '100%', padding: '10px 0', background: 'var(--sells-blue, #102772)',
+          color: '#fff', border: 'none', borderRadius: 6, fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
+        }}>
+        Open in CRM
+      </button>
+    </div>
     </div>
   );
 }
