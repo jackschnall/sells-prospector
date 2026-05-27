@@ -2692,6 +2692,35 @@ app.get('/api/companies/warm', requireUser, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// MAP — lean account projection for the interactive client map
+// ═══════════════════════════════════════════════════════════════════════════
+
+app.get('/api/map/accounts', async (req, res) => {
+  try {
+    const rows = await query(
+      `SELECT id, name, city, state, address, lat, lng, score, tier,
+              pipeline_stage, industry, owner, updated_at
+       FROM companies
+       WHERE deleted_at IS NULL AND lat IS NOT NULL AND lng IS NOT NULL`
+    );
+    const accounts = rows.map(r => ({
+      name: r.name,
+      city: r.city || '',
+      state: r.state || '',
+      street: r.address || '',
+      lat: Number(r.lat),
+      lng: Number(r.lng),
+      lastActivity: r.updated_at ? r.updated_at.toISOString().slice(0, 10) : null,
+      countyFips: null,
+      county: null,
+    }));
+    res.json(accounts);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // TWILIO RECORDING PROXY — serves recordings without exposing credentials
 // ═══════════════════════════════════════════════════════════════════════════
 

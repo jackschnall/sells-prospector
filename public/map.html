@@ -1474,8 +1474,16 @@ body {
 
   <!-- Data -->
   <script id="data">
-// Data will be loaded from CRM API
+// Load live data from CRM API
 window.ACCOUNTS = [];
+fetch('/api/map/accounts')
+  .then(r => r.json())
+  .then(data => {
+    window.ACCOUNTS = data;
+    // Re-render if the app has already mounted
+    if (window.__MAP_RERENDER) window.__MAP_RERENDER();
+  })
+  .catch(() => { console.warn('Failed to load map accounts from CRM API'); });
 </script>
   <script id="county-stats">
 // Auto-generated county/state denominators (Census PopEst 2023 + CBP 2022).
@@ -3046,6 +3054,8 @@ function topCityForCounty(fips, accounts) {
 // ------------------------------------------------------------------
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
+// Allow data script to trigger re-render after async fetch
+window.__MAP_RERENDER = () => root.render(<App />);
 
 </script>
 </body>
