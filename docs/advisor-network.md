@@ -4,14 +4,16 @@ The advisor network is a parallel pipeline to the business-owner prospecting eng
 
 ## Architecture
 
-### New Files
+### Files
 
 | File | Purpose |
 |------|---------|
 | `server/advisor-config.json` | Tunable scoring weights, tier thresholds, per-type filters |
-| `server/advisor-prompts.js` | System/user prompt templates per advisor type |
+| `server/advisor-prompts.js` | Reads markdown prompt templates, composes per-type prompts |
+| `server/prompts/advisor_research_base.md` | Base research prompt (shared schema, hunger signals, graduation year tracking) |
+| `server/prompts/advisor_research_{type}.md` | 7 type-specific overlays (CPA, RIA, attorney, lender, coach, insurance, fractional_cfo) |
 | `server/advisor-research.js` | Research engine (identify + dossier generation via Claude API) |
-| `server/advisor-scoring.js` | Fit score + relationship score computation |
+| `server/advisor-scoring.js` | Fit score, hunger score, relationship score computation |
 
 ### Database Tables
 
@@ -19,135 +21,152 @@ The advisor network is a parallel pipeline to the business-owner prospecting eng
 |-------|---------|
 | `advisors` | Core advisor records with dossier, scores, stage |
 | `advisor_credentials` | Certifications (CPA, CEPA, JD, etc.) with earned year |
-| `advisor_contacts` | Interaction log (calls, emails, meetings) |
+| `advisor_contacts` | Interaction log (calls, emails, meetings) with next action tracking |
 | `referrals` | Bidirectional referral tracking (advisor<->owner) |
 | `advisor_owner_links` | Suspected/confirmed advisor-owner relationships |
+| `call_logs` (advisor_id col) | Phone calls with advisors (Twilio recording, transcription, AI summary) |
+| `messages` (advisor_id col) | SMS messages with advisors |
+| `notes` (advisor_id col) | Free-form notes per advisor |
 
-### API Endpoints
+## CRM UI
+
+### Advisors Tab (3 subtabs)
+
+**Network** — List view or pipeline kanban view of all advisors
+- Filter by type, relationship stage, search
+- Pipeline view uses drag-and-drop kanban cards (same style as main deal pipeline)
+- "Auto-Link Owners" button cross-references advisors with company prospects by geography
+- "+ Add Advisor" button for manual entry
+
+**Call Queue** — Twilio-integrated call queue for advisor follow-ups
+- Left panel: ranked list sorted by urgency (overdue actions first) then priority score (0.4 × relationship_score + 0.6 × fit_score)
+- Right panel: full advisor detail with contact info, outreach angles, call history
+- Call button with timer, mute, recording, Whisper transcription, Claude AI summary
+- Debrief modal after each call (same flow as company call queue)
+- SMS compose + thread view
+- Notes with timestamp insertion
+- Manual contact logging for non-call interactions (email, LinkedIn, in-person)
+- Configurable cooldown (default 3 days between contacts)
+
+**Referral Graph** — Visual force-directed network graph
+- Diamond nodes = advisors (colored by type)
+- Circle nodes = companies (gold)
+- Edges: gray = suspected links, green = confirmed/inbound referrals, blue = outbound referrals
+- Legend in top-left corner
+
+### Contacts Tab — Advisor Contacts subtab
+- Separate subtab showing all advisors as contacts
+- Type badge, fit score, stage pill, phone/email/LinkedIn
+- Click firm name to navigate to advisor detail
+- Search and type filter
+
+## API Endpoints
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/advisors` | List with filters (type, state, score range, stage, search) |
 | GET | `/api/advisors/stats` | Aggregate stats |
-| GET | `/api/advisors/queue` | Daily follow-up queue |
-| GET | `/api/advisors/:id` | Full detail + credentials + contacts + referrals + links |
-| POST | `/api/advisors/research` | Identify + research batch (async) |
-| POST | `/api/advisors/:id/re-research` | Refresh a single advisor's dossier |
+| GET | `/api/advisors/queue?cooldown=3` | Daily follow-up queue (configurable cooldown in days) |
+| GET | `/api/advisors/:id` | Full dossier + credentials + contacts + referrals + links |
+| POST | `/api/advisors` | Manually add an advisor |
+| POST | `/api/advisors/research` | Identify + research batch (type + geo) — used by Claude Code |
+| POST | `/api/advisors/:id/re-research` | Refresh a single advisor's dossier — used by Claude Code |
+| PUT | `/api/advisors/:id/stage` | Update relationship stage |
+| DELETE | `/api/advisors/:id` | Soft-delete |
 | POST | `/api/advisors/:id/contacts` | Log a contact interaction |
 | POST | `/api/advisors/:id/referrals` | Log a referral |
-| PUT | `/api/advisors/:id/stage` | Update relationship stage |
+| PUT | `/api/referrals/:id` | Update referral status/value |
 | GET/POST | `/api/advisors/:id/owner-links` | View/create advisor-owner links |
 | GET | `/api/referrals/graph` | Full bidirectional referral graph data |
 | GET | `/api/companies/:id/advisors` | Advisors linked to a company |
+| POST | `/api/advisors/auto-link` | Cross-reference all advisors with company prospects by geography |
+| POST | `/api/advisors/recompute-scores` | Manually trigger relationship score recompute |
+| POST | `/api/advisors/:id/call` | Initiate a Twilio call to an advisor |
+| GET | `/api/advisors/:id/calls` | Call history with an advisor |
+| GET/POST | `/api/advisors/:id/messages` | SMS thread with an advisor |
+| POST | `/api/advisors/:id/sms` | Send SMS to an advisor |
+| GET/POST | `/api/advisors/:id/notes` | Notes for an advisor |
 
-## Running Research Jobs
+## Research (via Claude Code)
 
-### Via the UI
+Research is done from Claude Code, NOT from the web UI. The workflow:
 
-1. Go to the **Advisors** tab
-2. Click **+ Identify Advisors**
-3. Select an advisor type and enter a geography (e.g. "Austin TX")
-4. Click **Start Research**
+1. Claude Code searches for candidates (WebSearch)
+2. Inserts them via `POST /api/advisors` or direct DB insert
+3. Researches each one (WebSearch for dossier data)
+4. Scores using `computeFitScore()` from `advisor-scoring.js`
+5. Updates via `updateAdvisorResearch()` in `db.js`
+6. Stores credentials via `insertAdvisorCredential()`
 
-The system will:
-- Use Claude to search for 8-15 matching candidates
-- Insert them into the `advisors` table at `identified` stage
-- Research each candidate in sequence, generating a structured dossier
-- Score each candidate and advance them to `researched` stage
+The research prompts specifically target **early-career advisors** (30-40% of candidates should have graduated within ~8 years) and always look up graduation year as a key hunger signal.
 
-### Via API
+## Scoring
 
-```bash
-curl -X POST http://localhost:3000/api/advisors/research \
-  -H 'Content-Type: application/json' \
-  -d '{"type":"cpa","geo":"Charlotte NC"}'
-```
+### Fit Score (6 categories, configurable in advisor-config.json)
 
-### Re-research a single advisor
-
-```bash
-curl -X POST http://localhost:3000/api/advisors/<id>/re-research
-```
-
-## Scoring Model
-
-### Fit Score (set at research time)
-
-Six weighted categories, configurable in `server/advisor-config.json`:
-
-| Category | Default Weight | What It Measures |
-|----------|---------------|------------------|
-| Profile Fit | 25% | Right credentials, practice focus, advisor type |
+| Category | Weight | What It Measures |
+|----------|--------|------------------|
+| Profile Fit | 25% | Right credentials, practice focus |
 | Hunger Signals | 20% | Career stage, book-building incentive, content output |
 | Client Overlap | 20% | Serves our ICP geography & verticals |
-| Network Strength | 15% | Associations, LinkedIn density, referral partner signals |
-| Reachability | 10% | Email/phone available, active on LinkedIn |
-| Geographic Relevance | 10% | Proximity to our active owner pipeline |
+| Network Strength | 15% | Associations, LinkedIn density, referral signals |
+| Reachability | 10% | Email/phone available, LinkedIn activity |
+| Geographic Relevance | 10% | Proximity to active owner pipeline |
 
 ### Hunger Signals Sub-Weights
 
-The "young and hungry" profile is implemented via sub-weights inside the hunger category:
-
-| Sub-Signal | Default Weight |
-|------------|---------------|
+| Sub-Signal | Weight |
+|------------|--------|
 | Newly Independent | 30% |
-| Career Stage | 25% |
+| Career Stage (early-career/associate/junior get bonus) | 25% |
 | Personal Book Incentive | 15% |
 | Content Output | 15% |
 | Recent Certifications | 10% |
 | Growing Team | 5% |
 
 ### Tier Thresholds
+- **Strong Fit**: >= 7.5
+- **Moderate Fit**: 5.0 - 7.49
+- **Low Fit**: < 5.0
 
-- **Strong Fit**: score >= 7.5
-- **Moderate Fit**: score 5.0-7.49
-- **Low Fit**: score < 5.0
+### Relationship Score (recomputed every 6 hours + on server startup)
 
-### Relationship Score (recomputed continuously)
-
-| Category | Default Weight |
-|----------|---------------|
+| Category | Weight |
+|----------|--------|
 | Referral Activity (both directions) | 50% |
-| Engagement Recency (exponential decay) | 25% |
+| Engagement Recency (exponential decay, 45-day half-life) | 25% |
 | Response Rate | 15% |
 | Connection Density Growth | 10% |
 
-The engagement recency component decays with a configurable half-life (default: 45 days).
+### Daily Queue Priority
+```
+urgency_bucket:
+  0 = overdue action (next_action_date <= now)
+  1 = action due tomorrow
+  2 = never contacted
+  3 = everything else
 
-## Tuning Weights
+priority_score = relationship_score * 0.4 + fit_score * 0.6
 
-Edit `server/advisor-config.json` and restart the server. All weights are read from this file at runtime.
+Sort: urgency_bucket ASC, priority_score DESC
+Cooldown: skip advisors contacted within last N days (default 3)
+```
 
-Key config sections:
-- `fitScoreWeights` — the six top-level categories
-- `hungerSubWeights` — sub-weights within the hunger signal
-- `relationshipScoreWeights` — relationship score categories
-- `relationshipDecay.halfLifeDays` — how fast engagement recency decays
-- `tierThresholds` — cutoffs for strong/moderate/low fit
-- `perTypeFilters` — required/preferred credentials per advisor type
+## Twilio Integration
 
-## Advisor Types
+The advisor call queue uses the same Twilio infrastructure as the company call queue:
 
-| Type | Key | Priority |
-|------|-----|----------|
-| CPA / Accountant | `cpa` | v1 |
-| Wealth Manager / RIA | `ria` | v1 |
-| Estate / M&A Attorney | `attorney` | v1 |
-| Community Bank Lender | `lender` | v1 |
-| Business Coach | `coach` | v2 |
-| Insurance Broker | `insurance` | v2 |
-| Fractional CFO | `fractional_cfo` | v2 |
+- **Mock mode**: works without Twilio credentials (simulated calls with mock transcripts)
+- **Live mode**: browser Voice SDK places calls, Twilio records, Whisper transcribes
+- **AI analysis**: advisor-specific prompt extracts `relationship_signals` (interested in partnership, compliance concerns, referral potential) instead of company `key_info`
+- **Debrief**: same modal as company calls — sentiment, callback scheduling, structured Q&A
+- **Auto-logging**: calls are automatically logged as advisor contacts after debrief
 
-## Relationship Stages
+## Advisor-Owner Links
 
-`identified` -> `researched` -> `queued` -> `outreach_sent` -> `first_response` -> `intro_meeting_booked` -> `intro_meeting_done` -> `active_partner`
+The `advisor_owner_links` table bridges the advisor network with the existing owner pipeline:
 
-Terminal states: `dormant`, `declined`
-
-## UI Views
-
-- **List View**: Sortable table of all advisors with type badges, fit scores, stages
-- **Pipeline View**: Kanban board organized by relationship stage
-- **Daily Queue**: Advisors due for follow-up, sorted by score and overdue actions
-- **Detail Panel**: Full dossier with score breakdown, outreach angles, contact log, referral log, linked owners
-- **Identify Advisors Modal**: Form to kick off research jobs by type and geography
+- **Auto-population**: `POST /api/advisors/auto-link` cross-references all advisors against company prospects by city/state
+- **Confidence scores**: same-city matches get 0.7 confidence, same-state gets 0.4
+- **Link types**: `suspected` → `confirmed_serves` → `jointly_engaged`
+- **Visible in**: advisor detail panel (linked owners section) and company detail panel (linked advisors)

@@ -7588,6 +7588,190 @@ async function loadAdvisorQueueCallHistory(advisorId) {
   } catch { section.hidden = true; }
 }
 
+// ─── Referral Graph Visualization ────────────────────────────────────────
+
+async function loadReferralGraph() {
+  const canvas = $('#referral-graph-canvas');
+  if (!canvas) return;
+  const container = $('#referral-graph-container');
+  canvas.width = container.clientWidth * 2;
+  canvas.height = container.clientHeight * 2;
+  canvas.style.width = container.clientWidth + 'px';
+  canvas.style.height = container.clientHeight + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+
+  // Fetch data
+  let advisors = [], links = [], referrals = [];
+  try {
+    const [aRes, gRes] = await Promise.all([
+      fetch('/api/advisors?sort=fit_score_desc'),
+      fetch('/api/referrals/graph'),
+    ]);
+    const aData = await aRes.json();
+    const gData = await gRes.json();
+    advisors = (aData.advisors || []).filter(a => a.status === 'done');
+    referrals = gData.referrals || [];
+
+    // Also fetch advisor-owner links
+    const linkPromises = advisors.slice(0, 30).map(a => fetch(`/api/advisors/${a.id}/owner-links`).then(r => r.json()));
+    const linkResults = await Promise.all(linkPromises);
+    linkResults.forEach(r => { if (r.links) links.push(...r.links); });
+  } catch { return; }
+
+  if (advisors.length === 0) {
+    ctx.fillStyle = '#999'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('No advisors with completed research yet.', W / 2, H / 2);
+    return;
+  }
+
+  // Build nodes: advisors + linked companies
+  const nodes = [];
+  const nodeMap = {};
+
+  advisors.forEach((a, i) => {
+    const node = { id: a.id, label: a.name, type: 'advisor', advisorType: a.type, score: a.fit_score, x: 0, y: 0, vx: 0, vy: 0 };
+    nodes.push(node);
+    nodeMap[a.id] = node;
+  });
+
+  // Add company nodes from links
+  const companyIds = new Set();
+  links.forEach(l => {
+    if (!companyIds.has(l.prospect_id)) {
+      companyIds.add(l.prospect_id);
+      const node = { id: l.prospect_id, label: l.prospect_name || 'Company', type: 'company', city: l.prospect_city, state: l.prospect_state, x: 0, y: 0, vx: 0, vy: 0 };
+      nodes.push(node);
+      nodeMap[l.prospect_id] = node;
+    }
+  });
+
+  // Build edges
+  const edges = [];
+  links.forEach(l => {
+    if (nodeMap[l.advisor_id] && nodeMap[l.prospect_id]) {
+      edges.push({ from: l.advisor_id, to: l.prospect_id, type: l.link_type, confidence: l.confidence });
+    }
+  });
+  referrals.forEach(r => {
+    if (nodeMap[r.advisor_id] && nodeMap[r.prospect_id]) {
+      edges.push({ from: r.advisor_id, to: r.prospect_id, type: 'referral', direction: r.direction });
+    }
+  });
+
+  // Initial positions — circle layout
+  nodes.forEach((n, i) => {
+    const angle = (i / nodes.length) * Math.PI * 2;
+    const radius = Math.min(W, H) * 0.35;
+    n.x = W / 2 + Math.cos(angle) * radius * (0.7 + Math.random() * 0.3);
+    n.y = H / 2 + Math.sin(angle) * radius * (0.7 + Math.random() * 0.3);
+  });
+
+  // Simple force simulation (60 iterations)
+  for (let iter = 0; iter < 60; iter++) {
+    // Repulsion between all nodes
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        let dx = nodes[j].x - nodes[i].x;
+        let dy = nodes[j].y - nodes[i].y;
+        let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        let force = 800 / (dist * dist);
+        nodes[i].vx -= (dx / dist) * force;
+        nodes[i].vy -= (dy / dist) * force;
+        nodes[j].vx += (dx / dist) * force;
+        nodes[j].vy += (dy / dist) * force;
+      }
+    }
+    // Attraction along edges
+    edges.forEach(e => {
+      const a = nodeMap[e.from], b = nodeMap[e.to];
+      if (!a || !b) return;
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      let force = (dist - 120) * 0.01;
+      a.vx += (dx / dist) * force;
+      a.vy += (dy / dist) * force;
+      b.vx -= (dx / dist) * force;
+      b.vy -= (dy / dist) * force;
+    });
+    // Center gravity
+    nodes.forEach(n => {
+      n.vx += (W / 2 - n.x) * 0.005;
+      n.vy += (H / 2 - n.y) * 0.005;
+      n.vx *= 0.8; n.vy *= 0.8;
+      n.x += n.vx; n.y += n.vy;
+      n.x = Math.max(30, Math.min(W - 30, n.x));
+      n.y = Math.max(30, Math.min(H - 30, n.y));
+    });
+  }
+
+  // Draw
+  ctx.clearRect(0, 0, W, H);
+
+  // Edges
+  edges.forEach(e => {
+    const a = nodeMap[e.from], b = nodeMap[e.to];
+    if (!a || !b) return;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    if (e.type === 'referral') {
+      ctx.strokeStyle = e.direction === 'inbound' ? '#22c55e' : '#3b82f6';
+      ctx.lineWidth = 2;
+    } else if (e.type === 'confirmed_serves') {
+      ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 1.5;
+    } else {
+      ctx.strokeStyle = 'rgba(200,180,130,0.3)'; ctx.lineWidth = 1;
+    }
+    ctx.stroke();
+  });
+
+  // Nodes
+  const TYPE_COLORS = { cpa: '#2563eb', ria: '#7c3aed', attorney: '#0891b2', lender: '#059669', coach: '#d97706', insurance: '#dc2626', fractional_cfo: '#4f46e5' };
+
+  nodes.forEach(n => {
+    ctx.beginPath();
+    if (n.type === 'advisor') {
+      // Diamond shape for advisors
+      const s = 8;
+      ctx.moveTo(n.x, n.y - s); ctx.lineTo(n.x + s, n.y); ctx.lineTo(n.x, n.y + s); ctx.lineTo(n.x - s, n.y);
+      ctx.closePath();
+      ctx.fillStyle = TYPE_COLORS[n.advisorType] || '#6b7280';
+    } else {
+      // Circle for companies
+      ctx.arc(n.x, n.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = '#c9a227';
+    }
+    ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // Label
+    ctx.fillStyle = '#333'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(n.label.length > 18 ? n.label.slice(0, 16) + '...' : n.label, n.x, n.y + 16);
+  });
+
+  // Legend
+  ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
+  let ly = 20;
+  ctx.fillStyle = '#666'; ctx.fillText('Legend:', 12, ly); ly += 16;
+  // Diamond
+  ctx.fillStyle = '#7c3aed'; ctx.beginPath();
+  ctx.moveTo(12, ly - 4); ctx.lineTo(16, ly); ctx.lineTo(12, ly + 4); ctx.lineTo(8, ly); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#333'; ctx.fillText('Advisor', 22, ly + 3); ly += 16;
+  // Circle
+  ctx.fillStyle = '#c9a227'; ctx.beginPath(); ctx.arc(12, ly, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#333'; ctx.fillText('Company', 22, ly + 3); ly += 16;
+  // Lines
+  ctx.strokeStyle = 'rgba(200,180,130,0.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(6, ly); ctx.lineTo(18, ly); ctx.stroke();
+  ctx.fillStyle = '#333'; ctx.fillText('Suspected link', 22, ly + 3); ly += 16;
+  ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(6, ly); ctx.lineTo(18, ly); ctx.stroke();
+  ctx.fillStyle = '#333'; ctx.fillText('Confirmed / Inbound referral', 22, ly + 3); ly += 16;
+  ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(6, ly); ctx.lineTo(18, ly); ctx.stroke();
+  ctx.fillStyle = '#333'; ctx.fillText('Outbound referral', 22, ly + 3);
+}
+
 async function openAdvisorDetail(id) {
   advisorState.activeAdvisorId = id;
   try {
@@ -7898,6 +8082,7 @@ function initAdvisorBindings() {
       $$('#tab-advisors .pipeline-subtab').forEach(t => t.classList.toggle('active', t === tab));
       $$('.advisor-subpanel').forEach(p => p.hidden = p.id !== `advisor-sub-${target}`);
       if (target === 'advisor-call-queue') loadAdvisorCallQueue();
+      if (target === 'referral-graph') loadReferralGraph();
     });
   });
 
@@ -7987,6 +8172,16 @@ function initAdvisorBindings() {
 
   // Close detail
   $('#advisor-detail-close')?.addEventListener('click', closeAdvisorDetail);
+
+  // Auto-link advisors to owners by geography
+  $('#btn-auto-link')?.addEventListener('click', async () => {
+    toast('Auto-linking advisors to owners by geography...');
+    try {
+      const res = await fetch('/api/advisors/auto-link', { method: 'POST' });
+      const data = await res.json();
+      toast(`Created ${data.links_created || 0} suspected advisor-owner links`);
+    } catch { toast('Auto-link failed', 'error'); }
+  });
 
   // Add advisor modal (manual entry)
   $('#btn-add-advisor-manual')?.addEventListener('click', () => {

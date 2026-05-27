@@ -1328,6 +1328,7 @@
           <div class="pipeline-subtabs">
             <button type="button" class="pipeline-subtab active" data-subtab="network">Network</button>
             <button type="button" class="pipeline-subtab" data-subtab="advisor-call-queue">Call Queue</button>
+            <button type="button" class="pipeline-subtab" data-subtab="referral-graph">Referral Graph</button>
           </div>
 
           <!-- SUBTAB: Network -->
@@ -1368,7 +1369,8 @@
                     <option value="pipeline">Pipeline View</option>
                   </select>
                 </div>
-                <button type="button" class="btn-primary btn-sm" id="btn-add-advisor-manual">+ Add Advisor</button>
+                <button type="button" class="btn-ghost btn-sm" id="btn-auto-link" title="Cross-reference advisors with company prospects by geography">Auto-Link Owners</button>
+              <button type="button" class="btn-primary btn-sm" id="btn-add-advisor-manual">+ Add Advisor</button>
               </div>
             </div>
             <div id="advisor-list" class="advisor-list"></div>
@@ -1518,6 +1520,17 @@
             </div>
           </div>
         </div>
+
+          <!-- SUBTAB: Referral Graph -->
+          <div id="advisor-sub-referral-graph" class="advisor-subpanel" hidden>
+            <div class="advisors-header" style="padding-bottom:8px">
+              <div class="advisors-title">Referral Graph</div>
+              <div class="queue-sub">Visual network of advisor-owner connections. Nodes = advisors (diamonds) and companies (circles). Edges = suspected/confirmed links and referrals.</div>
+            </div>
+            <div id="referral-graph-container" style="width:100%;height:600px;border:1px solid var(--card-border);border-radius:8px;overflow:hidden;position:relative;background:var(--bg, #f9f6f0)">
+              <canvas id="referral-graph-canvas" style="width:100%;height:100%"></canvas>
+            </div>
+          </div>
 
         <!-- ADVISOR DETAIL PANEL (slides in from right) -->
         <div id="advisor-detail-panel" class="detail-panel" hidden>

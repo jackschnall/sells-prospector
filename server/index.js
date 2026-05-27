@@ -12,6 +12,8 @@ const {
   initSchema,
   pool,
   execute,
+  query,
+  queryOne,
   listCompanies,
   getCompany,
   insertCompany,
@@ -114,6 +116,7 @@ const {
   listAdvisorOwnerLinks,
   listOwnerAdvisorLinks,
   getAdvisorQueue,
+  recomputeAllRelationshipScores,
   listCallLogsByAdvisor,
   listAdvisorMessages,
   addAdvisorNote,
@@ -2727,7 +2730,8 @@ app.get('/api/advisors/stats', async (req, res) => {
 // --- Advisor queue (daily follow-up) ---
 app.get('/api/advisors/queue', async (req, res) => {
   try {
-    const queue = await getAdvisorQueue();
+    const cooldown = parseInt(req.query.cooldown) || 3;
+    const queue = await getAdvisorQueue(cooldown);
     res.json({ advisors: queue });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3095,6 +3099,55 @@ app.post('/api/advisors/:id/notes', async (req, res) => {
   }
 });
 
+// --- Recompute all advisor relationship scores (with decay) ---
+app.post('/api/advisors/recompute-scores', async (req, res) => {
+  try {
+    const count = await recomputeAllRelationshipScores();
+    res.json({ ok: true, updated: count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Auto-populate suspected advisor-owner links by geography ---
+app.post('/api/advisors/auto-link', async (req, res) => {
+  try {
+    const advisors = await listAdvisors({ sort: 'fit_score_desc' });
+    let created = 0;
+    for (const a of advisors) {
+      if (!a.city && !a.state) continue;
+      // Find companies in the same state (or city if available)
+      const where = ['c.deleted_at IS NULL', 'c.status = \'done\''];
+      const params = [];
+      let idx = 1;
+      if (a.state) { where.push(`UPPER(c.state) = $${idx++}`); params.push(a.state.toUpperCase()); }
+      if (a.city) { where.push(`LOWER(c.city) = $${idx++}`); params.push(a.city.toLowerCase()); }
+      const companies = await query(
+        `SELECT c.id, c.name, c.city, c.state FROM companies c WHERE ${where.join(' AND ')} LIMIT 50`, params
+      );
+      for (const c of companies) {
+        // Check if link already exists
+        const existing = await queryOne(
+          'SELECT id FROM advisor_owner_links WHERE advisor_id = $1 AND prospect_id = $2', [a.id, c.id]
+        );
+        if (existing) continue;
+        const confidence = a.city && c.city && a.city.toLowerCase() === c.city.toLowerCase() ? 0.7 : 0.4;
+        const evidence = a.city && c.city && a.city.toLowerCase() === c.city.toLowerCase()
+          ? `Same city (${a.city}, ${a.state}) — ${a.type} may serve this business owner`
+          : `Same state (${a.state}) — geographic proximity`;
+        await insertAdvisorOwnerLink({
+          advisor_id: a.id, prospect_id: c.id, link_type: 'suspected',
+          evidence, confidence,
+        });
+        created++;
+      }
+    }
+    res.json({ ok: true, links_created: created });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Advisors linked to a company ---
 app.get('/api/companies/:id/advisors', async (req, res) => {
   try {
@@ -3116,6 +3169,22 @@ async function startServer() {
     console.log('Seeding market intelligence data…');
     await marketIntel.seedMarkets();
   }
+
+  // Recompute advisor relationship scores on startup and every 6 hours
+  try {
+    const count = await recomputeAllRelationshipScores();
+    console.log(`[advisors] Recomputed ${count} relationship scores on startup`);
+  } catch (err) {
+    console.warn('[advisors] Relationship score recompute failed on startup:', err.message);
+  }
+  setInterval(async () => {
+    try {
+      const count = await recomputeAllRelationshipScores();
+      console.log(`[advisors] Recomputed ${count} relationship scores (scheduled)`);
+    } catch (err) {
+      console.warn('[advisors] Scheduled score recompute failed:', err.message);
+    }
+  }, 6 * 60 * 60 * 1000); // every 6 hours
 
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {

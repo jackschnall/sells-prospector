@@ -1440,26 +1440,73 @@ async function listOwnerAdvisorLinks(prospectId) {
 
 // ─── Advisor Queue (daily follow-up) ────────────────────────────────────────
 
-async function getAdvisorQueue() {
+async function getAdvisorQueue(cooldownDays = 3) {
+  // Configurable cooldown: skip advisors contacted within last N days
+  // Priority: overdue actions first, then weighted score (relationship_score * 0.4 + fit_score * 0.6)
+  // Excludes: declined, dormant, identified (not yet researched), recently contacted
   return query(
-    `SELECT a.*, ac.next_action, ac.next_action_date
+    `SELECT a.*,
+       ac.next_action,
+       ac.next_action_date,
+       ac.last_contact_at,
+       COALESCE(a.relationship_score, 0) * 0.4 + COALESCE(a.fit_score, 0) * 0.6 AS priority_score,
+       CASE
+         WHEN ac.next_action_date IS NOT NULL AND ac.next_action_date <= NOW() THEN 0
+         WHEN ac.next_action_date IS NOT NULL AND ac.next_action_date <= NOW() + INTERVAL '1 day' THEN 1
+         WHEN a.last_contact_date IS NULL THEN 2
+         ELSE 3
+       END AS urgency_bucket
      FROM advisors a
      LEFT JOIN LATERAL (
-       SELECT next_action, next_action_date
+       SELECT next_action, next_action_date, contact_date AS last_contact_at
        FROM advisor_contacts
-       WHERE advisor_id = a.id AND next_action IS NOT NULL
+       WHERE advisor_id = a.id
        ORDER BY created_at DESC LIMIT 1
      ) ac ON TRUE
      WHERE a.deleted_at IS NULL
-       AND a.relationship_stage NOT IN ('declined', 'dormant')
+       AND a.relationship_stage NOT IN ('declined', 'dormant', 'identified')
        AND a.status = 'done'
-       AND (ac.next_action_date IS NULL OR ac.next_action_date <= NOW() + INTERVAL '1 day')
+       AND (a.last_contact_date IS NULL OR a.last_contact_date < NOW() - INTERVAL '1 day' * $1)
      ORDER BY
-       CASE WHEN ac.next_action_date IS NOT NULL AND ac.next_action_date <= NOW() THEN 0 ELSE 1 END,
-       a.relationship_score DESC NULLS LAST,
+       urgency_bucket ASC,
+       priority_score DESC NULLS LAST,
        a.fit_score DESC NULLS LAST
-     LIMIT 50`
+     LIMIT 50`,
+    [cooldownDays]
   );
+}
+
+// ─── Advisor Relationship Score Recompute ────────────────────────────────────
+
+async function recomputeAllRelationshipScores() {
+  const { computeRelationshipScore } = require('./advisor-scoring');
+  const advisors = await query('SELECT id, last_contact_date FROM advisors WHERE deleted_at IS NULL AND status = \'done\'');
+  let updated = 0;
+  for (const a of advisors) {
+    // Count referrals
+    const refRow = await queryOne(
+      `SELECT COUNT(*) FILTER (WHERE direction = 'inbound') AS refs_in,
+              COUNT(*) FILTER (WHERE direction = 'outbound') AS refs_out
+       FROM referrals WHERE advisor_id = $1`, [a.id]
+    );
+    // Count contacts (outreach sent vs responses)
+    const contactRow = await queryOne(
+      `SELECT COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE direction = 'inbound') AS responses
+       FROM advisor_contacts WHERE advisor_id = $1`, [a.id]
+    );
+    const data = {
+      referrals_in: Number(refRow?.refs_in || 0),
+      referrals_out: Number(refRow?.refs_out || 0),
+      last_contact_date: a.last_contact_date,
+      outreach_count: Number(contactRow?.total || 0),
+      responses_count: Number(contactRow?.responses || 0),
+    };
+    const { score } = computeRelationshipScore(data);
+    await execute('UPDATE advisors SET relationship_score = $1, updated_at = NOW() WHERE id = $2', [score, a.id]);
+    updated++;
+  }
+  return updated;
 }
 
 // ─── Advisor Call Logs, Messages, Notes ──────────────────────────────────────
@@ -1625,6 +1672,7 @@ module.exports = {
   listAdvisorOwnerLinks,
   listOwnerAdvisorLinks,
   getAdvisorQueue,
+  recomputeAllRelationshipScores,
   listCallLogsByAdvisor,
   listAdvisorMessages,
   addAdvisorNote,
