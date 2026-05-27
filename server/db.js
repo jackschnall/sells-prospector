@@ -48,6 +48,62 @@ function normalizeName(name) {
     .trim();
 }
 
+// ─── Geocoding (standard for all companies) ─────────────────────────────
+
+/**
+ * Geocode a company's address to lat/lng and county FIPS.
+ * Uses Google Geocoding API for lat/lng, FCC Area API for county.
+ * Call after inserting/updating a company's address.
+ */
+async function geocodeCompany(companyId) {
+  const company = await queryOne('SELECT id, address, city, state, lat, lng FROM companies WHERE id = $1', [companyId]);
+  if (!company) return;
+
+  // Skip if already geocoded
+  if (company.lat && company.lng) {
+    // Still need county?
+    const hasFips = await queryOne('SELECT county_fips FROM companies WHERE id = $1 AND county_fips IS NOT NULL', [companyId]);
+    if (hasFips) return;
+  }
+
+  const addr = company.address || [company.city, company.state].filter(Boolean).join(', ');
+  if (!addr) return;
+
+  try {
+    // Step 1: Geocode to lat/lng (Google)
+    let lat = company.lat ? Number(company.lat) : null;
+    let lng = company.lng ? Number(company.lng) : null;
+
+    if (!lat || !lng) {
+      const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+      if (!apiKey) return;
+      const geoRes = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addr)}&key=${apiKey}`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      const geoData = await geoRes.json();
+      if (geoData.status === 'OK' && geoData.results?.[0]) {
+        lat = geoData.results[0].geometry.location.lat;
+        lng = geoData.results[0].geometry.location.lng;
+        await execute('UPDATE companies SET lat = $1, lng = $2 WHERE id = $3', [lat, lng, companyId]);
+      } else return;
+    }
+
+    // Step 2: Get county FIPS (FCC — free, no key)
+    const fccRes = await fetch(
+      `https://geo.fcc.gov/api/census/area?lat=${lat}&lon=${lng}&format=json`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    const fccData = await fccRes.json();
+    if (fccData.results?.[0]) {
+      await execute('UPDATE companies SET county_fips = $1, county_name = $2 WHERE id = $3',
+        [fccData.results[0].county_fips, fccData.results[0].county_name, companyId]);
+    }
+  } catch (err) {
+    console.warn(`[geocode] Failed for company ${companyId}:`, err.message);
+  }
+}
+
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 async function getConfig(key, fallback = null) {
@@ -1691,6 +1747,7 @@ module.exports = {
   listOwnerAdvisorLinks,
   getAdvisorQueue,
   recomputeAllRelationshipScores,
+  geocodeCompany,
   listCallLogsByAdvisor,
   listAdvisorMessages,
   addAdvisorNote,

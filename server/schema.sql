@@ -472,6 +472,8 @@ CREATE INDEX IF NOT EXISTS idx_email_tracking_opened ON email_tracking(opened_at
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS warm_until TIMESTAMPTZ;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS lat NUMERIC;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS lng NUMERIC;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS county_fips TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS county_name TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS warm_until TIMESTAMPTZ;
 
 -- ────────────────────────────────────────────────────────────────────────────

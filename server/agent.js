@@ -226,6 +226,12 @@ async function processOne(company, thesis) {
   }
   await updateCompanyResearch(company.id, persistData);
 
+  // Geocode in background if address was populated
+  if (contacts.address) {
+    const { geocodeCompany } = require('./db');
+    geocodeCompany(company.id).catch(() => {});
+  }
+
   const elapsedMs = Date.now() - started;
   return { scored, flags, contacts, enrichedContact, elapsedMs };
 }

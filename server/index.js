@@ -116,6 +116,7 @@ const {
   listAdvisorOwnerLinks,
   listOwnerAdvisorLinks,
   getAdvisorQueue,
+  geocodeCompany,
   recomputeAllRelationshipScores,
   listCallLogsByAdvisor,
   listAdvisorMessages,
@@ -201,10 +202,14 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
 
   let inserted = 0;
+  const insertedIds = [];
   for (const row of rows) {
     try {
       await insertCompany(row);
       inserted++;
+      // Get the ID for geocoding
+      const existing = await queryOne('SELECT id FROM companies WHERE name_key = $1', [normalizeName(row.name)]);
+      if (existing) insertedIds.push(existing.id);
     } catch (err) {
       console.error('Insert error for', row.name, err.message);
     }
@@ -212,6 +217,13 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 
   const known = await sf.getPastedKnownNames();
   if (known.length) await markCrmKnown(known);
+
+  // Geocode new companies in background (fire-and-forget)
+  (async () => {
+    for (const id of insertedIds) {
+      try { await geocodeCompany(id); } catch {}
+    }
+  })();
 
   res.json({
     ok: true,
@@ -2699,7 +2711,7 @@ app.get('/api/map/accounts', async (req, res) => {
   try {
     const rows = await query(
       `SELECT id, name, city, state, address, lat, lng, score, tier,
-              pipeline_stage, industry, owner, updated_at
+              pipeline_stage, industry, owner, updated_at, county_fips, county_name
        FROM companies
        WHERE deleted_at IS NULL AND lat IS NOT NULL AND lng IS NOT NULL`
     );
@@ -2711,8 +2723,8 @@ app.get('/api/map/accounts', async (req, res) => {
       lat: Number(r.lat),
       lng: Number(r.lng),
       lastActivity: r.updated_at ? r.updated_at.toISOString().slice(0, 10) : null,
-      countyFips: null,
-      county: null,
+      countyFips: r.county_fips || null,
+      county: r.county_name || null,
     }));
     res.json(accounts);
   } catch (err) {
