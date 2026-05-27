@@ -200,6 +200,22 @@ async function processOne(company, thesis) {
       }
     : { ...basicContacts, phone_type: 'office' };
 
+  // Hard-stop override: if any hard_stops exist, force score to 1 and tier to pass
+  if (flags.hard_stops && flags.hard_stops.length > 0) {
+    scored.final_score = 1;
+    scored.tier = 'pass';
+  }
+
+  // Also check the owner field for acquisition signals (safety net)
+  const ownerText = (contacts.owner || '').toLowerCase();
+  if (/acquired\s+by|pe[- ]backed|private\s+equity|sold\s+to/.test(ownerText)) {
+    if (!flags.hard_stops.some(f => (f.flag || '').toLowerCase().includes('acqui'))) {
+      flags.hard_stops.push({ flag: 'PE/Strategic acquisition detected', evidence: `Owner: "${contacts.owner}"` });
+    }
+    scored.final_score = 1;
+    scored.tier = 'pass';
+  }
+
   // Persist
   const persistData = {
     status: 'done',
