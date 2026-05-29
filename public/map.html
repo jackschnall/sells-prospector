@@ -2148,10 +2148,7 @@ const OverviewPanel = React.memo(function OverviewPanel({ accounts, stateCounts,
             Click any state on the map for a detailed breakdown, or use a leaderboard row below.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <ExportButton onExport={onExport} />
-          <CreateCampaignButton accounts={accounts} />
-        </div>
+        <ExportButton onExport={onExport} />
       </div>
 
       <div className="panel-body">
@@ -2307,7 +2304,6 @@ const StateDetailPanel = React.memo(function StateDetailPanel({ code, accounts, 
         </div>
         <div className="panel-header__actions">
           <ExportButton onExport={onExport} />
-          <CreateCampaignButton accounts={stateAccounts} />
           <button className="panel-close" onClick={onClose} aria-label="Close state detail">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6 6 18M6 6l12 12" />
@@ -3142,6 +3138,27 @@ function App() {
 
                 {/* Action buttons */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button onClick={() => {
+                    if (reportAccounts.length === 0) return;
+                    const name = prompt('Mandate name (buyer name):');
+                    if (!name || !name.trim()) return;
+                    if (window.parent && window.parent !== window) {
+                      window.parent.postMessage({
+                        type: 'map-create-mandate',
+                        buyerName: name.trim(),
+                        companyIds: reportAccounts.filter(a => a.id).map(a => a.id),
+                        count: reportAccounts.length,
+                        states: [...selectedStates],
+                        filters: reportFilters,
+                      }, '*');
+                    }
+                  }} style={{
+                    padding: '10px 0', background: 'var(--sells-blue, #102772)', color: '#fff',
+                    border: 'none', borderRadius: 6, fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
+                    opacity: reportAccounts.length === 0 ? 0.5 : 1,
+                  }}>
+                    Create Mandate ({reportAccounts.length})
+                  </button>
                   <button onClick={() => {
                     if (reportAccounts.length === 0) return;
                     if (window.parent && window.parent !== window) {

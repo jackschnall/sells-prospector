@@ -8556,6 +8556,43 @@ function initMapMessages() {
       if ($('#tab-queue')?.classList.contains('active')) loadQueue();
     }
 
+    if (e.data.type === 'map-create-mandate') {
+      const ids = e.data.companyIds || [];
+      const buyerName = e.data.buyerName;
+      if (!buyerName || ids.length === 0) return;
+      try {
+        // Create mandate with geographic + filter metadata
+        const createRes = await fetch('/api/mandates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            buyer_name: buyerName,
+            target_geographies: e.data.states || [],
+            target_verticals: e.data.filters?.industry ? [e.data.filters.industry] : [],
+          }),
+        });
+        const createData = await createRes.json();
+        if (!createData.id) { toast('Failed to create mandate', 'error'); return; }
+
+        // Add all companies
+        for (const companyId of ids) {
+          await fetch(`/api/mandates/${createData.id}/companies`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ company_id: companyId }),
+          }).catch(() => {});
+        }
+
+        toast(`Mandate "${buyerName}" created with ${ids.length} companies`);
+
+        // Switch to Buyside Reports tab
+        const reportsTab = document.querySelector('.tab[data-tab="reports"]');
+        if (reportsTab) reportsTab.click();
+      } catch (err) {
+        toast('Failed to create mandate: ' + err.message, 'error');
+      }
+    }
+
     if (e.data.type === 'map-create-campaign') {
       const ids = e.data.companyIds || [];
       if (ids.length === 0) return;
