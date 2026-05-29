@@ -2723,6 +2723,16 @@ app.get('/api/admin/team-stats', requireUser, async (req, res) => {
 // MAP — lean account projection for the interactive client map
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Map MSA data for proximity filtering
+app.get('/api/map/markets', async (req, res) => {
+  try {
+    const rows = await query('SELECT city, state, msa_name, population, score FROM markets ORDER BY population DESC NULLS LAST');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/map/accounts', async (req, res) => {
   try {
     const rows = await query(
@@ -2739,6 +2749,8 @@ app.get('/api/map/accounts', async (req, res) => {
                JOIN users u ON u.id = cl2.user_id
                WHERE cl2.company_id = c.id
                ORDER BY cl2.called_at DESC LIMIT 1) AS last_contacted_by
+       , c.created_at,
+              COALESCE((c.signals_json->'revenue_proxy'->>'score')::numeric, 0) AS revenue_score
        FROM companies c
        WHERE c.deleted_at IS NULL AND c.lat IS NOT NULL AND c.lng IS NOT NULL`
     );
@@ -2753,8 +2765,10 @@ app.get('/api/map/accounts', async (req, res) => {
       lastActivity: r.last_real_activity ? r.last_real_activity.toISOString().slice(0, 10) : null,
       countyFips: r.county_fips || null,
       county: r.county_name || null,
-      // Extra fields for detail panel
+      // Extra fields for detail panel + report mode
       score: r.score ? Number(r.score) : null,
+      revenueScore: r.revenue_score ? Number(r.revenue_score) : 0,
+      createdAt: r.created_at ? r.created_at.toISOString().slice(0, 10) : null,
       tier: r.tier || null,
       pipeline_stage: r.pipeline_stage || 'no_contact',
       industry: r.industry || null,

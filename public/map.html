@@ -2514,7 +2514,14 @@ function App() {
   // Report Mode state
   const [reportMode, setReportMode] = useState(false);
   const [selectedStates, setSelectedStates] = useState(new Set());
-  const [reportFilters, setReportFilters] = useState({ industry: '', tier: '', pipeline: '' });
+  const [reportFilters, setReportFilters] = useState({ industry: '', tier: '', pipeline: '', revenueMin: 0, msa: '' });
+  const [markets, setMarkets] = useState([]);
+  const [timeSliderDate, setTimeSliderDate] = useState(null); // null = show all
+
+  // Load markets for MSA filter
+  useEffect(() => {
+    fetch('/api/map/markets').then(r => r.json()).then(d => setMarkets(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
 
   const allAccounts = window.ACCOUNTS || [];
   const STATE_STATS = window.STATE_STATS || {};
@@ -2558,8 +2565,25 @@ function App() {
     if (reportFilters.pipeline) {
       filtered = filtered.filter(a => a.pipeline_stage === reportFilters.pipeline);
     }
+    if (reportFilters.revenueMin > 0) {
+      filtered = filtered.filter(a => (a.revenueScore || 0) >= reportFilters.revenueMin);
+    }
+    if (reportFilters.msa) {
+      // Filter by MSA city/state match
+      const mkt = markets.find(m => m.msa_name === reportFilters.msa);
+      if (mkt) {
+        const msaState = mkt.state?.toUpperCase();
+        const msaCity = (mkt.city || '').toLowerCase();
+        filtered = filtered.filter(a =>
+          a.state === msaState && (a.city || '').toLowerCase().includes(msaCity)
+        );
+      }
+    }
+    if (timeSliderDate) {
+      filtered = filtered.filter(a => a.createdAt && a.createdAt <= timeSliderDate);
+    }
     return filtered;
-  }, [reportMode, accounts, selectedStates, reportFilters]);
+  }, [reportMode, accounts, selectedStates, reportFilters, markets, timeSliderDate]);
 
   // State counts (filtered)
   const stateCounts = useMemo(() => {
@@ -3073,6 +3097,40 @@ function App() {
                     <option value="loi">LOI</option>
                     <option value="close">Close</option>
                   </select>
+
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#555', marginBottom: 4 }}>Revenue (signal score)</label>
+                  <select value={reportFilters.revenueMin} onChange={e => setReportFilters(f => ({...f, revenueMin: Number(e.target.value)}))}
+                    style={{ width: '100%', padding: '6px 8px', fontSize: '0.85rem', borderRadius: 4, border: '1px solid #ddd', marginBottom: 10 }}>
+                    <option value={0}>Any Revenue</option>
+                    <option value={5}>$5M+ (score ≥ 5)</option>
+                    <option value={6}>$8M+ (score ≥ 6)</option>
+                    <option value={7}>$10M+ (score ≥ 7)</option>
+                    <option value={8}>$25M+ (score ≥ 8)</option>
+                  </select>
+
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#555', marginBottom: 4 }}>Near MSA</label>
+                  <select value={reportFilters.msa} onChange={e => setReportFilters(f => ({...f, msa: e.target.value}))}
+                    style={{ width: '100%', padding: '6px 8px', fontSize: '0.85rem', borderRadius: 4, border: '1px solid #ddd', marginBottom: 10 }}>
+                    <option value="">Any Location</option>
+                    {markets.map(m => (
+                      <option key={m.msa_name} value={m.msa_name}>{m.msa_name} ({m.state}) — {m.population ? (m.population / 1000).toFixed(0) + 'k' : '?'} pop</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Time slider */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                    Time Slider {timeSliderDate && <span style={{ color: 'var(--sells-blue)' }}>— showing through {timeSliderDate}</span>}
+                  </div>
+                  <input type="date" value={timeSliderDate || ''} onChange={e => setTimeSliderDate(e.target.value || null)}
+                    style={{ width: '100%', padding: '6px 8px', fontSize: '0.85rem', borderRadius: 4, border: '1px solid #ddd' }} />
+                  {timeSliderDate && (
+                    <button onClick={() => setTimeSliderDate(null)}
+                      style={{ marginTop: 4, fontSize: '0.75rem', background: 'none', border: 'none', color: 'var(--sells-blue)', cursor: 'pointer', textDecoration: 'underline' }}>
+                      Clear — show all time
+                    </button>
+                  )}
                 </div>
 
                 {/* Results count */}
