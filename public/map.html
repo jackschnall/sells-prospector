@@ -1675,7 +1675,7 @@ function formatDaysAgo(d) {
   return `${(d/365).toFixed(1)}y ago`;
 }
 function activityBand(d) {
-  if (d == null) return 'unknown';
+  if (d == null) return 'nocontact';
   if (d <= 90) return 'hot';
   if (d <= 365) return 'warm';
   return 'cold';
@@ -1767,7 +1767,7 @@ function CreateCampaignButton({ accounts }) {
 // ------------------------------------------------------------------
 // Header
 // ------------------------------------------------------------------
-const Header = React.memo(function Header({ search, onSearch, results, onPickResult, activeRecency, setRecency, recencyCounts }) {
+const Header = React.memo(function Header({ search, onSearch, results, onPickResult, activeRecency, setRecency, recencyCounts, reportMode, setReportMode }) {
   const [focused, setFocused] = useState(false);
   const wrapRef = useRef(null);
 
@@ -1803,7 +1803,21 @@ const Header = React.memo(function Header({ search, onSearch, results, onPickRes
         <button className="filter-chip" aria-pressed={activeRecency === 'cold'} onClick={() => setRecency('cold')}>
           Stale 1y+ <span className="filter-chip__count">{recencyCounts.cold}</span>
         </button>
+        <button className="filter-chip" aria-pressed={activeRecency === 'nocontact'} onClick={() => setRecency('nocontact')}>
+          No Contact <span className="filter-chip__count">{recencyCounts.nocontact}</span>
+        </button>
       </div>
+
+      <button
+        className={'seg__btn' + (reportMode ? ' is-active' : '')}
+        onClick={() => setReportMode(!reportMode)}
+        style={{ marginLeft: 8, padding: '5px 14px', fontSize: '0.82rem', fontWeight: 600,
+          background: reportMode ? 'var(--sells-blue, #102772)' : 'transparent',
+          color: reportMode ? '#fff' : 'var(--sells-gray, #494840)',
+          border: '1px solid ' + (reportMode ? 'var(--sells-blue)' : '#ccc'),
+          borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+        {reportMode ? '✓ Report Mode' : 'Report Mode'}
+      </button>
 
       <div className="app-header__search" ref={wrapRef}>
         <svg className="app-header__search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1838,7 +1852,7 @@ const Header = React.memo(function Header({ search, onSearch, results, onPickRes
 // ------------------------------------------------------------------
 const MAP_W = 975, MAP_H = 610; // matches us-atlas Albers viewBox
 
-const ChoroplethMap = React.memo(function ChoroplethMap({ stateCounts, selectedState, onSelectState, onHoverState, statesGeo, dimEmpty, fillMap, showLabels }) {
+const ChoroplethMap = React.memo(function ChoroplethMap({ stateCounts, selectedState, onSelectState, onHoverState, statesGeo, dimEmpty, fillMap, showLabels, reportMode, selectedStates }) {
   const pathGen = useMemo(() => {
     if (!statesGeo) return null;
     // us-atlas data on jsdelivr ships in raw lat/lng — project to fit our viewBox.
@@ -1868,9 +1882,10 @@ const ChoroplethMap = React.memo(function ChoroplethMap({ stateCounts, selectedS
           const code = FIPS_TO_CODE[String(f.id).padStart(2, '0')];
           const count = stateCounts[code] || 0;
           const isSel = selectedState === code;
+          const isReportSel = reportMode && selectedStates && selectedStates.has(code);
           const isEmpty = !count;
           const isDim = dimEmpty && !count && !isSel;
-          const fill = isSel ? RAMP[4] : (fillMap ? (fillMap[code] || '#F0EFE7') : binColor(count));
+          const fill = isReportSel ? 'var(--sells-gold, #EFB64E)' : isSel ? RAMP[4] : (fillMap ? (fillMap[code] || '#F0EFE7') : binColor(count));
           const classes = [
             'state',
             isEmpty ? 'is-empty' : '',
@@ -2151,6 +2166,7 @@ const OverviewPanel = React.memo(function OverviewPanel({ accounts, stateCounts,
               { key: 'hot',  label: 'Active ≤ 90 days', count: recencyCounts.hot,  color: '#102772' },
               { key: 'warm', label: '90 days – 1 year', count: recencyCounts.warm, color: '#EFB64E' },
               { key: 'cold', label: 'Stale 1 year +',   count: recencyCounts.cold, color: '#B8B8B0' },
+              { key: 'nocontact', label: 'No Contact',  count: recencyCounts.nocontact, color: '#ef4444' },
               { key: 'all',  label: 'All accounts',     count: recencyCounts.all,  color: '#494840' }
             ].map(r => (
               <button
@@ -2264,14 +2280,15 @@ const StateDetailPanel = React.memo(function StateDetailPanel({ code, accounts, 
   }, [visibleAccounts]);
 
   const recency = useMemo(() => {
-    let hot = 0, warm = 0, cold = 0;
+    let hot = 0, warm = 0, cold = 0, nocontact = 0;
     for (const a of visibleAccounts) {
       const b = activityBand(daysAgo(a.lastActivity));
       if (b === 'hot') hot++;
       else if (b === 'warm') warm++;
-      else cold++;
+      else if (b === 'cold') cold++;
+      else nocontact++;
     }
-    return { hot, warm, cold };
+    return { hot, warm, cold, nocontact };
   }, [visibleAccounts]);
 
   const cityCount = grouped.length;
@@ -2494,6 +2511,11 @@ function App() {
   const [placesGeo, setPlacesGeo] = useState(null); // city/place boundaries for the zoomed county
   const placesCache = useRef({});
 
+  // Report Mode state
+  const [reportMode, setReportMode] = useState(false);
+  const [selectedStates, setSelectedStates] = useState(new Set());
+  const [reportFilters, setReportFilters] = useState({ industry: '', tier: '', pipeline: '' });
+
   const allAccounts = window.ACCOUNTS || [];
   const STATE_STATS = window.STATE_STATS || {};
   const COUNTY_STATS = window.COUNTY_STATS || {};
@@ -2509,15 +2531,35 @@ function App() {
 
   // Recency counts (always over full dataset)
   const recencyCounts = useMemo(() => {
-    let hot = 0, warm = 0, cold = 0;
+    let hot = 0, warm = 0, cold = 0, nocontact = 0;
     for (const a of allAccounts) {
       const b = activityBand(daysAgo(a.lastActivity));
       if (b === 'hot') hot++;
       else if (b === 'warm') warm++;
-      else cold++;
+      else if (b === 'cold') cold++;
+      else nocontact++;
     }
-    return { all: allAccounts.length, hot, warm, cold };
+    return { all: allAccounts.length, hot, warm, cold, nocontact };
   }, [allAccounts]);
+
+  // Report mode: filtered accounts based on selected states + criteria
+  const reportAccounts = useMemo(() => {
+    if (!reportMode) return [];
+    let filtered = accounts;
+    if (selectedStates.size > 0) {
+      filtered = filtered.filter(a => selectedStates.has(a.state));
+    }
+    if (reportFilters.industry) {
+      filtered = filtered.filter(a => a.industry === reportFilters.industry);
+    }
+    if (reportFilters.tier) {
+      filtered = filtered.filter(a => a.tier === reportFilters.tier);
+    }
+    if (reportFilters.pipeline) {
+      filtered = filtered.filter(a => a.pipeline_stage === reportFilters.pipeline);
+    }
+    return filtered;
+  }, [reportMode, accounts, selectedStates, reportFilters]);
 
   // State counts (filtered)
   const stateCounts = useMemo(() => {
@@ -2652,10 +2694,20 @@ function App() {
 
   // ------ Handlers ------
   const onSelectState = useCallback((code) => {
-    setSelectedState(code);
-    setSelectedCounty(null);
-    setFocusAccount(null);
-  }, []);
+    if (reportMode) {
+      // In report mode, toggle state in multi-select
+      setSelectedStates(prev => {
+        const next = new Set(prev);
+        if (next.has(code)) next.delete(code);
+        else next.add(code);
+        return next;
+      });
+    } else {
+      setSelectedState(code);
+      setSelectedCounty(null);
+      setFocusAccount(null);
+    }
+  }, [reportMode]);
 
   const onClosePanel = useCallback(() => {
     setSelectedState(null);
@@ -2743,6 +2795,8 @@ function App() {
         activeRecency={recency}
         setRecency={setRecency}
         recencyCounts={recencyCounts}
+        reportMode={reportMode}
+        setReportMode={setReportMode}
       />
 
       <div className="app-main">
@@ -2883,6 +2937,8 @@ function App() {
                 dimEmpty={!!selectedState}
                 fillMap={metricView ? metricView.fillById : null}
                 showLabels={metric === 'count'}
+                reportMode={reportMode}
+                selectedStates={selectedStates}
               />
             )}
 
@@ -2945,7 +3001,138 @@ function App() {
         </div>
 
         <aside className="side-panel">
-          {selectedState ? (
+          {reportMode ? (
+            <div className="panel">
+              <div className="panel-header">
+                <div>
+                  <div className="panel-header__eyebrow" style={{ color: 'var(--sells-blue)' }}>Report Mode</div>
+                  <h2 className="panel-header__title">Build a Target List</h2>
+                  <div className="panel-header__sub">
+                    Click states on the map to select them. Set criteria below to filter accounts.
+                  </div>
+                </div>
+              </div>
+
+              <div className="panel-body" style={{ padding: '16px 20px' }}>
+                {/* Selected states */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                    Selected States {selectedStates.size > 0 && <span style={{ color: 'var(--sells-blue)' }}>({selectedStates.size})</span>}
+                  </div>
+                  {selectedStates.size === 0 ? (
+                    <div style={{ fontSize: '0.85rem', color: '#bbb', fontStyle: 'italic' }}>Click states on the map to select</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {[...selectedStates].sort().map(s => (
+                        <button key={s} onClick={() => setSelectedStates(prev => { const n = new Set(prev); n.delete(s); return n; })}
+                          style={{ padding: '3px 10px', fontSize: '0.8rem', fontWeight: 600, background: 'var(--sells-blue)', color: '#fff',
+                            border: 'none', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {s} <span style={{ fontSize: '0.7rem' }}>×</span>
+                        </button>
+                      ))}
+                      <button onClick={() => setSelectedStates(new Set())}
+                        style={{ padding: '3px 8px', fontSize: '0.75rem', background: '#f0f0f0', color: '#666', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                        Clear all
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Criteria filters */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Criteria</div>
+
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#555', marginBottom: 4 }}>Industry</label>
+                  <select value={reportFilters.industry} onChange={e => setReportFilters(f => ({...f, industry: e.target.value}))}
+                    style={{ width: '100%', padding: '6px 8px', fontSize: '0.85rem', borderRadius: 4, border: '1px solid #ddd', marginBottom: 10 }}>
+                    <option value="">All Industries</option>
+                    {[...new Set(accounts.map(a => a.industry).filter(Boolean))].sort().map(ind => (
+                      <option key={ind} value={ind}>{ind}</option>
+                    ))}
+                  </select>
+
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#555', marginBottom: 4 }}>Tier</label>
+                  <select value={reportFilters.tier} onChange={e => setReportFilters(f => ({...f, tier: e.target.value}))}
+                    style={{ width: '100%', padding: '6px 8px', fontSize: '0.85rem', borderRadius: 4, border: '1px solid #ddd', marginBottom: 10 }}>
+                    <option value="">All Tiers</option>
+                    <option value="strong-buy">Prime</option>
+                    <option value="watchlist">Possible</option>
+                    <option value="pass">Poor</option>
+                  </select>
+
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#555', marginBottom: 4 }}>Pipeline Stage</label>
+                  <select value={reportFilters.pipeline} onChange={e => setReportFilters(f => ({...f, pipeline: e.target.value}))}
+                    style={{ width: '100%', padding: '6px 8px', fontSize: '0.85rem', borderRadius: 4, border: '1px solid #ddd', marginBottom: 10 }}>
+                    <option value="">All Stages</option>
+                    <option value="no_contact">No Contact</option>
+                    <option value="outreach_started">Outreach Started</option>
+                    <option value="initial_contact">Initial Contact</option>
+                    <option value="relationship_established">Relationship Established</option>
+                    <option value="prep">Prep</option>
+                    <option value="market">Market</option>
+                    <option value="loi">LOI</option>
+                    <option value="close">Close</option>
+                  </select>
+                </div>
+
+                {/* Results count */}
+                <div style={{ padding: '12px 16px', background: '#f8f7f2', borderRadius: 6, marginBottom: 16, textAlign: 'center' }}>
+                  <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--sells-blue)' }}>{reportAccounts.length}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#888' }}>accounts match your criteria</div>
+                </div>
+
+                {/* Action buttons */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button onClick={() => {
+                    if (reportAccounts.length === 0) return;
+                    if (window.parent && window.parent !== window) {
+                      window.parent.postMessage({
+                        type: 'map-create-campaign',
+                        companyIds: reportAccounts.filter(a => a.id).map(a => a.id),
+                        count: reportAccounts.length,
+                      }, '*');
+                    }
+                  }} style={{
+                    padding: '10px 0', background: 'var(--sells-gold, #EFB64E)', color: 'var(--sells-blue, #102772)',
+                    border: 'none', borderRadius: 6, fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
+                    opacity: reportAccounts.length === 0 ? 0.5 : 1,
+                  }}>
+                    Create Campaign ({reportAccounts.length})
+                  </button>
+                  <button onClick={() => {
+                    if (reportAccounts.length === 0) return;
+                    const stamp = selectedStates.size > 0 ? [...selectedStates].sort().join('-') : 'all';
+                    downloadCsv(`sells-report-${stamp}.csv`, buildCsv(reportAccounts));
+                  }} style={{
+                    padding: '10px 0', background: '#fff', color: 'var(--sells-gray, #494840)',
+                    border: '1px solid #ddd', borderRadius: 6, fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
+                    opacity: reportAccounts.length === 0 ? 0.5 : 1,
+                  }}>
+                    Export CSV ({reportAccounts.length})
+                  </button>
+                </div>
+
+                {/* Account list preview */}
+                {reportAccounts.length > 0 && reportAccounts.length <= 50 && (
+                  <div style={{ marginTop: 16, maxHeight: 300, overflowY: 'auto' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#888', textTransform: 'uppercase', marginBottom: 6 }}>Preview</div>
+                    {reportAccounts.slice(0, 50).map((a, i) => (
+                      <div key={a.id || i} style={{ padding: '4px 0', borderBottom: '1px solid #eee', fontSize: '0.82rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+                        onClick={() => setFocusAccount(a)}>
+                        <span style={{ fontWeight: 600 }}>{a.name}</span>
+                        <span style={{ color: '#999' }}>{a.city}, {a.state}</span>
+                      </div>
+                    ))}
+                    {reportAccounts.length > 50 && (
+                      <div style={{ fontSize: '0.8rem', color: '#999', fontStyle: 'italic', padding: '8px 0' }}>
+                        …and {reportAccounts.length - 50} more
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : selectedState ? (
             <StateDetailPanel
               code={selectedState}
               accounts={accounts}
