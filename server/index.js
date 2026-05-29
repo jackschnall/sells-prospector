@@ -2750,7 +2750,13 @@ app.get('/api/map/accounts', async (req, res) => {
                WHERE cl2.company_id = c.id
                ORDER BY cl2.called_at DESC LIMIT 1) AS last_contacted_by
        , c.created_at,
-              COALESCE((c.signals_json->'revenue_proxy'->>'score')::numeric, 0) AS revenue_score
+              COALESCE(
+                CASE jsonb_typeof(c.signals_json->'revenue_proxy')
+                  WHEN 'number' THEN (c.signals_json->>'revenue_proxy')::numeric
+                  WHEN 'object' THEN (c.signals_json->'revenue_proxy'->>'score')::numeric
+                  ELSE 0
+                END, 0
+              ) AS revenue_score
        FROM companies c
        WHERE c.deleted_at IS NULL AND c.lat IS NOT NULL AND c.lng IS NOT NULL`
     );

@@ -3098,14 +3098,15 @@ function App() {
                     <option value="close">Close</option>
                   </select>
 
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#555', marginBottom: 4 }}>Revenue (signal score)</label>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#555', marginBottom: 4 }}>Revenue Estimate</label>
                   <select value={reportFilters.revenueMin} onChange={e => setReportFilters(f => ({...f, revenueMin: Number(e.target.value)}))}
                     style={{ width: '100%', padding: '6px 8px', fontSize: '0.85rem', borderRadius: 4, border: '1px solid #ddd', marginBottom: 10 }}>
                     <option value={0}>Any Revenue</option>
-                    <option value={5}>$5M+ (score ≥ 5)</option>
-                    <option value={6}>$8M+ (score ≥ 6)</option>
-                    <option value={7}>$10M+ (score ≥ 7)</option>
-                    <option value={8}>$25M+ (score ≥ 8)</option>
+                    <option value={3}>$1M+ estimated</option>
+                    <option value={5}>$5M+ estimated</option>
+                    <option value={7}>$10M+ estimated</option>
+                    <option value={8}>$20M+ estimated</option>
+                    <option value={9}>$35M+ estimated</option>
                   </select>
 
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#555', marginBottom: 4 }}>Near MSA</label>
