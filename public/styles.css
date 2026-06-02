@@ -44,7 +44,7 @@
   --font-body: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'DM Mono', 'SF Mono', Menlo, monospace;
 
-  --sb-w: 340px;
+  --sb-w: 280px;
   --panel-w: 460px;
 }
 
@@ -575,22 +575,29 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   position: sticky;
   top: 0;
   z-index: 10;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  flex-wrap: nowrap;
 }
 
 .tab {
   border: none;
   background: transparent;
   color: var(--text-muted);
-  padding: 14px 20px 12px;
+  padding: 14px 14px 12px;
   font-family: var(--font-body);
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   transition: color 0.12s ease, border-color 0.12s ease;
   border-radius: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .tab:hover { color: var(--head); background: transparent; border-color: transparent; }
 .tab.active {
@@ -2991,6 +2998,13 @@ body.detail-fullscreen { overflow: hidden; }
 }
 
 /* ---------- Responsive ---------- */
+
+@media (max-width: 1400px) {
+  :root { --sb-w: 240px; }
+  .app-header { padding: 14px 20px; gap: 20px; }
+  .tab { padding: 12px 10px 10px; font-size: 0.82rem; }
+  .main { padding: 0 20px 60px; }
+}
 
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
