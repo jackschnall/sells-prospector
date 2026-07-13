@@ -1,5 +1,7 @@
 # Sells M&A Prospector — Claude Code Research Engine
 
+> **ACCOUNT / SUBSCRIPTION STATUS (2026-07-13):** Jack switched to a new Claude account and picked this repo back up via Claude Code — see `claude-account-transition-guide.md` in this repo's root for the full handoff. Twilio and OpenAI (Whisper) subscriptions were canceled the same day; the CRM Phase 2 telephony build (`docs/crm-phase2-prompt.md`, `docs/twilio-claude-code-prompt.md`, `docs/twilio-setup-walkthrough.md`, `docs/twilio-a2p-handoff.md`) is paused until those are re-subscribed. Railway hosting stayed active — the deployed app and research/discovery workflow below are unaffected.
+
 ## What This Is
 
 A plumbing company M&A target research tool for Sells (middle-market investment bank).
